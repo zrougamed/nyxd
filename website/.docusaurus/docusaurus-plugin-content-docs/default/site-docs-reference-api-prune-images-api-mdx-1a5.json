@@ -1,0 +1,35 @@
+{
+  "id": "reference/api/prune-images",
+  "title": "Remove local image metadata not referenced by any supervised container",
+  "description": "Uses in-memory supervisor container specs (`ContainerSpec.Image` strings) as the keep set.",
+  "source": "@site/docs/reference/api/prune-images.api.mdx",
+  "sourceDirName": "reference/api",
+  "slug": "/reference/api/prune-images",
+  "permalink": "/docs/reference/api/prune-images",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": null,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "prune-images",
+    "title": "Remove local image metadata not referenced by any supervised container",
+    "description": "Uses in-memory supervisor container specs (`ContainerSpec.Image` strings) as the keep set.",
+    "sidebar_label": "Remove local image metadata not referenced by any supervised container",
+    "hide_title": true,
+    "hide_table_of_contents": true,
+    "api": "eJzNVk1v3DYQ/SsDnhxBltZp44NSFHAcF3U/EsPeAC1sw+JKsyvGFEcZUmsLi/3vxVAy1l/NoafuYSGRnOHMvHlvtFFBr7wqLpVp9Qq9uk5Vjb5i0wVDThXqi0cPxu232BIP4PsOeW08MVTkgjYOGXyHlYe98vhh5aLDKjsVjyX4wMat/BvQHkKDcIvYgceQXbmPhB4cBajRYsDoEV2AhaWFh97VyFDGl9w3+u27wzK7cipV1CFrie+0VoXquHd4OoafKsZvPfrwgepBFZv4ahhrVSy19Ziq6Q7Z011nTRUd5V+9ZLtRvmqw1fIUhg5VoWjxFaugUtWxXBsMetmtebjh3j06uCCyqCW8pwU8XULgHlMgZwewxgdgXEotdIA76m0NCwTGltZYZ2q7TVUwwYrLmNSZpHc+ZqW2W9ln9B05P0bydjaLAT25NBoBo++txP6fk96V71LRreQ25S1bMWKVKuNueo/SOk9rRLevlGebfqd2253b3aZm1oNcE7D1j9bHxooFmyLY7RkXcIX8Aoxj6l0AWkJtfDCuChD7fkSkQcFi1+NY73rc/zsyIxYTND++hsYHXQM/IJiqd7MfXp6JHsEHYgTixzwTglTklmbVCxJyS4uhodj75GNv6tCoQuXrg3zkcR5JoVLlkdfIwvCN6tmqQjUhdEWeW6q0bUbzF4yHsurZwv5+78z9vqfqFgP8JLf8DM/t8yzLStiTR3C6RTAezMoRY/1+7Hlh/eRDXECrQ0D2b4TM2+tUSRue72h7cq/bzuITlgmDIs5LiihPMLjhfsSIycLR2emLXP40zrTawq/z+ZkcgCUxJInYJUkKsTo1kAMNSfLFmXuoqdXGTfEmCezVuNS9DVDm3LtcLONfJidKyWHeIMesHcH8+CxSHEUWFwNMxtmVu3JJcqytNW4VC3J0dpokslyW5UL75sqNJfcXz8r+yrUvMVgf5J1xq+hNnJ5jZ3WFrwcNdyY0MFDPT2AhhvLT3399vLn4fPz7ybyEHEo33MMUSDklcdSHBl2YNKRIEnDkEALVeoC9GJIIng9vMriY3CO3xntDzoNmhDB0ptLWDlDODg9nD55PmIm9eGy1G4CpD+ihl3YMeB/yzmrjSlhQbdDDkqmFUiqRRcPyPfx28fkToKs7Mi54YAw9OyifS14pgPu+qtD7caAIRcaGOchm2UylypoK3Sgp0tQiqWSHX4hb+ESuorZFroy28Md4EB4MdyTzRZ53ZIclcdsxiaJmxKt8cu1z99hRHh3kkd7C6la7R5efR1WEsbqjZLUYdK2DjvrAuERGV2EUMKneayL2nB6b3WD4X875Scx34It6xgJvJsm7VOsDGQ0P03+UvetURWUrLtVms9Aev7DdbmX5W488qOLyOlVrzUYvREYur7epalDXyFEnb3GIoyIGuT+XIOS47eM0ej4/t+mDxVFVYRe+e/b6kXaffb6Yq1Qtpi+VlmqxYX0nw1XfqULFTx2xjmMvrm2U1W7V65WcHX3K7x8TYGzQ",
+    "sidebar_class_name": "post api-method",
+    "info_path": "docs/reference/api/nyxd-control-api",
+    "custom_edit_url": null
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Remove local image metadata for a ref",
+    "permalink": "/docs/reference/api/remove-image"
+  },
+  "next": {
+    "title": "List supervised containers",
+    "permalink": "/docs/reference/api/list-containers"
+  }
+}

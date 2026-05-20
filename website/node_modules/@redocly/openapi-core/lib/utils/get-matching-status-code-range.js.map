@@ -1,0 +1,1 @@
+{"version":3,"file":"get-matching-status-code-range.js","sourceRoot":"","sources":["../../src/utils/get-matching-status-code-range.ts"],"names":[],"mappings":"AAAA,MAAM,UAAU,0BAA0B,CAAC,IAAqB;IAC9D,OAAO,GAAG,IAAI,EAAE,CAAC,OAAO,CAAC,YAAY,EAAE,CAAC,CAAC,EAAE,UAAU,EAAE,EAAE,CAAC,GAAG,UAAU,IAAI,CAAC,CAAC;AAC/E,CAAC"}

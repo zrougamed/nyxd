@@ -1,0 +1,12 @@
+import type { M } from "ts-algebra";
+import type { JSONSchema7 as $JSONSchema7, JSONSchema7Reference as $JSONSchema7Reference, FromSchemaOptions, FromSchemaDefaultOptions } from "./definitions";
+import type { ParseOptions } from "./parse-options";
+import type { ParseSchema } from "./parse-schema";
+import type { Readonly, Writable } from "./type-utils";
+export type { DeserializationPattern, FromSchemaOptions, FromSchemaDefaultOptions, } from "./definitions";
+export type { $Compiler, Compiler, $Validator, Validator } from "./utils";
+export { wrapCompilerAsTypeGuard, wrapValidatorAsTypeGuard, asConst, } from "./utils";
+export declare type JSONSchema7 = $JSONSchema7 | Readonly<$JSONSchema7>;
+export declare type JSONSchema7Reference = $JSONSchema7Reference | Readonly<$JSONSchema7Reference>;
+export declare type JSONSchema = JSONSchema7;
+export declare type FromSchema<S extends JSONSchema, Opt extends FromSchemaOptions = FromSchemaDefaultOptions, W extends $JSONSchema7 = S extends Record<string | number | symbol, unknown> ? Writable<S> : S> = M.$Resolve<ParseSchema<W, ParseOptions<W, Opt>>>;

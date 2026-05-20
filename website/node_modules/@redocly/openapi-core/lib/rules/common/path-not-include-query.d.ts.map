@@ -1,0 +1,1 @@
+{"version":3,"file":"path-not-include-query.d.ts","sourceRoot":"","sources":["../../../src/rules/common/path-not-include-query.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,QAAQ,EAAE,QAAQ,EAAE,MAAM,mBAAmB,CAAC;AAG5D,eAAO,MAAM,mBAAmB,EAAE,QAAQ,GAAG,QAa5C,CAAC"}

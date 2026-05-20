@@ -1,0 +1,1 @@
+{"version":3,"file":"boolean-parameter-prefixes.d.ts","sourceRoot":"","sources":["../../../src/rules/oas2/boolean-parameter-prefixes.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,QAAQ,EAAE,MAAM,mBAAmB,CAAC;AAElD,MAAM,MAAM,+BAA+B,GAAG;IAC5C,QAAQ,CAAC,EAAE,MAAM,EAAE,CAAC;CACrB,CAAC;AAEF,eAAO,MAAM,wBAAwB,EAAE,QAmBtC,CAAC"}

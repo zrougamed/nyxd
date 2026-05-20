@@ -1,0 +1,1 @@
+{"version":3,"file":"get-resolve-config.js","sourceRoot":"","sources":["../../src/config/get-resolve-config.ts"],"names":[],"mappings":"AAEA,MAAM,UAAU,gBAAgB,CAAC,OAA0B;IACzD,OAAO;QACL,IAAI,EAAE;YACJ,OAAO,EAAE,OAAO,EAAE,IAAI,EAAE,OAAO,IAAI,EAAE;YACrC,WAAW,EAAE,SAAS;SACvB;KACF,CAAC;AACJ,CAAC"}

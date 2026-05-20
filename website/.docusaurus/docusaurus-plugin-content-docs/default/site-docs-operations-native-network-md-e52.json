@@ -1,0 +1,24 @@
+{
+  "id": "operations/native-network",
+  "title": "nyxd Native Network Plugin",
+  "description": "For daemon flags, systemd, nyx vs nyxd, and the network.Backend abstraction, see Networking overview.",
+  "source": "@site/docs/operations/native-network.md",
+  "sourceDirName": "operations",
+  "slug": "/operations/native-network",
+  "permalink": "/docs/operations/native-network",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/zrougamed/nyxd/tree/main/website/docs/operations/native-network.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "nyxd networking",
+    "permalink": "/docs/operations/networking"
+  },
+  "next": {
+    "title": "nyxd — Kernel & System Requirements",
+    "permalink": "/docs/operations/kernel-requirements"
+  }
+}

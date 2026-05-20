@@ -1,0 +1,1 @@
+{"version":3,"file":"is-empty-object.js","sourceRoot":"","sources":["../../src/utils/is-empty-object.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,aAAa,EAAE,MAAM,sBAAsB,CAAC;AAErD,MAAM,UAAU,aAAa,CAAC,KAAc;IAC1C,OAAO,aAAa,CAAC,KAAK,CAAC,IAAI,MAAM,CAAC,IAAI,CAAC,KAAK,CAAC,CAAC,MAAM,KAAK,CAAC,CAAC;AACjE,CAAC"}

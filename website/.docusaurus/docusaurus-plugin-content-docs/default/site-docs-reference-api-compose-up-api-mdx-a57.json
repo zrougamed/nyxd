@@ -1,0 +1,35 @@
+{
+  "id": "reference/api/compose-up",
+  "title": "Apply a nyx compose file and start the stack",
+  "description": "Parses a compose file (strict subset: `nyx-compose`, `docker-compose`, `compose`, or `podman-compose`",
+  "source": "@site/docs/reference/api/compose-up.api.mdx",
+  "sourceDirName": "reference/api",
+  "slug": "/reference/api/compose-up",
+  "permalink": "/docs/reference/api/compose-up",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": null,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "compose-up",
+    "title": "Apply a nyx compose file and start the stack",
+    "description": "Parses a compose file (strict subset: `nyx-compose`, `docker-compose`, `compose`, or `podman-compose`",
+    "sidebar_label": "Apply a nyx compose file and start the stack",
+    "hide_title": true,
+    "hide_table_of_contents": true,
+    "api": "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",
+    "sidebar_class_name": "post api-method",
+    "info_path": "docs/reference/api/nyxd-control-api",
+    "custom_edit_url": null
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Create and start a container",
+    "permalink": "/docs/reference/api/run-container"
+  },
+  "next": {
+    "title": "Stop all services from a compose file",
+    "permalink": "/docs/reference/api/compose-stop"
+  }
+}

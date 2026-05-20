@@ -1,0 +1,35 @@
+{
+  "id": "reference/api/get-version",
+  "title": "Daemon version metadata",
+  "description": "Daemon version metadata",
+  "source": "@site/docs/reference/api/get-version.api.mdx",
+  "sourceDirName": "reference/api",
+  "slug": "/reference/api/get-version",
+  "permalink": "/docs/reference/api/get-version",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": null,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "get-version",
+    "title": "Daemon version metadata",
+    "description": "Daemon version metadata",
+    "sidebar_label": "Daemon version metadata",
+    "hide_title": true,
+    "hide_table_of_contents": true,
+    "api": "eJx1VNtu40YM/RWCT1lBkZw+7IO2KBAkaZtessbGKVo4RjWWaGt2RzOznJHXgqF/L6ho49yqB0sekYeHRzw8YFTbgMUSQx8itbhK0XliFbWz1zUWuKX4F3HQzmKKTME7GyhgccAfZjO51RQq1l4SsMApFrzqjVM1plg5G8lGCVXeG12N2PnnIPEHDFVDrZKn2HvCAt36M1VxLPa100y1sKsVtSOD3SOXyrWtlrh1p019qSIJec9CP+oHilPaETxE1naLKdJetd7Ike33NQ5H5FfBw2Ott14dq79+O6QYdRyrTLp8mgTEQa70hXiXI12YmEBLUdUqKkyxpdi46XNgil7FBgvMd2f5UZBALH+wWB6wY4MFNjH6Is+Nq5RpXJDM5wXvAkFZdWzg9LSzen8aXPWFIvwoBX6Cl/l5lmUlnMgjWNUS6AB6ax1T/QGcNT3EhmDCEAhoVYzE4V12b3FYpajtxo1CTbKI+CATws7A+fz6FcM/tdWtMvDrYjGXANg4hiSRvCRJYey5BmdBQZLcWb2H2rVK24lFksBJTRvVmQhlzp3NJXP8ySSiFGaLhnjsxTpYXMzB6BDJEsO6hyk5u7f3NkkulDHabsc2z+fXSSLHZVmuVWju7YOQ4faFmG+Ufa3s7iz32m5HNAH9RN6oit4mDd90bKB3HT8T2zGUN//8ffnv7ceL368WJeRQ2n4PE5FyauK8iw3ZOBmxSBKwzhJEV6seTkZKELkL8V0GtxM8cauDzFkAxQSx97pSxvRQzt6/n31HvmJ2HASxVbYHdl2kAJ0MWaR9zL1R2pawdrWmABt2LZSiRDYmlh/gt9uPN0C29k7bGIApdmyhfLk3SvngoasqCkEm64l58SybZTNM0eiKxGjFAWVUscC5M/3Pjlu4cVYMTVxpZeCPh0D4nni0Tijy3DvTbxy3np2spczxNp+gQ26fAuUjQD663rsQW2WfFP9/az+b98cVctRLlszI6TDZfom7syctr1IcvV0s8XBYq0B3bIZBjr92xD0Wy1WKO8VarcVyy9WQYkOqJh43xRfqscDzqiIv+2GnTCf1X61qce/jFvrlaoHD8B8TuCpI",
+    "sidebar_class_name": "get api-method",
+    "info_path": "docs/reference/api/nyxd-control-api",
+    "custom_edit_url": null
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Liveness probe",
+    "permalink": "/docs/reference/api/ping"
+  },
+  "next": {
+    "title": "Pull an image from a registry",
+    "permalink": "/docs/reference/api/pull-image"
+  }
+}

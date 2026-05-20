@@ -1,0 +1,24 @@
+{
+  "id": "operations/networking",
+  "title": "nyxd networking",
+  "description": "This document describes how the daemon picks a network implementation, how that maps to code, and how to run with native (default) or CNI plugins.",
+  "source": "@site/docs/operations/networking.md",
+  "sourceDirName": "operations",
+  "slug": "/operations/networking",
+  "permalink": "/docs/operations/networking",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/zrougamed/nyxd/tree/main/website/docs/operations/networking.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Using nyxd and nyx",
+    "permalink": "/docs/getting-started/usage"
+  },
+  "next": {
+    "title": "nyxd Native Network Plugin",
+    "permalink": "/docs/operations/native-network"
+  }
+}

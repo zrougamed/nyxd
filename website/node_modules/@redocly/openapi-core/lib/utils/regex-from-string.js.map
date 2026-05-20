@@ -1,0 +1,1 @@
+{"version":3,"file":"regex-from-string.js","sourceRoot":"","sources":["../../src/utils/regex-from-string.ts"],"names":[],"mappings":"AAAA,MAAM,UAAU,eAAe,CAAC,KAAa;IAC3C,MAAM,OAAO,GAAG,KAAK,CAAC,KAAK,CAAC,oBAAoB,CAAC,CAAC;IAClD,OAAO,OAAO,IAAI,IAAI,MAAM,CAAC,OAAO,CAAC,CAAC,CAAC,IAAI,OAAO,CAAC,CAAC,CAAC,EAAE,OAAO,CAAC,CAAC,CAAC,CAAC,CAAC;AACrE,CAAC"}

@@ -1,0 +1,24 @@
+{
+  "id": "project/roadmap",
+  "title": "nyxd roadmap",
+  "description": "Legend: [x] shipped in tree (still may need polish), [ ] not done, [~] partial / risky.",
+  "source": "@site/docs/project/roadmap.md",
+  "sourceDirName": "project",
+  "slug": "/project/roadmap",
+  "permalink": "/docs/project/roadmap",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/zrougamed/nyxd/tree/main/website/docs/project/roadmap.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Architecture Diagram Kit",
+    "permalink": "/docs/project/architecture-diagram-kit"
+  },
+  "next": {
+    "title": "Benchmarks: nyxd vs Docker vs Podman (Alpine 3.23 / QEMU)",
+    "permalink": "/docs/project/benchmarks"
+  }
+}

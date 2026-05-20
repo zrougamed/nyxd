@@ -1,0 +1,178 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/docs",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/docs",
+          "mainDocId": "overview",
+          "docs": [
+            {
+              "id": "getting-started/install",
+              "path": "/docs/getting-started/install",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "getting-started/usage",
+              "path": "/docs/getting-started/usage",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "operations/kernel-requirements",
+              "path": "/docs/operations/kernel-requirements",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "operations/native-network",
+              "path": "/docs/operations/native-network",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "operations/networking",
+              "path": "/docs/operations/networking",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "operations/qemu-alpine",
+              "path": "/docs/operations/qemu-alpine",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "overview",
+              "path": "/docs/",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "project/architecture",
+              "path": "/docs/project/architecture",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "project/architecture-diagram-kit",
+              "path": "/docs/project/architecture-diagram-kit",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "project/benchmarks",
+              "path": "/docs/project/benchmarks",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "project/roadmap",
+              "path": "/docs/project/roadmap",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api-reference",
+              "path": "/docs/reference/api-reference",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/compose-down",
+              "path": "/docs/reference/api/compose-down",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/compose-stop",
+              "path": "/docs/reference/api/compose-stop",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/compose-up",
+              "path": "/docs/reference/api/compose-up",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/container-logs",
+              "path": "/docs/reference/api/container-logs",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/exec-in-container",
+              "path": "/docs/reference/api/exec-in-container",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/get-version",
+              "path": "/docs/reference/api/get-version",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/kill-container",
+              "path": "/docs/reference/api/kill-container",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/list-containers",
+              "path": "/docs/reference/api/list-containers",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/list-images",
+              "path": "/docs/reference/api/list-images",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/nyxd-control-api",
+              "path": "/docs/reference/api/nyxd-control-api",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/ping",
+              "path": "/docs/reference/api/ping",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/prune-images",
+              "path": "/docs/reference/api/prune-images",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/pull-image",
+              "path": "/docs/reference/api/pull-image",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/remove-container",
+              "path": "/docs/reference/api/remove-container",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/remove-image",
+              "path": "/docs/reference/api/remove-image",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/run-container",
+              "path": "/docs/reference/api/run-container",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "reference/api/stop-container",
+              "path": "/docs/reference/api/stop-container",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "/reference/api",
+              "path": "/docs/reference/api",
+              "sidebar": "docsSidebar"
+            }
+          ],
+          "draftIds": [],
+          "sidebars": {
+            "docsSidebar": {
+              "link": {
+                "path": "/docs/",
+                "label": "overview"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}

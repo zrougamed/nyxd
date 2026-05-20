@@ -1,0 +1,1 @@
+{"version":3,"file":"no-schema-type-mismatch.d.ts","sourceRoot":"","sources":["../../../src/rules/common/no-schema-type-mismatch.ts"],"names":[],"mappings":"AAEA,OAAO,KAAK,EAAE,WAAW,EAAE,UAAU,EAAE,UAAU,EAAE,QAAQ,EAAE,QAAQ,EAAE,MAAM,mBAAmB,CAAC;AAGjG,eAAO,MAAM,oBAAoB,EAC7B,QAAQ,GACR,QAAQ,GACR,UAAU,GACV,UAAU,GACV,WAkBH,CAAC"}

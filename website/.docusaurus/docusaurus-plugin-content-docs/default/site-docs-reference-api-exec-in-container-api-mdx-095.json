@@ -1,0 +1,35 @@
+{
+  "id": "reference/api/exec-in-container",
+  "title": "Run a command inside a running container",
+  "description": "Streams combined stdout/stderr as raw bytes (`application/octet-stream`).",
+  "source": "@site/docs/reference/api/exec-in-container.api.mdx",
+  "sourceDirName": "reference/api",
+  "slug": "/reference/api/exec-in-container",
+  "permalink": "/docs/reference/api/exec-in-container",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": null,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "exec-in-container",
+    "title": "Run a command inside a running container",
+    "description": "Streams combined stdout/stderr as raw bytes (`application/octet-stream`).",
+    "sidebar_label": "Run a command inside a running container",
+    "hide_title": true,
+    "hide_table_of_contents": true,
+    "api": "eJztV9tu20YQ/ZXBPskqJcq95IEpCjiug7qXWLAVoIFslCtyJG6y3GV2h5IIQUA/ol/YL2lnSUUX2wXavvShfrAlcueyM2fOGW8EyYUXyVRk1pBUBp0XD5HI0WdOVaSsEYm4I4ey9JDZcqYM5uAptzXFnnJ0DqQHJ1cwawg99FJZVVplkm1jmxHSwAf79Gx4byYFwneTyRgyawxmfAg8ycaDrdBAbUhpoAIB15hxwEojoR/em3vzyuYNLKVT0pBP7s0AjmK999ak8Puvv0F6tcbsFj/W6CkFa3QDPU+5MpBp6zHnRE6M1wPTrPMBR/1sed66mSvnCbQyCMrD93c3b04891LpFss0AhsqJTWkRM3Rd2dXPo3TzGqfnr28NwAOS6mMMouuYG1xgCykmatNuHgKbbq91DTrthQDFeonImErdCHp61wkgl9em8td90QkKulkicSdTKYbYWSJIhEqF5FQ3M1KUiEi4fBjrRzmIiFXYyR8VmApRbIR1FRs4ckpsxDb7UN7GD1xB/jEqS2DBw3xq9OO8LNHru3sPWZ0lMRUcC0Ze5XjG5JCH/zx072ldE42fBPC0j+R7Cl02Xw6euAGMqoqZxeurTYXjs8TNQd+ZtZqlFzmYz/XcwhXBam1zSQhSKg81rkdELpScbN7n/oHgwFRcwZz68AXqLUHafIWSpgrUmYx5NiMjoPgyhAuQg9LZVRZlyI5f5SIUaSkhvHkHRSoFgVBbwe3syHcoSGYNcC44ejpgFJYFWg6RCkPEiaTdyE8o/JfhF+pnIp/Gp0rr0hz3IOZCs+fn8snwdS1PhJz60pJ3ERlpGsegyGMcIEyR9f2oncQ+owBYgKTtcm2XHR185qz5Wahr6zxLSw/H434z7H/W7liyiq517amqibmHR7vM/HskBxS5N+8X0jry6cyeSVzcLuSRuKr0RdPZMsXLBFqI5dSaTnTGMpfIhWWqaWyngKfUCESES/P471IxBuVb+MwQ5Hw6JY7uqmdFokoiKokjnlUdNG6OQ7+1iOkWe00DAa1UeuBt9kHJPiao30Dp/bxcDhMoccfgQmNkaQWxjrMX7YEz9Pd+WAXUEpiCgycyQzGXHS7Z7GrtWRp2TPMdFfnh44SWmZrJ3S0m5XRlkl0bkN7OvgyQFnOyFkNF+PrR3f9iadJ6lb3LsbXYTT6fbbr9yMI1cvBGpDQ7781ag25ZY3o7tPvQy/Huaw1QRq72sRsGX4N+cROV12oirEwuRyDVp7QoONp7IyDhvb7l1JrVh8u2MX4ut/nx2mazqQv7k3bEn930pYnwj7u0fI8rpRZBG/s9BYrLTN8OmlYKSqgsbU7ahuTxpt3P3/7y93N5Q9XkxRiCBrYJZJ2l7ioeVipm6Gk3wdjDQLZXDbQCykxX3tiUurcM017r6zxIB0CNZXKpNYNpKMXL0Y7z1fOWefZYylNA87WLNI1w5VwTXGlpfpzzZjZXKGHubMlpFyJYTBMX7Z7Apq8ssqQB4dUO/PUpsKbT51l6H2r6zxCLWDOh6PhSERCqwyNDyDtVHxsdfPauhLeWMNMgy5jNv6xPQg7w/0Q+iSOK6sb5o7KWZbdoXWLuHPtY3PoKA4O4kADPP2lNAfBb2uG6I7glPEqZxl0tQnrTHawgxwNwGZPff+vkv+pVbJTmD2wWSwCeDYd7U/F8rzTru6/g0gkYZcM3P8QiUDvyVRsNjPp8a3T2y0//lija0QyfYhEqDOrC+tDrjx/zkUyl9rjX0Cld9sth2fwXKq7pdDwSriUuuZvIhIfsGlX3u3DNhKt4ofo7YvLNsZgwuZ7w0er6zbaWVxkGVb0zNkjBWet+aSg45u7iYjErFubS5uzrZMrXn3lqk227XDYKsKzjdDSLGq54LNtHvzzBxNSxuo=",
+    "sidebar_class_name": "post api-method",
+    "info_path": "docs/reference/api/nyxd-control-api",
+    "custom_edit_url": null
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Remove a container",
+    "permalink": "/docs/reference/api/remove-container"
+  },
+  "next": {
+    "title": "Send a signal to a container (default SIGKILL)",
+    "permalink": "/docs/reference/api/kill-container"
+  }
+}

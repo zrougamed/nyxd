@@ -1,0 +1,27 @@
+{
+  "id": "reference/api-reference",
+  "title": "API Reference",
+  "description": "The nyxd control API is documented as an OpenAPI 3 specification.",
+  "source": "@site/docs/reference/api-reference.md",
+  "sourceDirName": "reference",
+  "slug": "/reference/api-reference",
+  "permalink": "/docs/reference/api-reference",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/zrougamed/nyxd/tree/main/website/docs/reference/api-reference.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "api-reference",
+    "title": "API Reference"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "QEMU + Alpine 3.23 for nyxd hacking",
+    "permalink": "/docs/operations/qemu-alpine"
+  },
+  "next": {
+    "title": "REST API",
+    "permalink": "/docs/reference/api"
+  }
+}

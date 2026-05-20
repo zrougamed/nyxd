@@ -1,0 +1,24 @@
+{
+  "id": "getting-started/install",
+  "title": "Installing nyxd on Linux",
+  "description": "nyxd runs on any Linux host that meets the kernel and tooling requirements below (desktop, VM, VPS, edge box, ARM or x86). It was first written for a home Raspberry Pi so containers could run without Docker or a heavy daemon; that same footprint applies everywhere you want a minimal stack.",
+  "source": "@site/docs/getting-started/install.md",
+  "sourceDirName": "getting-started",
+  "slug": "/getting-started/install",
+  "permalink": "/docs/getting-started/install",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/zrougamed/nyxd/tree/main/website/docs/getting-started/install.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Overview",
+    "permalink": "/docs/"
+  },
+  "next": {
+    "title": "Using nyxd and nyx",
+    "permalink": "/docs/getting-started/usage"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "project/architecture",
+  "title": "Architecture",
+  "description": "This page explains how nyxd is structured so new contributors can quickly map commands, APIs, and runtime behavior to source code.",
+  "source": "@site/docs/project/architecture.md",
+  "sourceDirName": "project",
+  "slug": "/project/architecture",
+  "permalink": "/docs/project/architecture",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/zrougamed/nyxd/tree/main/website/docs/project/architecture.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Container stdout/stderr log file",
+    "permalink": "/docs/reference/api/container-logs"
+  },
+  "next": {
+    "title": "Architecture Diagram Kit",
+    "permalink": "/docs/project/architecture-diagram-kit"
+  }
+}
