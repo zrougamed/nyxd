@@ -1,0 +1,935 @@
+openapi: 3.0.3
+info:
+  title: nyxd control API
+  description: |
+    Minimal HTTP API for **nyxd**, served on a **Unix domain socket** (default `/run/nyxd/nyxd.sock`).
+    There is no TCP listener by default.
+
+    **Calling the API**
+
+    ```bash
+    curl -sS --unix-socket /run/nyxd/nyxd.sock http://localhost/v1/ping
+    ```
+
+    Replace `/run/nyxd/nyxd.sock` with your socket path or `NYXD_SOCKET` / `nyx -socket`.
+
+    **Authentication:** none today (local trust). Socket permissions are typically `0660`.
+
+    **Errors:** many routes use `text/plain` bodies from `http.Error`; JSON endpoints return `application/json` on success.
+  version: "1.0.0"
+  license:
+    name: PolyForm Noncommercial License 1.0.0
+    url: https://polyformproject.org/licenses/noncommercial/1.0.0/
+
+servers:
+  - url: http://localhost
+    description: |
+      Use `curl --unix-socket <path> http://localhost/...` (host name is ignored; only the socket path matters).
+
+tags:
+  - name: system
+    description: Health and version
+  - name: images
+    description: Image pull, list, and remove
+  - name: containers
+    description: Container lifecycle and exec
+
+paths:
+  /v1/ping:
+    get:
+      tags: [system]
+      summary: Liveness probe
+      operationId: ping
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PingResponse"
+
+  /v1/version:
+    get:
+      tags: [system]
+      summary: Daemon version metadata
+      operationId: getVersion
+      responses:
+        "200":
+          description: Version payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResponse"
+
+  /v1/containers:
+    get:
+      tags: [containers]
+      summary: List supervised containers
+      description: |
+        Without `detail`, returns `{"containers":["id",...]}` (IDs only).
+
+        With `?detail=1` or `?detail=true`, also returns `items`: an array of
+        `{id, image, ip, status}` suitable for `nyx ps`.
+      operationId: listContainers
+      parameters:
+        - name: detail
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["1", "true", ""]
+          description: When `1` or `true`, include per-container metadata in `items`.
+      responses:
+        "200":
+          description: Container list (with or without detail)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ContainersResponse"
+                  - $ref: "#/components/schemas/ContainersDetailResponse"
+
+  /v1/images/pull:
+    post:
+      tags: [images]
+      summary: Pull an image from a registry
+      description: |
+        When `stream` is **false** or omitted, returns a single JSON object on success.
+
+        When `stream` is **true**, the response is **`application/x-ndjson`**: one JSON object per line
+        (`PullEvent`), flushed progressively, ending with a `phase: done` line (or `phase: error`).
+      operationId: pullImage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PullRequest"
+      responses:
+        "200":
+          description: Success — either one JSON document or NDJSON stream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PullResponseJSON"
+            application/x-ndjson:
+              schema:
+                type: string
+                format: binary
+                description: |
+                  Each line is a `PullEvent` JSON object. Final line uses `phase: done` with summary fields.
+        "400":
+          description: Bad request (invalid body / missing ref)
+        "502":
+          description: Registry or transport error (non-stream mode)
+        "503":
+          description: Image store not configured
+
+  /v1/containers/run:
+    post:
+      tags: [containers]
+      summary: Create and start a container
+      description: |
+        Starts an OCI workload via crun. If the image is not in the local store, the daemon pulls it first.
+        When `stream: true`, the response is `application/x-ndjson` (same `PullEvent` lines as `POST /v1/images/pull` if a pull runs, then `phase: run` with `container_id`). Otherwise the response is a single JSON `RunResponse`.
+        If `id` is omitted, the server generates one from the image reference.
+      operationId: runContainer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunRequest"
+      responses:
+        "200":
+          description: Started (JSON) or pull+run stream (NDJSON when `stream` is true)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunResponse"
+            application/x-ndjson:
+              schema:
+                type: string
+                format: binary
+              description: |
+                Same `PullEvent` lines as image pull when a registry fetch is required, including a final `phase: done` summary after pull, then a terminal `{"phase":"run","ok":true,"container_id":"...","ref":"..."}` line.
+        "400":
+          description: Validation or start error (plain text or NDJSON `phase:error` when streaming)
+        "502":
+          description: Registry or transport error during pull (plain text, or NDJSON when streaming)
+        "503":
+          description: Supervisor or image store unavailable
+
+  /v1/compose/up:
+    post:
+      tags: [containers]
+      summary: Apply a nyx compose file and start the stack
+      description: |
+        Parses a compose file (strict subset: `nyx-compose`, `docker-compose`, `compose`, or `podman-compose`
+        YAML on disk), merges `.env` from the compose directory with the process environment, substitutes
+        `${VAR}` in the raw YAML, pulls missing images, maps services to container specs (including compose
+        healthchecks and volume bind mounts), then starts containers in `depends_on` order via ordered
+        sequential start.
+      operationId: composeUp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComposeProjectRequest"
+      responses:
+        "200":
+          description: Stack started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComposeUpResponse"
+        "400":
+          description: Invalid body, compose validation, pull, or start error
+        "503":
+          description: Supervisor or image store unavailable
+
+  /v1/compose/stop:
+    post:
+      tags: [containers]
+      summary: Stop all services from a compose file
+      description: |
+        Resolves the same project + container IDs as `compose/up`, then stops each service in reverse
+        dependency order. Missing containers are ignored (idempotent).
+      operationId: composeStop
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComposeProjectRequest"
+      responses:
+        "200":
+          description: Stop completed (per-service errors are not partial — all-or-nothing when a stop fails)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComposeStopResponse"
+        "400":
+          description: Invalid body or compose validation error
+        "503":
+          description: Supervisor unavailable
+
+  /v1/compose/down:
+    post:
+      tags: [containers]
+      summary: Remove compose stack containers (and optionally named volume dirs)
+      description: |
+        Stops and removes supervised containers for the stack (reverse dependency order). When
+        `remove_volumes` is true, deletes host directories for **declared** top-level named volumes
+        under `{nyxd base}/volumes/<project>/…` only if no running container still references that path.
+      operationId: composeDown
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComposeProjectRequest"
+      responses:
+        "200":
+          description: Stack torn down
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComposeDownResponse"
+        "400":
+          description: Invalid body or compose validation error
+        "503":
+          description: Supervisor unavailable
+
+  /v1/containers/{id}/stop:
+    post:
+      tags: [containers]
+      summary: Stop a container
+      description: Sends the image stop signal (default SIGTERM) then SIGKILL if needed.
+      operationId: stopContainer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stop accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StopResponse"
+        "400":
+          description: Bad request
+        "404":
+          description: Container not found
+        "503":
+          description: Supervisor unavailable
+
+  /v1/containers/{id}/remove:
+    post:
+      tags: [containers]
+      summary: Remove a container
+      description: |
+        Stops the container if needed, deletes crun state, and tears down
+        network and overlay resources.
+      operationId: removeContainer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoveResponse"
+        "400":
+          description: Bad request
+        "404":
+          description: Container not found
+        "503":
+          description: Supervisor unavailable
+
+  /v1/containers/{id}/exec:
+    post:
+      tags: [containers]
+      summary: Run a command inside a running container
+      description: |
+        Streams combined stdout/stderr as raw bytes (`application/octet-stream`).
+        The HTTP connection stays open until the exec completes.
+
+        Body variants:
+        - `application/json` — `ExecRequest` only (stdin closed).
+        - `application/x-nyxd-exec+v1` — first line is JSON `ExecRequest` (`argv`, optional `tty`, optional `rows`/`cols`);
+          remaining bytes stream to `crun exec` stdin (`nyx exec -i`).
+      operationId: execInContainer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExecRequest"
+          application/x-nyxd-exec+v1:
+            schema:
+              type: string
+              format: binary
+            description: JSON header line (ExecRequest) then raw stdin until EOF.
+      responses:
+        "200":
+          description: Raw command output (stream)
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Bad request
+        "503":
+          description: Runtime unavailable
+
+  /v1/containers/{id}/kill:
+    post:
+      tags: [containers]
+      summary: Send a signal to a container (default SIGKILL)
+      description: |
+        Optional JSON body `{"signal":"KILL"}` (or `SIGKILL`). Used by foreground `nyx run` on Ctrl+C.
+      operationId: killContainer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                signal:
+                  type: string
+                  description: Signal name without or with `SIG` prefix (e.g. `KILL`, `SIGTERM`).
+      responses:
+        "200":
+          description: Kill accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KillResponse"
+        "400":
+          description: Bad request
+        "404":
+          description: Container not found
+        "503":
+          description: Supervisor unavailable
+
+  /v1/containers/{id}/logs:
+    get:
+      tags: [containers]
+      summary: Container stdout/stderr log file
+      description: |
+        Reads `logs/{id}.log` under the daemon data directory. With `plain=1` (default), JSONL
+        lines are decoded to plain text. With `follow=1`, new lines are streamed until the client disconnects.
+      operationId: containerLogs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tail
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 99999
+          description: Number of trailing lines to send first (default 200).
+        - name: follow
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["1", "true", ""]
+        - name: plain
+          in: query
+          required: false
+          schema:
+            type: string
+          description: When not `0`, decode JSONL log entries to text (default on).
+      responses:
+        "200":
+          description: Plain text log stream (or snapshot when not following)
+          content:
+            text/plain:
+              schema:
+                type: string
+        "404":
+          description: No log file for this container
+        "500":
+          description: Read error
+
+  /v1/images:
+    get:
+      tags: [images]
+      summary: List locally stored image references
+      operationId: listImages
+      responses:
+        "200":
+          description: Image ref list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImagesListResponse"
+        "503":
+          description: Image store not configured
+
+  /v1/images/remove:
+    post:
+      tags: [images]
+      summary: Remove local image metadata for a ref
+      operationId: removeImage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImageRemoveRequest"
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageRemoveResponse"
+        "400":
+          description: Bad request
+        "503":
+          description: Image store not configured
+
+  /v1/images/prune:
+    post:
+      tags: [images]
+      summary: Remove local image metadata not referenced by any supervised container
+      description: |
+        Uses in-memory supervisor container specs (`ContainerSpec.Image` strings) as the keep set.
+        Does not delete content blobs under `blobs/sha256`.
+      operationId: pruneImages
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImagePruneRequest"
+      responses:
+        "200":
+          description: Prune result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImagePruneResponse"
+        "400":
+          description: Bad request
+        "503":
+          description: Image store or supervisor not configured
+
+components:
+  schemas:
+    PingResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          example: true
+
+    VersionResponse:
+      type: object
+      required: [daemon, version, commit, buildDate]
+      properties:
+        daemon:
+          type: string
+          example: nyxd
+        version:
+          type: string
+        commit:
+          type: string
+        buildDate:
+          type: string
+
+    ContainersResponse:
+      type: object
+      required: [containers]
+      properties:
+        containers:
+          type: array
+          items:
+            type: string
+
+    ContainersDetailResponse:
+      type: object
+      required: [containers, items]
+      properties:
+        containers:
+          type: array
+          items:
+            type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContainerItem"
+
+    ContainerItem:
+      type: object
+      required: [id, short_id, image, status]
+      properties:
+        id:
+          type: string
+          description: Canonical supervisor id (e.g. compose project_service).
+        short_id:
+          type: string
+          description: Stable 12-char lowercase hex id (Docker-style) derived from id; use for ps/stop prefixes.
+        image:
+          type: string
+        ip:
+          type: string
+        ports:
+          type: string
+        status:
+          type: string
+          description: crun state status (e.g. running, stopped)
+
+    RemoveResponse:
+      type: object
+      required: [ok, id]
+      properties:
+        ok:
+          type: boolean
+        id:
+          type: string
+
+    KillResponse:
+      type: object
+      required: [ok, id, signal]
+      properties:
+        ok:
+          type: boolean
+        id:
+          type: string
+        signal:
+          type: string
+          example: KILL
+
+    ImagesListResponse:
+      type: object
+      required: [images]
+      properties:
+        images:
+          type: array
+          items:
+            type: string
+
+    ImageRemoveRequest:
+      type: object
+      required: [ref]
+      properties:
+        ref:
+          type: string
+
+    ImageRemoveResponse:
+      type: object
+      required: [ok, ref]
+      properties:
+        ok:
+          type: boolean
+        ref:
+          type: string
+
+    ImagePruneRequest:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+          description: If true, only list refs that would be removed.
+
+    ImagePruneResponse:
+      type: object
+      required: [ok, dry_run, removed, in_use]
+      properties:
+        ok:
+          type: boolean
+        dry_run:
+          type: boolean
+        removed:
+          type: array
+          items:
+            type: string
+        in_use:
+          type: integer
+          description: Count of distinct image refs held by supervised containers.
+
+    PullRequest:
+      type: object
+      required: [ref]
+      properties:
+        ref:
+          type: string
+          description: Image reference (e.g. `nginx:alpine` or `registry/repo@sha256:...`)
+          example: nginx:alpine
+        stream:
+          type: boolean
+          description: If true, response is NDJSON stream instead of a single JSON object
+        username:
+          type: string
+          description: Optional registry user for Basic auth / token flows during pull
+        password:
+          type: string
+          description: Optional registry password
+
+    PullResponseJSON:
+      type: object
+      required: [ok, ref, config]
+      properties:
+        ok:
+          type: boolean
+        ref:
+          type: string
+        config:
+          type: object
+          description: Subset of OCI image config
+          properties:
+            os:
+              type: string
+            architecture:
+              type: string
+            entrypoint:
+              type: array
+              items:
+                type: string
+            cmd:
+              type: array
+              items:
+                type: string
+            working_dir:
+              type: string
+            env_len:
+              type: integer
+
+    PullEvent:
+      type: object
+      description: One NDJSON line when `stream` is true
+      required: [phase]
+      properties:
+        phase:
+          type: string
+          enum:
+            - begin
+            - auth
+            - manifest
+            - config
+            - layer
+            - progress
+            - layer_done
+            - meta
+            - done
+            - error
+        ref:
+          type: string
+        message:
+          type: string
+        media_type:
+          type: string
+        layer_count:
+          type: integer
+        index:
+          type: integer
+        count:
+          type: integer
+        digest:
+          type: string
+        size:
+          type: integer
+          format: int64
+        cached:
+          type: boolean
+        current:
+          type: integer
+          format: int64
+        ok:
+          type: boolean
+        ref_out:
+          type: string
+        config:
+          $ref: "#/components/schemas/PullSummary"
+        error:
+          type: string
+
+    PullSummary:
+      type: object
+      properties:
+        os:
+          type: string
+        architecture:
+          type: string
+        entrypoint:
+          type: array
+          items:
+            type: string
+        cmd:
+          type: array
+          items:
+            type: string
+        working_dir:
+          type: string
+        env_len:
+          type: integer
+        rootfs_diff_ids:
+          type: integer
+
+    RunRequest:
+      type: object
+      required: [image]
+      properties:
+        id:
+          type: string
+          description: Optional container id; generated if empty
+        image:
+          type: string
+          description: Image ref as stored after pull (e.g. `nginx:alpine`)
+        args:
+          type: array
+          items:
+            type: string
+        env:
+          type: array
+          items:
+            type: string
+        hostname:
+          type: string
+        restart:
+          type: string
+          description: Restart policy (`always`, `on-failure`, `unless-stopped`, `never`, …)
+        publish:
+          type: array
+          description: Docker-style port specs (e.g. `8080:80`, `127.0.0.1:9000:443/udp`)
+          items:
+            type: string
+        ports:
+          type: array
+          description: Structured port maps (alternative to `publish`)
+          items:
+            type: object
+            required: [hostPort, containerPort]
+            properties:
+              hostPort:
+                type: integer
+              containerPort:
+                type: integer
+              protocol:
+                type: string
+                enum: [tcp, udp]
+        stream:
+          type: boolean
+          description: |
+            When true, use `application/x-ndjson` for the response if a pull is needed or for the terminal `run` line when no pull (same event schema as `POST /v1/images/pull` plus final `phase: run`).
+        healthcheck:
+          $ref: "#/components/schemas/RunHealthcheck"
+        registry_username:
+          type: string
+          description: Optional registry credentials when a pull is required before run
+        registry_password:
+          type: string
+
+    RunHealthcheck:
+      type: object
+      description: |
+        Optional readiness and ongoing checks. The daemon waits until the first successful probe (within a bounded budget) before returning from a non-streaming run, then continues checking in the background. Unhealthy transitions trigger a kill so restart policy can respawn the workload.
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [exec, http, tcp, none]
+        command:
+          type: array
+          items:
+            type: string
+          description: Required for `exec` — argv inside the container (`crun exec`).
+        url:
+          type: string
+          description: Required for `http` — GET target expecting 2xx.
+        address:
+          type: string
+          description: Required for `tcp` — host:port to dial.
+        interval:
+          type: string
+          description: Go duration string for background checks (e.g. `30s`).
+        timeout:
+          type: string
+          description: Per-probe timeout (e.g. `10s`).
+        retries:
+          type: integer
+          description: Consecutive failures before declaring unhealthy.
+        start_period:
+          type: string
+          description: Grace period before failures count (Go duration).
+
+    ComposeProjectRequest:
+      type: object
+      description: |
+        Provide **either** `file` (path on the daemon host) **or** `yaml` plus `context_dir`.
+        The optional `remove_volumes` flag is honored only by **`POST /v1/compose/down`**.
+      properties:
+        file:
+          type: string
+          description: Path to compose file readable by nyxd (e.g. `nyx-compose.yaml`, `docker-compose.yml`)
+        yaml:
+          type: string
+          description: Full compose document as a string (requires `context_dir`)
+        context_dir:
+          type: string
+          description: Directory used for `.env` loading and resolving relative bind mounts when `yaml` is set
+        project:
+          type: string
+          description: |
+            Prefix for named volume directories and container IDs. When omitted, defaults to the
+            basename of the compose file's parent directory if `file` is set (Docker Compose style),
+            or the basename of `context_dir` if `yaml` is set. Use the same value for `up`, `stop`,
+            and `down`.
+        remove_volumes:
+          type: boolean
+          description: When true (compose down only), delete on-disk named volume directories declared in the file after containers are removed
+
+    ComposeUpResponse:
+      type: object
+      required: [ok, ids]
+      properties:
+        ok:
+          type: boolean
+        ids:
+          type: array
+          items:
+            type: string
+          description: Container IDs started, in dependency order
+
+    ComposeStopResponse:
+      type: object
+      required: [ok, stopped]
+      properties:
+        ok:
+          type: boolean
+        stopped:
+          type: array
+          items:
+            type: string
+          description: Container IDs stopped, in reverse dependency order
+
+    ComposeDownResponse:
+      type: object
+      required: [ok, removed]
+      properties:
+        ok:
+          type: boolean
+        removed:
+          type: array
+          items:
+            type: string
+          description: Container IDs removed, in reverse dependency order
+        removed_volume_paths:
+          type: array
+          items:
+            type: string
+          description: Host paths deleted when `remove_volumes` was true (omitted when empty)
+
+    RunResponse:
+      type: object
+      required: [ok, id, image]
+      properties:
+        ok:
+          type: boolean
+        id:
+          type: string
+        image:
+          type: string
+
+    StopResponse:
+      type: object
+      required: [ok, id]
+      properties:
+        ok:
+          type: boolean
+        id:
+          type: string
+
+    ExecRequest:
+      type: object
+      required: [argv]
+      properties:
+        argv:
+          type: array
+          items:
+            type: string
+          description: argv[0] is the program to exec
+        tty:
+          type: boolean
+          description: If true, allocate a pseudo-terminal (crun exec --tty) for shells and line editing.
+        rows:
+          type: integer
+          minimum: 1
+          description: Initial PTY height (optional). Sent by nyx for `-t` when stdin is a TTY.
+        cols:
+          type: integer
+          minimum: 1
+          description: Initial PTY width (optional). Sent by nyx for `-t` when stdin is a TTY.
