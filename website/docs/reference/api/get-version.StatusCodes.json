@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Version payload","content":{"application/json":{"schema":{"type":"object","required":["daemon","version","commit","buildDate"],"properties":{"daemon":{"type":"string","example":"nyxd"},"version":{"type":"string"},"commit":{"type":"string"},"buildDate":{"type":"string"}},"title":"VersionResponse"}}}}}}

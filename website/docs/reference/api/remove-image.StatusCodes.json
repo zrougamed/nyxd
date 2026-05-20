@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Removed","content":{"application/json":{"schema":{"type":"object","required":["ok","ref"],"properties":{"ok":{"type":"boolean"},"ref":{"type":"string"}},"title":"ImageRemoveResponse"}}}},"400":{"description":"Bad request"},"503":{"description":"Image store not configured"}}}

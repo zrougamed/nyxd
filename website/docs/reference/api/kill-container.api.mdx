@@ -1,0 +1,70 @@
+---
+id: kill-container
+title: "Send a signal to a container (default SIGKILL)"
+description: "Optional JSON body `{'signal':'KILL'}` (or `SIGKILL`). Used by foreground `nyx run` on Ctrl+C."
+sidebar_label: "Send a signal to a container (default SIGKILL)"
+hide_title: true
+hide_table_of_contents: true
+api: eJy9Vt9P40YQ/ldG8wSusUN7dw++qhKX0pbCASJBakWiemNPkj3Wu77ddYgV5X+vZm0IEO4e+tA8JJv1/Pxm5htv0IuFw+wOC6O9kJqsw2mMJbnCytpLozHDq3AQCv4cXV3CzJQt5JsJOrnQQk0wm+D52cXFBLc5HBgL+ejsd77IDxO4dVTCrIW5sbSwptEl5Lpdg210DkbD0Fv1wzCZaIzR1GQFezorMcN7qdTwMSiMsRZWVOQ5wOxug1pUhBnKEmOUHGQt/BJjtPS1kZZKzLxtKEZXLKkSmG3QtzVrOG+lXuB2O+2EyflPpmxZYqc7F8pRHEAh7fmZqGslixBe+sUxLJt922b2hQrPwVpOxktyQS4AtR/Da5xHQQ44NXiQfmkaD8aGYwA1h9rSXK7hgJJFAnkAOQ6Pxqc3n/PDBLfhw5m52mjX+f9xMOCfl87OpVIgioJqTwzif851h9odmnsuB5vrc56+xsLcP7MxM0aR0LgNSvs1ir8DHa1FVSu+YhiQk/bSdxdSqZseAOzwePcWBJ9ECX0LYJB5ty/z1IKgjYc5dzDLvh/8tC87amqyK+mMhUaLlZBKzBSF0CryS8NtXRsXGoS7NcN0dZzuJi/dyHKbcuMzgGRXj83eWIUZLr2vszRVphBq2Zl56f/WEeRFYxUcHTVaro+cKe7Jw8/s7Rd4rZ8mSZLDAR+7npMO5EIbS+VHMFq14JcEvQ02AZXwPICHPK88P9wcN7sZOn0sya7ln5VS6rkJheyrpNt1CZy8NQpOrs/20vkstayEgj/G42sWYBKBKGK9KIohAFQyiQiIolst11CaSkjdhxxFcFDSXDTKQ57aRqesGb4Slsg5jfGSbEhcGxgPr0FJ54mrPWuhV04meqKjaCiUknoRMDm5Posivs7zfCbccqI71N3oFfJvuN0vw+o4raVeBGts9IZqJQp6O+iODVrT2BeVYdq9/PuvX/8ZXQ3PT8c5pB3P9oHkfRInjV+S9v1wZ1EE2mgCb0rRwkEICbxtnD9MYNSbJ1tJ56TRDoQl8G0tC6FUC/ngw4fBo+VTa411bLESugVrGk8OGu5IT2uf1kpInfPykORgbk0FOSORBMX8Y7dbSJe1kdo7sOQbqyF/zUVha7imKMi5bm3wlHQNc5wMkgHGqGRBPPrZ05q4Nqr9zdgKLo0uTFWRLaRQcNEJwqPibs5clqa1Ue3c2Kq2hqkuMXaR9qZdqp8bSoOBNEw6D3gl9DPnI9IlCOhGArwBAU8zv2vRfmkevh6DzY6Z/69F3FPtrm48vgGbTU9cd7g67ndG/9IQYxZ4P7DXNMZAUNkdbjYz4ejWqu2Wr782ZFvM7qYxroSVgR+Z4Urp+Lxbvd/E4OCm3zeH8K1Q+0uhW24PoRr+x7FR270ybKfbGJckSrLBe/dg2Pk4GrP6TnFvG27jR42TsD6/Kzt9xv3XV6MxxjjrXzcqU7KOFQ+8RcVDF6QJOYddGe42qIReNGLBsp1N/vwL1qhULQ==
+sidebar_class_name: "post api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Send a signal to a container (default SIGKILL)"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/v1/containers/{id}/kill"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Optional JSON body `{"signal":"KILL"}` (or `SIGKILL`). Used by foreground `nyx run` on Ctrl+C.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./kill-container.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./kill-container.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./kill-container.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

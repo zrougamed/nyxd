@@ -1,0 +1,61 @@
+---
+id: nyxd-control-api
+title: "nyxd control API"
+description: "Minimal HTTP API for **nyxd**, served on a **Unix domain socket** (default `/run/nyxd/nyxd.sock`)."
+sidebar_label: Introduction
+sidebar_position: 0
+hide_title: true
+custom_edit_url: null
+---
+
+import ApiLogo from "@theme/ApiLogo";
+import Heading from "@theme/Heading";
+import SchemaTabs from "@theme/SchemaTabs";
+import TabItem from "@theme/TabItem";
+import Export from "@theme/ApiExplorer/Export";
+
+<span
+  className={"theme-doc-version-badge badge badge--secondary"}
+  children={"Version: 1.0.0"}
+>
+</span>
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"nyxd control API"}
+>
+</Heading>
+
+
+
+Minimal HTTP API for **nyxd**, served on a **Unix domain socket** (default `/run/nyxd/nyxd.sock`).
+There is no TCP listener by default.
+
+**Calling the API**
+
+```bash
+curl -sS --unix-socket /run/nyxd/nyxd.sock http://localhost/v1/ping
+```
+
+Replace `/run/nyxd/nyxd.sock` with your socket path or `NYXD_SOCKET` / `nyx -socket`.
+
+**Authentication:** none today (local trust). Socket permissions are typically `0660`.
+
+**Errors:** many routes use `text/plain` bodies from `http.Error`; JSON endpoints return `application/json` on success.
+
+
+<div
+  style={{"marginBottom":"var(--ifm-paragraph-margin-bottom)"}}
+>
+  <h3
+    style={{"marginBottom":"0.25rem"}}
+  >
+    License
+  </h3><a
+    href={"https://polyformproject.org/licenses/noncommercial/1.0.0/"}
+  >
+    PolyForm Noncommercial License 1.0.0
+  </a>
+</div>
+      

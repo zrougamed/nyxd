@@ -1,0 +1,69 @@
+---
+id: compose-stop
+title: "Stop all services from a compose file"
+description: "Resolves the same project + container IDs as `compose/up`, then stops each service in reverse"
+sidebar_label: "Stop all services from a compose file"
+hide_title: true
+hide_table_of_contents: true
+api: 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
+sidebar_class_name: "post api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Stop all services from a compose file"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/v1/compose/stop"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Resolves the same project + container IDs as `compose/up`, then stops each service in reverse
+dependency order. Missing containers are ignored (idempotent).
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./compose-stop.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./compose-stop.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

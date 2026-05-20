@@ -1,0 +1,1 @@
+{"title":"Body","body":{"required":false,"content":{"application/json":{"schema":{"type":"object","properties":{"signal":{"type":"string","description":"Signal name without or with `SIG` prefix (e.g. `KILL`, `SIGTERM`)."}}}}}}}

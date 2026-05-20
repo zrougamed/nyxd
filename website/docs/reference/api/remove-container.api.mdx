@@ -1,0 +1,71 @@
+---
+id: remove-container
+title: "Remove a container"
+description: "Stops the container if needed, deletes crun state, and tears down"
+sidebar_label: "Remove a container"
+hide_title: true
+hide_table_of_contents: true
+api: eJy9Vdtu4zYQ/ZXBPCWCYjntdh+0RYE03aLpJTFiB2jhBBUtjiNuqKGWpJwIhv69GFm5Ou1jX2yJOjNz5na4xahuA+ZLLB1HZZh8wJsUNYXSmyYax5jjPLomQKwInlBg1sBEmnQKmixFClD6liFEFSkFxRoiKR9Au3u+ZqZ47/zdcO425K3qwFNwrS8pTK4ZU3QNeSURzzTm6Kl2Gzp9jIcpNsqrmqIwzJdbZFUT5mg0pmiEZaNihSl6+toaTxrz6FtKMZQV1QrzLcauEYsQveFb7PsbAYfGcaAg37+ZTuXvde6XAw8JIrkTR4GoprGmHMhmX4Lgtvtx3OoLlfEVoyW6O6GrpcaNl4yj2QV3dy9MV85ZUoz9gH2HeorRREtP/C7HPLDv5eOH9zL5UWkQKhQiDpgP+5inegO7CGvXshbsd9Nv97HztiG/McF5aFltlLFqZWkgV1OsnHSxcSEOrYsV5phtjrPnOcu2RvfZrs+YYiC/eext6y3mWMXY5FlmXalstXP0msFVICjK1ls4OmrZPBwFV95RhO8l3g/w1j6bTCYFHMgjyPSACWBu2XnSn8Cx7YYRH32IC6hVlHk7lAGVcTG8dkM7xuJz96CHnfDOwsnsbI/hH4ZNrSz8sljMBABr5yFJxC5JUhhy1uAYFCTJFZsH0K5WhkcWSQIHmtaqtRGKzLecieXwMxFEIcwWFfkhF3awOJ2BNSGStHDVwWg8ueZrTpJTZa3h2yHNk9lZkshxURQrFapr3hUyzN8U852w+5XdHGeN4dvBmzi9pMaqkt4nDfcmVtC51r8qtvNQnP/1509/zy9Of/u8KCCDgrsHGIkUYxInbayI47h+eZIAOyaITqsODgZKEH0b4uEE5qN78rUJwTgOoDxB7BpTKms7KKYfP04fPX/23vkgHmvFHXjXiqq1MmSRHmLWWGW4gJXThgKsvauhkEpMBsPiE/w6vzgHYt04wzGAp9h6huKtWhTS8NCWJYVR+mTwdwNzPJlOppiiNSXJPudPQjdztvvZ+RrOHZeursmXRln4fQeER8Pn1Ql5ljXOdmvn68Y7EaOJ87fZ6Dpk/NJRNjjIhvWVra0Vvwi+UxlQzxfA21HfPuvj/3RfjJr43BpRqiH97Sg4S9wcj8I9Xm0p5sOFMarOTYqDsORL3G5XKtCVt30vx19b8h3my5sUN8qbQdlEmbQJ8qwxXysb6D+KcHA5yv4h/BvZ8VBxJzOgbCtvmOIddbubrb/pU6xIafJD9N2Hk7KkJr4w2buORKueNHh2MV9g3/8DGoq+tw==
+sidebar_class_name: "post api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Remove a container"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/v1/containers/{id}/remove"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Stops the container if needed, deletes crun state, and tears down
+network and overlay resources.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./remove-container.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./remove-container.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./remove-container.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

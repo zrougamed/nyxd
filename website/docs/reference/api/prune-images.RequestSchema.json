@@ -1,0 +1,1 @@
+{"title":"Body","body":{"required":false,"content":{"application/json":{"schema":{"type":"object","properties":{"dry_run":{"type":"boolean","description":"If true, only list refs that would be removed."}},"title":"ImagePruneRequest"}}}}}

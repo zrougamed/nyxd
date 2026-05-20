@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Raw command output (stream)","content":{"application/octet-stream":{"schema":{"type":"string","format":"binary"}}}},"400":{"description":"Bad request"},"503":{"description":"Runtime unavailable"}}}

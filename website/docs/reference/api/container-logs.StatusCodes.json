@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Plain text log stream (or snapshot when not following)","content":{"text/plain":{"schema":{"type":"string"}}}},"404":{"description":"No log file for this container"},"500":{"description":"Read error"}}}

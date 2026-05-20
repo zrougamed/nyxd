@@ -1,0 +1,69 @@
+---
+id: stop-container
+title: "Stop a container"
+description: "Sends the image stop signal (default SIGTERM) then SIGKILL if needed."
+sidebar_label: "Stop a container"
+hide_title: true
+hide_table_of_contents: true
+api: eJytVdtu4zYQ/ZXBPCWCVnLa7T5oiwJpmrbpZhMjdoAWSVDR0tjmhhpqScobwdC/F0Mr97RPfbElaubMmdvhFoNaeSyusLIclGZyHm9SrMlXTrdBW8YCZ8S1h7Am0I1aEfhgW/B6xcrAXk1L1ZkAs5Pf5scXn/fFjuXt08npKeglMFFNdYYp2pacEsyTGgsUlKP7qJhiq5xqKAiD4mqLrBrCAnWNKWph0aqwxhQdfe20oxqL4DpK0VdrahQWWwx9SxHXaV7hMNyIsW8te/Ly/bvJRP5e5Ca5qKqiNpCEkjoQBzFUbWt0FQnnX7xYb19Hs4svVIVnvK7Q3grpWirZOsk66B0Fe/vEdWGtIcU4RNs3Ekgx6GBoZHkx5oLDIJ/ev5XNz6oGIUI+YLR5/9rmoebANsDSdlyL7Q+T79+oTteS22hvHXSsNkobtTAUqTUU1lb62FofYvvCGgvMNwf54yzlW10PuXQaU/TkNvfd7ZzBAtchtEWeG1sps97BPI9/6QnKqnMG3r3rWN+987a6pQA/SrSf4KV/nmVZCXvyCDI/oD3oFVtH9UewbPo4xCOGQECjgkzcfnbNKAOjeWljK8bCc39Xg+TjrIHD6ckrhp8160YZ+H0+n4oBLK2DJBG/JEkh5lyDZVCQJJes76C2jdI8skiSxw0qc9dxLp7xJxOLUpjN1+RiLmxhfjQFo30gaeCih9E5u+ZrTpIjZYzmVUzzcHqSJHJcluVC+fU17wrpZy+K+UbY15XdHOSt5lVEE9ALao2q6G3S8E2HNfS2c8+KbR2UZ3/9+cvfs/OjT8fzEnIoub+DkUg5JnHYiYSEcfWKJAG2TBBsrXrYi5QguM6H/QxmIzy5RnuvLXtQjiD0ra6UMT2Ukw8fJvfIx85Z5wWxUdyDs10gD50MWaC7kLdGaS5hYWtNHpbONlBKJbLoWH6EP2bnZ0Bct1Zz8OAodI6hfKkUpTTcd1VF3stkpSiDvxuYg2ySTTBFoyuSbS4epG5qTf+rdQ2cWa5s05CrtDJwujOEe8fH1fFFnrfW9EvrmtZZEaLMulU+QvucnwLlESCPyys72yh+Enyng1A9EeRng759VMb/7T4Y9e6x9KJDMb3tKCdXuDkYRXm8nFIs4pUQNeUmxSgbxRVutwvl6dKZYZDjrx25HourmxQ3yumoWqI7tfbyXGOxVMbTfyS5dzEK+j78G9XxUHEvHVamkzdM8Zb63c013AwprknV5GL03YfDeNs8cXl10YgSPejr9Hw2x2H4B8WioYw=
+sidebar_class_name: "post api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Stop a container"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/v1/containers/{id}/stop"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Sends the image stop signal (default SIGTERM) then SIGKILL if needed.
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./stop-container.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./stop-container.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./stop-container.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

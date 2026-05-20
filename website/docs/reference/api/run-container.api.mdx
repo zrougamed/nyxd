@@ -1,0 +1,70 @@
+---
+id: run-container
+title: "Create and start a container"
+description: "Starts an OCI workload via crun. If the image is not in the local store, the daemon pulls it first."
+sidebar_label: "Create and start a container"
+hide_title: true
+hide_table_of_contents: true
+api: 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
+sidebar_class_name: "post api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Create and start a container"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/v1/containers/run"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Starts an OCI workload via crun. If the image is not in the local store, the daemon pulls it first.
+When `stream: true`, the response is `application/x-ndjson` (same `PullEvent` lines as `POST /v1/images/pull` if a pull runs, then `phase: run` with `container_id`). Otherwise the response is a single JSON `RunResponse`.
+If `id` is omitted, the server generates one from the image reference.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./run-container.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./run-container.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

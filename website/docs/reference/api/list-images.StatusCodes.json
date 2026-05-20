@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Image ref list","content":{"application/json":{"schema":{"type":"object","required":["images"],"properties":{"images":{"type":"array","items":{"type":"string"}}},"title":"ImagesListResponse"}}}},"503":{"description":"Image store not configured"}}}

@@ -1,0 +1,1 @@
+{"parameters":[{"name":"detail","in":"query","required":false,"schema":{"type":"string","enum":["1","true",""]},"description":"When `1` or `true`, include per-container metadata in `items`."}]}

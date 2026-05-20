@@ -1,0 +1,189 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ─── Light theme ──────────────────────────────────────────────────────── */
+:root {
+  /* Brand */
+  --nyxd-green:       #3ecf5e;
+  --nyxd-green-deep:  #27a845;
+  --nyxd-navy:        #0d1f3c;
+  --nyxd-navy-mid:    #183558;
+  --nyxd-blue-mid:    #1e4d8c;
+
+  /* Infima overrides */
+  --ifm-color-primary:          #27a845;
+  --ifm-color-primary-dark:     #219c3d;
+  --ifm-color-primary-darker:   #1e9039;
+  --ifm-color-primary-darkest:  #187830;
+  --ifm-color-primary-light:    #2dbc4e;
+  --ifm-color-primary-lighter:  #3ecf5e;
+  --ifm-color-primary-lightest: #67dc82;
+
+  --ifm-background-color:       #f8fafb;
+  --ifm-background-surface-color: #ffffff;
+  --ifm-heading-color:          #0d1f3c;
+  --ifm-font-color-base:        #243856;
+  --ifm-link-color:             #1a56b0;
+  --ifm-link-hover-color:       #0f3d8a;
+  --ifm-code-font-size:         93%;
+  --ifm-font-family-base:       'Inter', 'Segoe UI', system-ui, sans-serif;
+  --ifm-heading-font-family:    'Space Grotesk', 'Inter', sans-serif;
+  --ifm-font-family-monospace:  'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Navbar */
+  --ifm-navbar-height:               3.75rem;
+  --ifm-navbar-background-color:     #ffffff;
+  --ifm-navbar-shadow:               0 1px 0 rgba(13, 31, 60, 0.08);
+
+  /* Sidebar */
+  --ifm-menu-color:                  #364a66;
+  --ifm-menu-color-active:           #1a56b0;
+  --ifm-menu-color-background-active: rgba(26, 86, 176, 0.08);
+  --ifm-menu-color-background-hover: rgba(13, 31, 60, 0.05);
+
+  /* Footer */
+  --ifm-footer-background-color:    #0d1f3c;
+  --ifm-footer-color:                #b8cfee;
+  --ifm-footer-link-color:           #b8cfee;
+  --ifm-footer-link-hover-color:     #ffffff;
+  --ifm-footer-title-color:          #ffffff;
+
+  /* Misc */
+  --ifm-hr-border-color:             rgba(13, 31, 60, 0.1);
+  --ifm-table-stripe-background:     rgba(13, 31, 60, 0.03);
+  --docusaurus-highlighted-code-line-bg: rgba(62, 207, 94, 0.12);
+
+  /* Custom tokens */
+  --nyxd-hero-bg:        linear-gradient(135deg, #0d1f3c 0%, #183558 45%, #1a4070 100%);
+  --nyxd-card-bg:        #ffffff;
+  --nyxd-card-border:    rgba(13, 31, 60, 0.09);
+  --nyxd-card-shadow:    0 4px 24px rgba(13, 31, 60, 0.08), 0 1px 4px rgba(13, 31, 60, 0.04);
+  --nyxd-badge-bg:       rgba(62, 207, 94, 0.12);
+  --nyxd-badge-color:    #1a7a35;
+}
+
+/* ─── Dark theme ───────────────────────────────────────────────────────── */
+[data-theme='dark'] {
+  --ifm-color-primary:          #3ecf5e;
+  --ifm-color-primary-dark:     #2dc050;
+  --ifm-color-primary-darker:   #27b548;
+  --ifm-color-primary-darkest:  #1e943b;
+  --ifm-color-primary-light:    #57d972;
+  --ifm-color-primary-lighter:  #70e389;
+  --ifm-color-primary-lightest: #9aedb0;
+
+  --ifm-background-color:          #080f1c;
+  --ifm-background-surface-color:  #0f1e33;
+  --ifm-heading-color:             #e8f4ff;
+  --ifm-font-color-base:           #aec8e8;
+  --ifm-link-color:                #7ab8ff;
+  --ifm-link-hover-color:          #a8d0ff;
+
+  --ifm-navbar-background-color:   #0c1929;
+  --ifm-navbar-shadow:             0 1px 0 rgba(255, 255, 255, 0.06);
+
+  --ifm-menu-color:                #8aabc8;
+  --ifm-menu-color-active:         #7ab8ff;
+  --ifm-menu-color-background-active: rgba(122, 184, 255, 0.1);
+  --ifm-menu-color-background-hover: rgba(255, 255, 255, 0.05);
+
+  --ifm-footer-background-color:   #060d18;
+  --ifm-footer-color:              #6b8fb3;
+  --ifm-footer-link-color:         #6b8fb3;
+  --ifm-footer-link-hover-color:   #b8cfee;
+  --ifm-footer-title-color:        #d0e4ff;
+
+  --ifm-table-stripe-background:   rgba(255, 255, 255, 0.04);
+  --docusaurus-highlighted-code-line-bg: rgba(62, 207, 94, 0.15);
+
+  --nyxd-card-bg:      #0f1e33;
+  --nyxd-card-border:  rgba(255, 255, 255, 0.07);
+  --nyxd-card-shadow:  0 4px 24px rgba(0, 0, 0, 0.35);
+  --nyxd-badge-bg:     rgba(62, 207, 94, 0.15);
+  --nyxd-badge-color:  #3ecf5e;
+}
+
+/* ─── Global typography ────────────────────────────────────────────────── */
+body {
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--ifm-heading-font-family);
+  letter-spacing: -0.015em;
+}
+
+code, pre {
+  font-family: var(--ifm-font-family-monospace);
+}
+
+/* ─── Navbar ───────────────────────────────────────────────────────────── */
+.navbar {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.navbar__title {
+  font-family: var(--ifm-heading-font-family);
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
+.navbar__item.navbar__link--active,
+.navbar__link:hover {
+  color: var(--ifm-color-primary);
+}
+
+/* ─── Sidebar ──────────────────────────────────────────────────────────── */
+.menu__link--active {
+  font-weight: 600;
+  border-left: 3px solid var(--ifm-color-primary);
+}
+
+/* ─── Inline code ──────────────────────────────────────────────────────── */
+code:not(pre > code) {
+  border: 1px solid var(--nyxd-card-border);
+  background: var(--ifm-table-stripe-background);
+  font-size: 0.88em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+/* ─── Admonitions ──────────────────────────────────────────────────────── */
+.alert--tip {
+  --ifm-alert-background-color: var(--nyxd-badge-bg);
+  --ifm-alert-border-color: var(--ifm-color-primary);
+}
+
+/* ─── Tables ───────────────────────────────────────────────────────────── */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th {
+  background: var(--ifm-table-stripe-background);
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ─── Footer ───────────────────────────────────────────────────────────── */
+.footer {
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+}
+
+.footer__title {
+  font-family: var(--ifm-heading-font-family);
+  font-size: 0.8rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.footer__copyright {
+  font-size: 0.8rem;
+  opacity: 0.55;
+}
