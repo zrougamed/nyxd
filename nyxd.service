@@ -1,0 +1,36 @@
+# /etc/systemd/system/nyxd.service
+[Unit]
+Description=nyxd - Nyx OCI container orchestrator
+Documentation=https://github.com/zrougamed/nyxd
+After=network.target
+Wants=network.target
+
+[Service]
+# Default: in-process networking (no /opt/cni/bin). For CNI plugins use e.g.:
+#   --net-driver=cni --cni-bin-dir=/opt/cni/bin --cni-conf-dir=/etc/cni/net.d --network=nyx
+# and extend ReadWritePaths with /etc/cni if needed.
+Type=notify
+ExecStart=/usr/local/bin/nyxd \
+    --base-dir=/var/lib/nyxd \
+    --crun=/usr/bin/crun \
+    --net-driver=native \
+    --log-level=info
+# Optional: non-root `nyx` — create group `nyxd`, add users with `usermod -aG nyxd …`,
+# then append to ExecStart above:  --socket-group=nyxd
+
+Restart=on-failure
+RestartSec=5s
+
+# Security hardening
+NoNewPrivileges=no          # must be no - containers need privilege setup
+PrivateNetwork=no           # nyxd manages the network
+ProtectKernelTunables=no    # overlayfs needs kernel params
+ProtectControlGroups=no     # cgroup management
+ReadWritePaths=/var/lib/nyxd /run/nyxd /sys/fs/cgroup
+
+# Resource limits for the daemon itself
+MemoryMax=256M
+TasksMax=512
+
+[Install]
+WantedBy=multi-user.target
