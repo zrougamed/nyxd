@@ -21,29 +21,36 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # Namespaced unit tests and the e2e scripts run real containers
+      # unprivileged: crun, newuidmap/newgidmap with a subordinate range, nft,
+      # and unprivileged user namespaces (restricted by AppArmor on 24.04).
+      - name: Prerequisites
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          which crun newuidmap newgidmap nft bzip2 || { sudo apt-get update && sudo apt-get install -y crun uidmap nftables bzip2; }
+          grep -q "^$(id -un):" /etc/subuid || sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$(id -un)"
+
       - name: Vet
         run: make vet
 
-      - name: Test
-        run: make test
+      # Unit tests plus the rootless, build, transfer and WSL end-to-end
+      # scripts against -cover builds; fails below COVER_MIN (statements,
+      # whole module, merged).
+      - name: Tests and coverage
+        env:
+          E2E: "1"
+          COVER_MIN: "91.5"
+        run: scripts/coverage.sh
 
-      - name: Overlay mount test (user namespace)
-        run: |
-          # Ubuntu 24.04 runners restrict unprivileged user namespaces via AppArmor.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-          make test-overlay
-
-      - name: Rootless end-to-end (crun + uidmap from the runner image)
-        run: |
-          which crun newuidmap newgidmap || { sudo apt-get update && sudo apt-get install -y crun uidmap; }
-          grep -q "^$(id -un):" /etc/subuid || sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$(id -un)"
-          make test-rootless
-
-      - name: Image build end-to-end (rootless)
-        run: make test-build
-
-      - name: Image push / pull / save / load end-to-end (rootless)
-        run: make test-transfer
+      - name: Coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: |
+            coverage/coverage.out
+            coverage/packages.txt
+            coverage/total.txt
 
       - name: Build binaries
         run: make build build-nyx
@@ -55,11 +62,6 @@ jobs:
           make wsl-rootfs WSL_ARCH=arm64
           mkdir -p wsl-rootfs
           tar -xzf bin/nyx-wsl-amd64.tar.gz -C wsl-rootfs
-
-      # Hosted runners have no WSL2: nyx drives a fake wsl.exe that boots the
-      # real distro tarball in its own namespaces, without a shell.
-      - name: nyx machine + WSL distro end-to-end (fake wsl.exe)
-        run: make build-nyx && scripts/wsl-smoke.sh
 
       # The distro ships to Windows users as-is: fail on known vulnerabilities in
       # what it contains (nyxd's Go modules; crun is pinned in build-wsl-rootfs.sh).
