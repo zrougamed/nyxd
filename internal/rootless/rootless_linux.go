@@ -55,6 +55,9 @@ type Info struct {
 	// SubIDs is true when a subordinate ID range is mapped; false means only
 	// the invoking user is mapped (single-ID mode).
 	SubIDs bool
+	// Remap is true when real root started nyxd with -userns-remap: the
+	// daemon runs as root of a namespace mapped to an unprivileged ID range.
+	Remap bool
 }
 
 // Wanted reports whether this process must go through Enter: it is not real
@@ -69,7 +72,8 @@ func Current() Info {
 	if os.Getenv(envStage) != stageReady {
 		return Info{}
 	}
-	return Info{Rootless: true, SubIDs: os.Getenv(envMapping) == "subid"}
+	m := os.Getenv(envMapping)
+	return Info{Rootless: true, SubIDs: m == "subid" || m == "remap", Remap: m == "remap"}
 }
 
 // Enter makes sure the daemon runs inside its user namespace. In the host
@@ -112,6 +116,54 @@ func waitAndReexec() error {
 	}
 	env := setEnv(os.Environ(), envStage, stageReady)
 	return syscall.Exec(exe, os.Args, env)
+}
+
+// EnterRemap is Enter for real root with -userns-remap: the daemon runs in a
+// new user + mount namespace where 0..count-1 map to host IDs
+// start..start+count-1. Root writes the maps itself (no newuidmap). The
+// directories in own are chowned to the mapped root first so the daemon can
+// use them. Like Enter, it never returns in the host process.
+func EnterRemap(start, count int, own []string) (Info, error) {
+	if os.Getenv(envStage) != "" {
+		return Enter()
+	}
+	if os.Geteuid() != 0 {
+		return Info{}, errors.New("-userns-remap needs root (run nyxd as a normal user for rootless mode)")
+	}
+	if start < 1 || count < 1 || start+count > 1<<32-2 {
+		return Info{}, fmt.Errorf("-userns-remap: invalid range %d:%d", start, count)
+	}
+	for _, d := range own {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			return Info{}, err
+		}
+		if err := os.Chown(d, start, start); err != nil {
+			return Info{}, fmt.Errorf("-userns-remap: chown %s: %w", d, err)
+		}
+	}
+	// /proc/self/exe: the remapped root may not be allowed to walk the path
+	// to the binary (e.g. under a home directory), and it guarantees the
+	// same binary is re-executed.
+	cmd := exec.Command("/proc/self/exe", os.Args[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags:                 syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS,
+		Pdeathsig:                  syscall.SIGKILL,
+		UidMappings:                []syscall.SysProcIDMap{{ContainerID: 0, HostID: start, Size: count}},
+		GidMappings:                []syscall.SysProcIDMap{{ContainerID: 0, HostID: start, Size: count}},
+		GidMappingsEnableSetgroups: true,
+		// The caller's own uid (0) is not in the map, so the child would be
+		// "nobody" and lose its capabilities at exec. Switch to uid/gid 0 of
+		// the new namespace (host start) first, while it still has them.
+		Credential: &syscall.Credential{Uid: 0, Gid: 0},
+	}
+	// Go writes the maps before exec, so the child starts as mapped root.
+	cmd.Env = setEnv(setEnv(os.Environ(), envStage, stageReady), envMapping, "remap")
+	if err := cmd.Start(); err != nil {
+		return Info{}, fmt.Errorf("-userns-remap: start user namespace: %w", err)
+	}
+	os.Exit(forwardAndWait(cmd))
+	return Info{}, nil
 }
 
 func runHost() int {
@@ -182,6 +234,12 @@ func runHost() int {
 		syncW.Close()
 	}
 
+	return forwardAndWait(cmd)
+}
+
+// forwardAndWait relays termination signals to the namespaced daemon and
+// returns its exit status.
+func forwardAndWait(cmd *exec.Cmd) int {
 	sigs := make(chan os.Signal, 4)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 	go func() {
@@ -190,7 +248,7 @@ func runHost() int {
 		}
 	}()
 
-	err = cmd.Wait()
+	err := cmd.Wait()
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
 		return ee.ExitCode()
@@ -250,6 +308,20 @@ func parseSubID(sc *bufio.Scanner, keys map[string]bool, file string) (subRange,
 		return subRange{}, err
 	}
 	return subRange{}, fmt.Errorf("no entry in %s", file)
+}
+
+// CleanEnv drops nyxd's internal namespace-stage variables, for running
+// another program (e.g. `nyxd unshare CMD`): a nyxd started from it must not
+// believe it is already inside its own namespace.
+func CleanEnv(env []string) []string {
+	out := env[:0:0]
+	for _, e := range env {
+		if strings.HasPrefix(e, envStage+"=") || strings.HasPrefix(e, envMapping+"=") || strings.HasPrefix(e, EnvHostUID+"=") {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 func setEnv(env []string, key, val string) []string {

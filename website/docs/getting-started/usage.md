@@ -17,6 +17,9 @@ sudo nyx pull --username "$USER" --password "$TOKEN" registry.example.com/myapp:
 # Run — foreground prints container id, then streams logs; Ctrl+C sends SIGKILL (POST /v1/containers/{id}/kill)
 sudo nyx run nginx:alpine
 
+# Command after the image, like docker run ("--" before it is optional)
+sudo nyx run alpine:3.20 sh -c 'echo hello; exit 3'   # nyx exits; the daemon logs exitCode 3
+
 # Detach: prints container id only (use --json for the full JSON object on stdout)
 sudo nyx run -d nginx:alpine
 sudo nyx run -d --json nginx:alpine
@@ -66,6 +69,17 @@ nyx run myapp:1.0
 ```
 
 No Docker or BuildKit involved; works rootless. Supported syntax, cache rules and security notes: [Building images](/docs/getting-started/build).
+
+## Sharing images (`nyx tag`, `push`, `save`, `load`)
+
+```bash
+nyx tag myapp:1.0 registry.example.com/team/myapp:1.0
+nyx push registry.example.com/team/myapp:1.0             # credentials: flags, NYX_REGISTRY_*, ~/.docker/config.json
+nyx save -o myapp.tar myapp:1.0                          # OCI layout + docker manifest.json
+nyx load -i myapp.tar                                    # also loads docker save / podman save archives
+```
+
+Details: [Sharing images](/docs/getting-started/images).
 
 ## Compose stacks (`nyx compose`)
 

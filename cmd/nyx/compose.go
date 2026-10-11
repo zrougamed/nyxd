@@ -112,6 +112,10 @@ func doComposeUp(socket string, opts composeCLI) error {
 	if err != nil {
 		return err
 	}
+	// The daemon reads the file: give it the path as the daemon sees it.
+	if abs, err = daemonPath(socket, abs); err != nil {
+		return err
+	}
 	body := map[string]string{"file": abs}
 	if opts.project != "" {
 		body["project"] = opts.project
@@ -124,6 +128,10 @@ func doComposeStop(socket string, opts composeCLI) error {
 	if err != nil {
 		return err
 	}
+	// The daemon reads the file: give it the path as the daemon sees it.
+	if abs, err = daemonPath(socket, abs); err != nil {
+		return err
+	}
 	body := map[string]string{"file": abs}
 	if opts.project != "" {
 		body["project"] = opts.project
@@ -134,6 +142,10 @@ func doComposeStop(socket string, opts composeCLI) error {
 func doComposeDown(socket string, opts composeCLI) error {
 	abs, err := resolveComposePathForCLI(opts.file)
 	if err != nil {
+		return err
+	}
+	// The daemon reads the file: give it the path as the daemon sees it.
+	if abs, err = daemonPath(socket, abs); err != nil {
 		return err
 	}
 	body := map[string]any{"file": abs}

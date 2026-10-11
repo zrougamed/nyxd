@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -29,6 +30,9 @@ const systemSocket = "/run/nyxd/nyxd.sock"
 func defaultSocket() string {
 	if v := os.Getenv("NYXD_SOCKET"); v != "" {
 		return v
+	}
+	if runtime.GOOS == "windows" {
+		return wslScheme + "nyx" // see nyx machine
 	}
 	if os.Geteuid() != 0 {
 		if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
@@ -110,6 +114,16 @@ func run(args []string) error {
 		return doCompose(socket, args[1:])
 	case "build":
 		return doBuild(socket, args[1:])
+	case "machine":
+		return doMachine(args[1:])
+	case "tag":
+		return doTag(socket, args[1:])
+	case "push":
+		return doPush(socket, args[1:])
+	case "save":
+		return doSave(socket, args[1:])
+	case "load":
+		return doLoad(socket, args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -128,11 +142,13 @@ global-options (before <command>):
 commands:
   ping
       check that nyxd is reachable
+  machine <init|start|stop|rm|status|logs> [--name NAME]
+      Windows: manage the WSL2 distro that runs nyxd (no admin rights needed after WSL is enabled)
   version
       print daemon version / build info
   pull [--json] [--username USER] [--password PASS] <ref>
       pull an image into the local store; default shows progress, --json streams raw events
-  run [flags] <image> [-- <argv...>]
+  run [flags] <image> [command [args...]]   (a "--" before the command is optional)
       start a container. default: stay attached and stream logs until the workload exits.
       -d / --detach: start in the background and print the container id.
       flags:
@@ -154,6 +170,15 @@ commands:
   build [-t TAG]... [-f Dockerfile] [--build-arg K=V]... [--target STAGE] [--no-cache] [-q] <context-dir>
       build an image from a Dockerfile (no Docker/BuildKit; RUN runs in the container sandbox).
       the context honours .dockerignore; -q prints only the image id
+  tag <source> <target>
+      give a local image another reference (e.g. registry.example.com/team/app:1.0)
+  push [--username USER] [--password PASS] <ref>
+      upload a local image to its registry; credentials default to NYX_REGISTRY_USERNAME /
+      NYX_REGISTRY_PASSWORD, then ~/.docker/config.json "auths". localhost registries use http
+  save [-o FILE] <ref> [<ref>...]
+      write images to a tar archive (OCI layout + docker manifest.json; loads in docker/podman)
+  load [-i FILE]
+      import images from an archive made by nyx, docker or podman save (stdin without -i)
   image ls
       list image refs present in the local store
   image rm <ref> [<ref>...]
@@ -173,6 +198,8 @@ commands:
       compose down: remove stack containers; -v deletes declared named volume dirs when unreferenced.
 
 environment:
+  NYX_REGISTRY_USERNAME, NYX_REGISTRY_PASSWORD
+                credentials for nyx push
   NYXD_SOCKET   default control socket path (else $XDG_RUNTIME_DIR/nyxd/nyxd.sock
                 for a rootless daemon when present, else /run/nyxd/nyxd.sock)
 `, defaultSocket())
@@ -182,8 +209,7 @@ func httpClient(socket string) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				var d net.Dialer
-				return d.DialContext(ctx, "unix", socket)
+				return dialEndpoint(ctx, socket)
 			},
 		},
 		Timeout: 30 * time.Minute,
@@ -210,6 +236,7 @@ func doPing(socket string) error {
 }
 
 func doVersion(socket string) error {
+	fmt.Printf("nyx %s\n", version)
 	c := httpClient(socket)
 	resp, err := c.Get("http://unix/v1/version")
 	if err != nil {

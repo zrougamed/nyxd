@@ -113,27 +113,19 @@ func parseRunArgs(args []string) (runOpts, error) {
 doneFlags:
 	rest := args[i:]
 	if len(rest) < 1 {
-		return o, fmt.Errorf("usage: nyx run [flags] <image> [-- <command args>]")
+		return o, fmt.Errorf("usage: nyx run [flags] <image> [command [args...]]")
 	}
-	dash := -1
-	for j, a := range rest {
-		if a == "--" {
-			dash = j
-			break
-		}
-	}
-	switch {
-	case dash == 0:
+	// Like docker run: everything after the image is the command. A "--"
+	// right after the image is accepted (and dropped) for compatibility.
+	o.image = rest[0]
+	if o.image == "--" {
 		return o, fmt.Errorf("missing image before --")
-	case dash > 0:
-		if dash != 1 {
-			return o, fmt.Errorf("expected a single image ref before --")
-		}
-		o.image = rest[0]
-		o.cmdArgs = rest[dash+1:]
-	default:
-		o.image = rest[0]
 	}
+	cmd := rest[1:]
+	if len(cmd) > 0 && cmd[0] == "--" {
+		cmd = cmd[1:]
+	}
+	o.cmdArgs = cmd
 	return o, nil
 }
 
@@ -436,7 +428,7 @@ func doLogs(socket string, args []string) error {
 
 func doImage(socket string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: nyx image <ls|list|rm|prune> ...")
+		return fmt.Errorf("usage: nyx image <ls|list|rm|prune|tag|push|save|load|build> ...")
 	}
 	switch args[0] {
 	case "ls", "list":
@@ -459,8 +451,18 @@ func doImage(socket string, args []string) error {
 		return nil
 	case "prune":
 		return doImagePrune(socket, args[1:])
+	case "tag":
+		return doTag(socket, args[1:])
+	case "push":
+		return doPush(socket, args[1:])
+	case "save":
+		return doSave(socket, args[1:])
+	case "load":
+		return doLoad(socket, args[1:])
+	case "build":
+		return doBuild(socket, args[1:])
 	default:
-		return fmt.Errorf("unknown image subcommand %q (try ls, rm, prune)", args[0])
+		return fmt.Errorf("unknown image subcommand %q (try ls, rm, prune, tag, push, save, load, build)", args[0])
 	}
 }
 

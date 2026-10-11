@@ -25,7 +25,6 @@ import (
 
 const (
 	defaultRegistry    = "registry-1.docker.io"
-	tokenEndpoint      = "https://auth.docker.io/token"
 	maxLayerConcurrent = 3
 	pullTimeout        = 10 * time.Minute
 	layerBufSize       = 32 * 1024
@@ -126,13 +125,7 @@ func (s *Store) PullWithProgress(ctx context.Context, ref string, auth *Registry
 
 	reg, repo, tag := parseRef(ref)
 	client := &registryClient{
-		registry: reg,
-		repo:     repo,
-		hc:       &http.Client{Timeout: 30 * time.Second},
-	}
-	if auth != nil {
-		client.user = auth.Username
-		client.pass = auth.Password
+		s: newSession(&http.Client{Timeout: 30 * time.Second}, reg, repo, auth, "pull"),
 	}
 	client.wantOS, client.wantArch = s.pullPlatform()
 
@@ -622,78 +615,33 @@ func (s *Store) writeImageMeta(ref string, m *oci.Manifest, cfg *oci.ImageConfig
 // ─── Registry HTTP client ─────────────────────────────────────────────────────
 
 type registryClient struct {
-	registry string
-	repo     string
-	token    string
-	user     string
-	pass     string
-	hc       *http.Client
+	s        *session
 	wantOS   string
 	wantArch string
 }
 
-func (c *registryClient) setRegistryAuth(req *http.Request) {
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-		return
-	}
-	if c.user != "" {
-		req.SetBasicAuth(c.user, c.pass)
-	}
-}
-
+// auth checks the registry API is reachable and obtains credentials up front
+// (GET /v2/ answers with the auth challenge), so failures surface as auth
+// errors rather than on the first manifest request.
 func (c *registryClient) auth(ctx context.Context) error {
-	if c.user != "" {
-		url := fmt.Sprintf("%s?service=registry.docker.io&scope=repository:%s:pull", tokenEndpoint, c.repo)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return err
-		}
-		req.SetBasicAuth(c.user, c.pass)
-		resp, err := c.hc.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			// Non–Docker-Hub registries may not expose this token endpoint; fall back to Basic only.
-			c.token = ""
-			return nil
-		}
-		var tok struct {
-			Token string `json:"token"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&tok); err != nil {
-			return err
-		}
-		c.token = tok.Token
-		return nil
-	}
-	url := fmt.Sprintf("%s?service=registry.docker.io&scope=repository:%s:pull", tokenEndpoint, c.repo)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.s.baseURL()+"/v2/", nil)
 	if err != nil {
 		return err
 	}
-	resp, err := c.hc.Do(req)
+	resp, err := c.s.do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	resp.Body.Close()
+	// 401 here is fine for registries that only challenge per repository.
+	if resp.StatusCode >= 500 {
 		return fmt.Errorf("auth: %s", resp.Status)
 	}
-	var tok struct {
-		Token string `json:"token"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&tok); err != nil {
-		return err
-	}
-	c.token = tok.Token
 	return nil
 }
 
 func (c *registryClient) manifest(ctx context.Context, ref string) (*oci.Manifest, error) {
-	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", c.registry, c.repo, ref)
+	url := c.s.repoURL("manifests/" + ref)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -704,9 +652,7 @@ func (c *registryClient) manifest(ctx context.Context, ref string) (*oci.Manifes
 		oci.MediaTypeDockerManifestV2,
 		oci.MediaTypeDockerManifestList,
 	}, ", "))
-	c.setRegistryAuth(req)
-
-	resp, err := c.hc.Do(req)
+	resp, err := c.s.do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -770,17 +716,16 @@ func pickIndexDigest(manifests []oci.Descriptor, wantOS, wantArch string) (strin
 }
 
 func (c *registryClient) blob(ctx context.Context, digest string, start int64) (io.ReadCloser, error) {
-	url := fmt.Sprintf("https://%s/v2/%s/blobs/%s", c.registry, c.repo, digest)
+	url := c.s.repoURL("blobs/" + digest)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	c.setRegistryAuth(req)
 	if start > 0 {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", start))
 	}
 
-	resp, err := c.hc.Do(req)
+	resp, err := c.s.do(req)
 	if err != nil {
 		return nil, err
 	}

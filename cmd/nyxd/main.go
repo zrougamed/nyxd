@@ -52,12 +52,19 @@ type Config struct {
 	PullPlatform string // OCI platform for multi-arch indexes, e.g. linux/arm64; empty uses GOOS/GOARCH
 	DNS          string // auto (default), embedded, cni, off — see docs/networking.md
 
-	Rootless rootless.Info // set when running in nyxd's own user namespace
+	Rootless    rootless.Info // set when running in nyxd's own user namespace
+	UsernsRemap string        // "START:COUNT" or "default": root runs the daemon in a remapped user namespace
 }
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "unshare" {
 		os.Exit(unshareCmd(os.Args[2:]))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "stdio-proxy" {
+		os.Exit(stdioProxy(os.Args[2:]))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "stop" {
+		os.Exit(stopCmd(os.Args[2:]))
 	}
 
 	cfg := parseFlags()
@@ -67,7 +74,22 @@ func main() {
 		os.Exit(0)
 	}
 
-	if rootless.Wanted() {
+	switch {
+	case cfg.UsernsRemap != "":
+		// Root, but the daemon and containers run in a user namespace mapped
+		// to an unprivileged ID range (does not return in the host process).
+		start, count, err := parseRemap(cfg.UsernsRemap)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "nyxd:", err)
+			os.Exit(1)
+		}
+		info, err := rootless.EnterRemap(start, count, []string{cfg.BaseDir, filepath.Dir(cfg.Socket)})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "nyxd:", err)
+			os.Exit(1)
+		}
+		cfg.Rootless = info
+	case rootless.Wanted():
 		// Not root: re-exec inside a user namespace (does not return in the
 		// host process). See internal/rootless and docs/rootless.md.
 		info, err := rootless.Enter()
@@ -116,7 +138,7 @@ func unshareCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, "nyxd unshare:", err)
 		return 127
 	}
-	err = syscall.Exec(bin, args, os.Environ())
+	err = syscall.Exec(bin, args, rootless.CleanEnv(os.Environ()))
 	fmt.Fprintln(os.Stderr, "nyxd unshare:", err)
 	return 1
 }
@@ -128,8 +150,12 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	defer dlock.Close()
 
-	if err := cgroup.CheckUnifiedV2(); err != nil {
-		return fmt.Errorf("cgroup: %w", err)
+	// Rootless and -userns-remap run crun without a cgroup manager, so they
+	// work on hosts with a hybrid v1/v2 layout (e.g. some WSL2 kernels).
+	if !cfg.Rootless.Rootless {
+		if err := cgroup.CheckUnifiedV2(); err != nil {
+			return fmt.Errorf("cgroup: %w", err)
+		}
 	}
 
 	imgStore, err := image.NewStore(cfg.BaseDir + "/images")
@@ -153,7 +179,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		net = network.NewManager(cfg.NetworkName, cfg.CNIConfDir, cfg.CNIBinDir)
 	case "", "native":
 		if cfg.Rootless.Rootless {
-			return fmt.Errorf("-net-driver=native needs root; rootless nyxd supports -net-driver=host")
+			return fmt.Errorf("-net-driver=native needs root outside a user namespace; rootless and -userns-remap support -net-driver=host")
 		}
 		driver = "native"
 		net = native.NewManager(logger)
@@ -243,13 +269,37 @@ func parseFlags() Config {
 	flag.StringVar(&cfg.SocketGroup, "socket-group", "", "POSIX group name for the socket (mode 0660, chown root:group); add users to this group so nyx works without sudo")
 	flag.StringVar(&cfg.PullPlatform, "pull-platform", "", "OCI platform for multi-arch manifests (e.g. linux/arm64); default uses this binary's GOOS/GOARCH")
 	flag.StringVar(&cfg.DNS, "dns", "auto", "DNS: auto (embedded; on CNI only for compose internal networks), embedded, cni (no embedded), off")
+	flag.StringVar(&cfg.UsernsRemap, "userns-remap", "", "As root: run the daemon and containers in a user namespace mapped to host IDs START:COUNT (\"default\" = 100000:65536); no setuid helpers needed")
 	flag.BoolVar(&cfg.Version, "version", false, "Print version and exit")
 	flag.Parse()
 
-	if rootless.Wanted() {
+	switch {
+	case cfg.UsernsRemap != "":
+		set := map[string]bool{}
+		flag.Visit(func(f *flag.Flag) { set[f.Name] = true })
+		if !set["net-driver"] {
+			cfg.NetDriver = "host"
+		}
+	case rootless.Wanted():
 		applyRootlessDefaults(&cfg)
 	}
 	return cfg
+}
+
+// parseRemap parses -userns-remap: "default" or "START:COUNT".
+func parseRemap(v string) (start, count int, err error) {
+	if v == "default" {
+		return 100000, 65536, nil
+	}
+	a, b, ok := strings.Cut(v, ":")
+	if ok {
+		_, err1 := fmt.Sscan(a, &start)
+		_, err2 := fmt.Sscan(b, &count)
+		if err1 == nil && err2 == nil && start > 0 && count > 0 {
+			return start, count, nil
+		}
+	}
+	return 0, 0, fmt.Errorf("-userns-remap=%q: expected \"default\" or START:COUNT, e.g. 100000:65536", v)
 }
 
 // applyRootlessDefaults moves defaults that need root to per-user locations,

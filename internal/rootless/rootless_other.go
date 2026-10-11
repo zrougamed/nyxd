@@ -8,6 +8,7 @@ import "errors"
 type Info struct {
 	Rootless bool
 	SubIDs   bool
+	Remap    bool
 }
 
 // EnvHostUID carries the invoking user's uid into the namespace.
@@ -21,3 +22,11 @@ func Current() Info { return Info{} }
 
 // Enter is only supported on Linux.
 func Enter() (Info, error) { return Info{}, errors.New("rootless mode is supported only on linux") }
+
+// EnterRemap is only supported on Linux.
+func EnterRemap(int, int, []string) (Info, error) {
+	return Info{}, errors.New("-userns-remap is supported only on linux")
+}
+
+// CleanEnv returns env unchanged off Linux.
+func CleanEnv(env []string) []string { return env }

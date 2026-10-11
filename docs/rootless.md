@@ -7,7 +7,7 @@ never real root.
 ```bash
 nyxd                                   # as your user: rootless mode is automatic
 nyx pull alpine:3.20
-nyx run alpine:3.20 -- id              # uid=0(root) inside, your uid on the host
+nyx run alpine:3.20 id                 # uid=0(root) inside, your uid on the host
 ```
 
 `nyx` finds the rootless daemon on its own (see [Socket](#paths)).

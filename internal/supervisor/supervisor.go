@@ -97,7 +97,31 @@ type containerEntry struct {
 	stopped   bool // intentionally stopped - don't restart
 	logCancel context.CancelFunc
 	checker   *health.Checker
-	mu        sync.Mutex
+	// runDone receives the result of the foreground `crun run` that owns the
+	// workload. nil for containers re-adopted after a daemon restart.
+	runDone <-chan error
+	// exited is closed by supervise once the foreground run has returned.
+	exited chan struct{}
+	mu     sync.Mutex
+}
+
+// exitedChan returns the channel closed when the current foreground run ends,
+// or nil when no foreground run is attached (re-adopted container).
+func (e *containerEntry) exitedChan() chan struct{} {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.exited
+}
+
+func waitClosed(ch <-chan struct{}, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ch:
+		return true
+	case <-t.C:
+		return false
+	}
 }
 
 // Supervisor manages the full lifecycle of containers.
@@ -287,8 +311,25 @@ func (s *Supervisor) Stop(ctx context.Context, id string) error {
 		}
 	}
 
-	// Foreground `crun run` (see startOnce) can stay attached to stdio pipes; without
-	// tearing it down, `crun state` may never reach stopped and WaitStopped times out.
+	// Containers started by this daemon: wait for the foreground `crun run` to
+	// return (it carries the real exit status), SIGKILL after the grace period.
+	if exited := entry.exitedChan(); exited != nil {
+		if waitClosed(exited, waitBudget) {
+			s.log.Info("container stopped", "id", id)
+			return nil
+		}
+		s.log.Info("stop grace period expired, sending KILL", "id", id, "grace", waitBudget)
+		killCtx, kcancel := context.WithTimeout(context.Background(), 20*time.Second)
+		_ = s.rt.Kill(killCtx, id, "KILL")
+		kcancel()
+		if waitClosed(exited, 10*time.Second) {
+			s.log.Info("container stopped", "id", id)
+			return nil
+		}
+	}
+
+	// Re-adopted containers (or a run that would not end): tear down the
+	// foreground run and poll crun state, force-deleting on timeout.
 	s.resetLogIO(entry)
 
 	waitCtx, wcancel := context.WithTimeout(context.Background(), waitBudget)
@@ -334,6 +375,11 @@ func (s *Supervisor) Kill(_ context.Context, id string, signal string) error {
 		s.log.Warn("crun kill: OCI state missing on disk; cancelling foreground run", "id", id, "err", err)
 	}
 
+	if exited := entry.exitedChan(); exited != nil && waitClosed(exited, 10*time.Second) {
+		s.log.Info("container stopped after kill", "id", id, "signal", signal)
+		return nil
+	}
+
 	// Unblock the supervisor's foreground `crun run` (CommandContext(logCtx)) so
 	// runtime state can move to stopped and network teardown can proceed.
 	s.resetLogIO(entry)
@@ -360,8 +406,6 @@ func (s *Supervisor) KillForRestart(ctx context.Context, id string) error {
 		return fmt.Errorf("container %s not found", id)
 	}
 
-	s.resetLogIO(entry)
-
 	killCtx, kcancel := context.WithTimeout(ctx, 20*time.Second)
 	defer kcancel()
 	s.log.Info("health restart: kill container", "id", id)
@@ -369,6 +413,11 @@ func (s *Supervisor) KillForRestart(ctx context.Context, id string) error {
 	if err != nil && !runtime.CrunContainerAbsent(err) {
 		return fmt.Errorf("kill container: %w", err)
 	}
+	if exited := entry.exitedChan(); exited != nil && waitClosed(exited, 10*time.Second) {
+		s.log.Info("container stopped for health restart", "id", id)
+		return nil
+	}
+	s.resetLogIO(entry)
 
 	waitCtx, wcancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer wcancel()
@@ -835,6 +884,10 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		case <-tick.C:
 			st, err2 := s.rt.State(ctx, spec.ID)
 			if err2 == nil && st != nil && st.Status == "running" {
+				e.mu.Lock()
+				e.runDone = runErr
+				e.exited = make(chan struct{})
+				e.mu.Unlock()
 				log.Info("container started", "image", spec.Image, "ip", ip)
 				s.registerEmbeddedDNS(spec, ip)
 				if err := s.persistContainerEntry(e); err != nil {
@@ -885,13 +938,32 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 	log := s.log.With("id", e.spec.ID)
 
 	for {
-		// Wait for container exit.
-		exitCode, err := s.rt.WaitForExit(ctx, e.spec.ID)
-		if err != nil {
-			if ctx.Err() != nil {
+		// Wait for container exit: the exit status of the foreground `crun run`
+		// we started (crun removes its state on exit, so polling cannot see the
+		// code), or crun state polling for re-adopted containers.
+		e.mu.Lock()
+		runDone := e.runDone
+		exited := e.exited
+		e.runDone = nil
+		e.mu.Unlock()
+		var exitCode int
+		if runDone != nil {
+			select {
+			case <-ctx.Done():
 				return // daemon shutting down
+			case err := <-runDone:
+				exitCode = runtime.ExitCode(err)
+				close(exited)
 			}
-			log.Warn("wait error", "err", err)
+		} else {
+			var err error
+			exitCode, err = s.rt.WaitForExit(ctx, e.spec.ID)
+			if err != nil {
+				if ctx.Err() != nil {
+					return // daemon shutting down
+				}
+				log.Warn("wait error", "err", err)
+			}
 		}
 
 		e.stopHealth()

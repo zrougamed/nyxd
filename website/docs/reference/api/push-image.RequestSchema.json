@@ -1,0 +1,1 @@
+{"title":"Body","body":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["ref"],"properties":{"ref":{"type":"string","example":"registry.example.com/team/myapp:1.0"},"username":{"type":"string"},"password":{"type":"string","format":"password"}},"title":"ImagePushRequest"}}}}}

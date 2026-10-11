@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/zrougamed/nyxd/internal/build/dockerignore"
@@ -143,8 +144,7 @@ func doBuild(socket string, args []string) error {
 	// No overall timeout: builds can take long; the daemon stops on disconnect.
 	c := &http.Client{Transport: &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, "unix", socket)
+			return dialEndpoint(ctx, socket)
 		},
 	}}
 	req, err := http.NewRequest(http.MethodPost, "http://unix/v1/build?"+q.Encode(), pr)
@@ -277,6 +277,11 @@ func addToTar(tw *tar.Writer, p, name string) error {
 		hdr.Name += "/"
 	}
 	hdr.Uid, hdr.Gid, hdr.Uname, hdr.Gname = 0, 0, "", ""
+	if runtime.GOOS == "windows" {
+		// Windows has no Unix permission bits; like docker build on Windows,
+		// send files and directories as 0755 so scripts stay executable.
+		hdr.Mode = 0o755
+	}
 	hdr.Format = tar.FormatPAX
 	if err := tw.WriteHeader(hdr); err != nil {
 		return err

@@ -143,6 +143,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /v1/images/remove", s.handleImagesRemove)
 	mux.HandleFunc("POST /v1/images/prune", s.handleImagesPrune)
 	mux.HandleFunc("POST /v1/build", s.handleBuild)
+	mux.HandleFunc("POST /v1/images/tag", s.handleImageTag)
+	mux.HandleFunc("POST /v1/images/push", s.handleImagePush)
+	mux.HandleFunc("GET /v1/images/save", s.handleImageSave)
+	mux.HandleFunc("POST /v1/images/load", s.handleImageLoad)
 
 	// ReadHeaderTimeout caps slow clients parsing headers; ReadTimeout must stay 0 so
 	// POST bodies can stream indefinitely (e.g. nyx exec -i stdin). A positive ReadTimeout

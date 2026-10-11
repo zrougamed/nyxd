@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Tagged"},"400":{"description":"Missing source or target"},"404":{"description":"Source image not found"}}}

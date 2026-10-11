@@ -33,3 +33,10 @@ func TestSetEnv(t *testing.T) {
 		t.Fatalf("env = %v", env)
 	}
 }
+
+func TestCleanEnv(t *testing.T) {
+	env := CleanEnv([]string{"A=1", "_NYXD_USERNS=ready", "_NYXD_USERNS_MAPPING=subid", "_NYXD_HOST_UID=1000", "B=2"})
+	if strings.Join(env, ",") != "A=1,B=2" {
+		t.Fatalf("env = %v", env)
+	}
+}

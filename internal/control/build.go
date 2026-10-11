@@ -51,6 +51,7 @@ func (w *ndjsonWriter) Write(p []byte) (int, error) {
 // Response: application/x-ndjson with {"stream":...} progress lines, then
 // {"done":true,"image_id":...,"tags":[...]} or {"error":...}.
 func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
+	noWriteDeadline(w)
 	if s.builder == nil {
 		http.Error(w, "builder not configured", http.StatusServiceUnavailable)
 		return

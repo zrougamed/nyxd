@@ -1,0 +1,69 @@
+---
+id: load-images
+title: "Import images from an archive"
+description: "Accepts archives from nyx save, docker save (any version) and podman save, optionally gzip-compressed."
+sidebar_label: "Import images from an archive"
+hide_title: true
+hide_table_of_contents: true
+api: eJzNVVFv2zYQ/iuHe0oFxUqGoQ/qMCDLOixblxiNA2xIgomWzhZbiqceKTea4f8+HC2vaZK+78WWqLuP33e8+7jFaNYBy1u0nVlTwPscGwq12D5a9ljiWV1THwMYqVu7oQAr4Q78+ADBbCiHhuuPJOkFjowfYUMSLPtXYHwDPTed8VMoJ0zj3Ajrf2x/XHPXC4VAzezOv92QjLB0vAQbFMSuLDVg1sb6EMHGAI1dU4izO485ck9iFO6iwRIdm+ZiLyBHoU8DhfgTNyOW2/RqhRosowyUY80+ko/6yfS9s3WCKR6OoxFdDHVLndGnOPaEJYYo1q8xxxVLZyKWuLTeyIi73W6n24WefaCgKd+dnOjf1yV8x6ahBoRWJOTrRPIbLD4EzXiBBC8/UB0xx15UerT7/fjjo5glsyPjMZFahUdfjIgZMUcbqQvPpSUd0Uana6mOSvn9JGzS+f1L0i45gvGQmufQIjmwgJlOCzobOhPrFhWjo9iyHljPIYkxscUSi81pse+/Qk8Scwwk2kdY3m5xEIcltjH2ZVE4ro1r99lfU7kJBFU9iIPj48Hbh+OgnRnhB93kR3iaX8xmswqO9BG86Ui7zq49CzVvgL0bIbYEE4ZCQGdiJAmvtAF39zlav+JUy6lwfnxoQM9V2MHZ/OIZwz+st51x8OtiMdcAWLFAlmleluWQNDfAHgxk2Y23D9BwZ6yfWGQZHDW0MoOLUBUy+EIz089MIypltmhJkhbPsDifg7MhkieB5QhT8uzO3/ksOzfOWb9OMs/mF1mmy1VVLU1o7/y+kOH6STFf2PZ5ZTenRW/9OqEp6HvqnanpZdLw2cYWRh7kq2KzQHX5158//319df7720UFBVRqOhORahJxNsSWfJzGp8wy8OwJIjdmhKNECaIMIb6awfUET9LZoBalpkYQx97WyZSqk9evTw7Ib0VYgiJ26mrCQ6QAgzZZpIdY9M5YX8GSG3swxUorMUuJ1Rv47frqEsg3PVsfAwjFQTxUT6e90gMPQ11TCHtrmwwUSzydncxOMEdna9JBLLeorYolztmNv7B0cMm+5q4jqa1x8G4fCIfEL6MTyqLo2Y3qYb2wmsmMZV1M0KHwj4GKBFCkmdVR7Yx/tPlF17PE/dBP0o0/TP/Trt9+sbr/610ymeGXY1UHTaXbTg51i5tTtc/DFZNc6j7HZETlLW63SxPoRtxup8ufBpIRy9v7HDdGrFmqP9ze73JsyTQkydY+0oglnu+Lc7xQDhruhmTYz26mXX5I2VfxG8HpAlF3+s9q51fXC8xxOV2HHTeas7IuGfu/WHXKvA==
+sidebar_class_name: "post api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Import images from an archive"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/v1/images/load"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Accepts archives from nyx save, docker save (any version) and podman save, optionally gzip-compressed.
+Every blob is verified against its digest.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./load-images.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./load-images.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

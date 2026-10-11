@@ -1,0 +1,71 @@
+---
+id: push-image
+title: "Push a local image to its registry"
+description: "Streams `application/x-ndjson` progress using the pull event shape: `begin`, one `blob` per blob"
+sidebar_label: "Push a local image to its registry"
+hide_title: true
+hide_table_of_contents: true
+api: eJztV9tu4zYQ/ZUBnxJDkeLFYgtoiwJJNkXTSxJsskCLJDBpaWxxQ5HqkEqiGv73Yih5YyfaRfvSp/rBlsm5kHM5c7QSQS29yG+ErtUSvbhLRIm+IN0E7azIxVUgVLUHqZrG6ELxcvZ0YMvP3lkJDbkloffQem2XECqEpjUG8AFtAF+pBnOQc1xqKxNwFkHOjZtLaJCAn27tnixUUWGZQ6AWJTxWaKMhwqX2gTpQhlCVHVTKgw77SW9jVjqLMgFZK6sX6INMWM2CjBuw96hDBbLUS97bv7WOQCKRI5nCUcuiYbgQLJwx7tHvui0qZQzaJcLeMSpCAkdwrLwu9t+Dca6Zq+J+I67R39o94wplKudDAtM336WH6WE6TSDPp/vQeoTGKG3hp+vryxSuEKF0hc/6yKd1md5akQjXIMVDnZUiF03rqzMWEIkg/LNFH45d2Yl8Ff9qwlLkHLdEFM4GtIG3tnPFeeI1X1RYK34KXYMiF27+GYsw2O0N3QjCBddAQ3yMoNH3nhZbenxZuxSJwCdVN4aXNiFLh6W0cHUWUNVZ3ammyafpoVgnovVIVtX42tg6EY3y/tFROeZp4ahWgcOxEVqvExF0iN5jfC5bX33sAyTWa94m9I2zvr/Cm8ND/tmt7fMPP19dnAPH+LmQfSx48dV4bmr/2zHddXRhEQZnRlvsS1z2niRoHyv/RSaaSnl8nYt+eSwbtq1ZL/aaSIRqQyUSsWmO/kILzaJGdUgiWo533izFjmIdDIrv0P+LLSPuYkRH6mDN8t5ziY7vlVrN+uWR7d5v4do+0MO+tgGXSCygbYlP41vf0OqbftSj13/hiNJWkWkb3r2NDiIubQnPnTOobNxriXDU/Zgldz9uhXAxc+34QYd0jRTXbkU4P6quqKh0wCK0NB56tIG6xumdSygi1YlE6ID1mF0+V13+O4VHR/faLmelpq8c5GFm0I5nkpwLCz8r9WIx06UfE9qCgsvWmKu2rhV10XIs3dFDbWuc8rAaUOPtGFAcqxJoAy4s8/a1TEQhsC7AwrW2hDgKTBed1RgqF+HcxU5sVKhELrKH6YD+GWOQSIRHekDigbwSLRmRiyqEJs+yL4PlFbZ88giyaMnAwUFr9dOBd8U9BvienfwAL/WzNE0l7PEjMBYz+uildYTle3DWdHEGDjbYBNQqBCS/z+NpfZcIBr+Pz6PodDMFhjnxj4bB9ix4hrDnEbBVHdouXEzhkDDbPZXA2EzOwNHl2auA/KatrpWJY5YFYOEIJhPWm0wSiCEuwVlQMJl8svoJSlfzXO4vPZnAXokL1ZoAMqPWZqwZv1KWkByI6wophs46uD65BKN9QMuUpoNBOb21t3YyOVHGbJjR0eXZZMLLUsq58tWt7fPmr17kbsTt60Q+TLNG22W0xkY/YmNUgeOHhkiGOtfSTm6ZEp3/8fuH2dXFyS+n1xIykLZ7guEgcrjELlvKJxOwTOWCK1UHPenhEebDfgpXg3mkWnuvnfWgCCF0jY4NAfLw3bvDjeVT7lDPFmtlOyDXBvSRK8mATyGLjEnC3JUaPSzI1SA5EmlUlO8hDlW0ZQQyD4ShJbvLVnum6iz4tijQ+55ncZ/1BTNlnsYzUBdo++E6VOalM92Pjmo4d7ZwdY1UaGXg114QNorPnerzLGuc6XgCNOQYr1NHy2ww7TO7bSiLBrIIEYwMtbLbzpmWqB5HIMIEBAc6XrLvsJelv3rmLP/z9v+atw8j5rlqI+PlylgNeH8jHqY8Kfs3rSRyeyZ4EdbzG7FazZXHT2TWa17+s0XqRH5zl4gHRVrNGf5umIdVqEqkOCTusRO5OOnTfnDNZ2Bx08bZ/PI1YJ1sNI6KApvwFdkvFJfh/svsury4uhaJmA+vH7UrI/VXj0xc1aPIRXx7YQv9WwOvrYRRdtlGdih6m/z5G9ErBMw=
+sidebar_class_name: "post api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Push a local image to its registry"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/v1/images/push"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Streams `application/x-ndjson` progress using the pull event shape: `begin`, one `blob` per blob
+(`cached: true` when the registry already has it), `blob_done`, `manifest`, then `done` (with `digest`)
+or `error`. Authentication follows the registry challenge (Bearer or Basic); loopback registries
+(localhost, 127.0.0.1, ::1) use plain HTTP. See docs/images.md.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./push-image.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./push-image.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

@@ -486,6 +486,109 @@ paths:
         "503":
           description: Image store or supervisor not configured
 
+  /v1/images/tag:
+    post:
+      tags: [images]
+      summary: Give a local image another reference
+      operationId: tagImage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImageTagRequest"
+      responses:
+        "200":
+          description: Tagged
+        "400":
+          description: Missing source or target
+        "404":
+          description: Source image not found
+
+  /v1/images/push:
+    post:
+      tags: [images]
+      summary: Push a local image to its registry
+      description: |
+        Streams `application/x-ndjson` progress using the pull event shape: `begin`, one `blob` per blob
+        (`cached: true` when the registry already has it), `blob_done`, `manifest`, then `done` (with `digest`)
+        or `error`. Authentication follows the registry challenge (Bearer or Basic); loopback registries
+        (localhost, 127.0.0.1, ::1) use plain HTTP. See docs/images.md.
+      operationId: pushImage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImagePushRequest"
+      responses:
+        "200":
+          description: NDJSON push progress stream
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: "#/components/schemas/PullEvent"
+        "400":
+          description: Bad request
+        "404":
+          description: Image not found locally
+
+  /v1/images/save:
+    get:
+      tags: [images]
+      summary: Export images as an archive
+      description: |
+        One tar with an OCI image layout plus a docker-archive manifest.json (loads with nyx, docker and podman).
+      operationId: saveImages
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          description: Image reference (repeatable)
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+      responses:
+        "200":
+          description: Image archive
+          content:
+            application/x-tar:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: No ref given
+        "404":
+          description: An image was not found
+
+  /v1/images/load:
+    post:
+      tags: [images]
+      summary: Import images from an archive
+      description: |
+        Accepts archives from nyx save, docker save (any version) and podman save, optionally gzip-compressed.
+        Every blob is verified against its digest.
+      operationId: loadImages
+      requestBody:
+        required: true
+        content:
+          application/x-tar:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Loaded references
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageLoadResponse"
+        "400":
+          description: Not an image archive, or a digest mismatch
+
   /v1/build:
     post:
       tags: [images]
@@ -557,6 +660,40 @@ paths:
 
 components:
   schemas:
+    ImageTagRequest:
+      type: object
+      required: [source, target]
+      properties:
+        source:
+          type: string
+          example: myapp:1.0
+        target:
+          type: string
+          example: registry.example.com/team/myapp:1.0
+
+    ImagePushRequest:
+      type: object
+      required: [ref]
+      properties:
+        ref:
+          type: string
+          example: registry.example.com/team/myapp:1.0
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+
+    ImageLoadResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        refs:
+          type: array
+          items:
+            type: string
+
     BuildEvent:
       type: object
       description: One line of the build stream; exactly one of stream, error, done is set.
