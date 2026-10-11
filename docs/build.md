@@ -111,7 +111,7 @@ image, the container fails to start with `unable to find user ...`.
 - `RUN --mount=type=cache|secret|bind` and heredocs are planned next.
 - Builds are linear per stage (no parallel stage execution yet).
 - Image IDs change on every rebuild (history timestamps); reproducible IDs (`SOURCE_DATE_EPOCH`) are planned.
-- `nyx push`, `nyx tag`, `nyx save` / `nyx load` are planned in the same branch of work.
+- To move built images, use `nyx tag` / `nyx push` / `nyx save` / `nyx load` (see the images page).
 
 ## Testing
 

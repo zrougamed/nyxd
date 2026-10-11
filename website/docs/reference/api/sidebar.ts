@@ -58,6 +58,30 @@ const sidebar: SidebarsConfig = {
           label: "Build an image from a Dockerfile",
           className: "api-method post",
         },
+        {
+          type: "doc",
+          id: "reference/api/tag-image",
+          label: "Give a local image another reference",
+          className: "api-method post",
+        },
+        {
+          type: "doc",
+          id: "reference/api/push-image",
+          label: "Push a local image to its registry",
+          className: "api-method post",
+        },
+        {
+          type: "doc",
+          id: "reference/api/save-images",
+          label: "Export images as an archive",
+          className: "api-method get",
+        },
+        {
+          type: "doc",
+          id: "reference/api/load-images",
+          label: "Import images from an archive",
+          className: "api-method post",
+        },
       ],
     },
     {

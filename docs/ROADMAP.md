@@ -55,12 +55,12 @@ Legend: `[x]` shipped in tree (still may need polish), `[ ]` not done, `[~]` par
 
 - [x] **Dockerfile builds** — `internal/build`: own parser (directives, continuations, JSON/shell forms, ARG before FROM, variable expansion), multi-stage, RUN via crun in the container sandbox (host network), COPY/ADD (wildcards, `--from`, `--chown`, `--chmod`, archives, URLs + `--checksum`), content-addressed build cache, `.dockerignore`, `POST /v1/build` NDJSON stream, works rootless.
 - [ ] **RUN --mount** (cache / secret / bind) and heredocs.
-- [ ] **Push / tag / save / load** — registry push, `nyx tag`, OCI archive export/import.
+- [x] **Push / tag / save / load** — `nyx tag`, registry push (HEAD skip, monolithic upload, challenge auth, docker config credentials), `nyx save` (OCI layout + docker manifest.json) / `nyx load` (nyx, docker, podman archives; digests verified).
 - [ ] **Reproducible image IDs** (`SOURCE_DATE_EPOCH`).
 
 ## Image puller
 
-- [~] **Private / credentialed registries** — `PullWithProgress` accepts `RegistryAuth` (Basic + Bearer token flow); **`POST /v1/images/pull`** / **`POST /v1/containers/run`** / compose per-service `registry_username` / `registry_password`; **`nyx pull -u/--password`**. No `DOCKER_CONFIG` / OAuth refresh yet.
+- [~] **Private / credentialed registries** — pull and push answer the registry auth challenge (Bearer/Basic), so non-Docker-Hub registries work anonymously too; loopback registries use http; `PullWithProgress` accepts `RegistryAuth` (Basic + Bearer token flow); **`POST /v1/images/pull`** / **`POST /v1/containers/run`** / compose per-service `registry_username` / `registry_password`; **`nyx pull -u/--password`**. No `DOCKER_CONFIG` / OAuth refresh yet.
 - [ ] **Image signature / policy enforcement** — no cosign / Notary-style verify-before-run; pulled blobs are digest-checked for transport integrity only.
 - [ ] **Registry mirror for pulls** — no `HTTP_PROXY`-style mirror host or `--registry-mirror` for air-gapped or restricted-network pulls.
 - [x] **Resume partial downloads** — incomplete layer/config fetch keeps `<blob>.partial` and resumes with `Range` when the registry returns `206`; falls back to full re-download if the server ignores ranges.

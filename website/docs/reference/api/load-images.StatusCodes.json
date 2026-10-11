@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Loaded references","content":{"application/json":{"schema":{"type":"object","properties":{"ok":{"type":"boolean"},"refs":{"type":"array","items":{"type":"string"}}},"title":"ImageLoadResponse"}}}},"400":{"description":"Not an image archive, or a digest mismatch"}}}

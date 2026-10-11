@@ -436,7 +436,7 @@ func doLogs(socket string, args []string) error {
 
 func doImage(socket string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: nyx image <ls|list|rm|prune> ...")
+		return fmt.Errorf("usage: nyx image <ls|list|rm|prune|tag|push|save|load|build> ...")
 	}
 	switch args[0] {
 	case "ls", "list":
@@ -459,8 +459,18 @@ func doImage(socket string, args []string) error {
 		return nil
 	case "prune":
 		return doImagePrune(socket, args[1:])
+	case "tag":
+		return doTag(socket, args[1:])
+	case "push":
+		return doPush(socket, args[1:])
+	case "save":
+		return doSave(socket, args[1:])
+	case "load":
+		return doLoad(socket, args[1:])
+	case "build":
+		return doBuild(socket, args[1:])
 	default:
-		return fmt.Errorf("unknown image subcommand %q (try ls, rm, prune)", args[0])
+		return fmt.Errorf("unknown image subcommand %q (try ls, rm, prune, tag, push, save, load, build)", args[0])
 	}
 }
 

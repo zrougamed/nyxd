@@ -9,6 +9,7 @@ const (
 	MediaTypeImageManifest     = "application/vnd.oci.image.manifest.v1+json"
 	MediaTypeImageIndex        = "application/vnd.oci.image.index.v1+json"
 	MediaTypeImageConfig       = "application/vnd.oci.image.config.v1+json"
+	MediaTypeImageLayer        = "application/vnd.oci.image.layer.v1.tar"
 	MediaTypeImageLayerGzip    = "application/vnd.oci.image.layer.v1.tar+gzip"
 	MediaTypeImageLayerZstd    = "application/vnd.oci.image.layer.v1.tar+zstd"
 	MediaTypeDockerManifestV2  = "application/vnd.docker.distribution.manifest.v2+json"

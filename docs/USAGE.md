@@ -67,6 +67,17 @@ nyx run myapp:1.0
 
 No Docker or BuildKit involved; works rootless. Supported syntax, cache rules and security notes: [build.md](build.md).
 
+## Sharing images (`nyx tag`, `push`, `save`, `load`)
+
+```bash
+nyx tag myapp:1.0 registry.example.com/team/myapp:1.0
+nyx push registry.example.com/team/myapp:1.0             # credentials: flags, NYX_REGISTRY_*, ~/.docker/config.json
+nyx save -o myapp.tar myapp:1.0                          # OCI layout + docker manifest.json
+nyx load -i myapp.tar                                    # also loads docker save / podman save archives
+```
+
+Details: [images.md](images.md).
+
 ## Compose stacks (`nyx compose`)
 
 **Compose file:** if you omit `-f` / `--file`, **`nyx`** picks the first existing file in the **current directory**, in this order: `nyx-compose.yaml` / `.yml`, then `docker-compose.yaml` / `.yml`, then `compose.yaml` / `.yml`, then `podman-compose.yaml` / `.yml`. The file must be readable on the **daemon host** (paths are sent to `nyxd`).

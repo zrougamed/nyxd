@@ -1,0 +1,1 @@
+{"parameters":[{"name":"ref","in":"query","required":true,"description":"Image reference (repeatable)","schema":{"type":"array","items":{"type":"string"}},"style":"form","explode":true}]}

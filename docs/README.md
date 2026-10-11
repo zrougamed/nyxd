@@ -4,6 +4,7 @@
 |-----|---------|
 | [INSTALL.md](INSTALL.md) | Linux install, systemd, cross-build |
 | [build.md](build.md) | `nyx build`: Dockerfile builds without Docker/BuildKit, cache, supported syntax |
+| [images.md](images.md) | `nyx tag` / `push` / `save` / `load`: registries, archives, credentials |
 | [USAGE.md](USAGE.md) | `nyx` CLI (including **`nyx compose`**), `curl` examples |
 | [openapi.yaml](openapi.yaml) | Control HTTP API (Unix socket) — OpenAPI 3 |
 | [rootless.md](rootless.md) | Run nyxd as a normal user (user namespace, limits, `nyxd unshare`) |

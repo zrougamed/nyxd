@@ -11,7 +11,7 @@ LDFLAGS  := -w -s \
 	-X main.gitCommit=$(COMMIT) \
 	-X main.buildDate=$(DATE)
 
-.PHONY: all build build-nyx lint vet test test-overlay test-rootless test-build clean install install-usr scan scan-trivy scan-grype
+.PHONY: all build build-nyx lint vet test test-overlay test-rootless test-build test-transfer clean install install-usr scan scan-trivy scan-grype
 
 BINDIR ?= /usr/local/bin
 
@@ -51,6 +51,10 @@ test-rootless: build build-nyx
 # Image build end-to-end against a rootless daemon.
 test-build: build build-nyx
 	scripts/build-smoke.sh
+
+# Image transfer end-to-end: registry:2 via nyx, push / pull / save / load.
+test-transfer: build build-nyx
+	scripts/transfer-smoke.sh
 
 # Real overlayfs mount test, run unprivileged inside a user + mount namespace.
 test-overlay:

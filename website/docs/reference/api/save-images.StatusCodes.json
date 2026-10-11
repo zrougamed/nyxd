@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Image archive","content":{"application/x-tar":{"schema":{"type":"string","format":"binary"}}}},"400":{"description":"No ref given"},"404":{"description":"An image was not found"}}}

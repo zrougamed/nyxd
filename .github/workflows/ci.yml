@@ -42,6 +42,9 @@ jobs:
       - name: Image build end-to-end (rootless)
         run: make test-build
 
+      - name: Image push / pull / save / load end-to-end (rootless)
+        run: make test-transfer
+
       - name: Build binaries
         run: make build build-nyx
 
