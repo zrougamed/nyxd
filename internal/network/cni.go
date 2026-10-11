@@ -229,13 +229,12 @@ func (m *Manager) execPlugin(ctx context.Context, pluginType string, conf []byte
 	cmd := exec.CommandContext(ctx, binPath)
 	cmd.Stdin = bytes.NewReader(conf)
 	cmd.Env = env
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		var exitErr *exec.ExitError
-		if ok := false; !ok {
-			_ = exitErr
-		}
-		return nil, fmt.Errorf("exec %s: %w stderr=%s", pluginType, err, string(out))
+		// CNI plugins report errors as JSON on stdout; keep both streams.
+		return nil, fmt.Errorf("exec %s: %w: %s %s", pluginType, err, bytes.TrimSpace(out), bytes.TrimSpace(stderr.Bytes()))
 	}
 	return out, nil
 }

@@ -18,11 +18,11 @@ func TestDependsOnForms(t *testing.T) {
 		D DependsOn `yaml:"depends_on"`
 	}
 	for src, want := range map[string]string{
-		"depends_on: [a, b]":                         "a,b",
+		"depends_on: [a, b]":                        "a,b",
 		"depends_on:\n  a: {condition: x}\n  b: {}": "a,b",
-		"depends_on: null":                           "",
-		"depends_on: ~":                              "",
-		"depends_on: ''":                             "",
+		"depends_on: null":                          "",
+		"depends_on: ~":                             "",
+		"depends_on: ''":                            "",
 	} {
 		var w wrap
 		if err := yaml.Unmarshal([]byte(src), &w); err != nil {
@@ -238,4 +238,3 @@ func TestMountsAndNames(t *testing.T) {
 		t.Error("pullAuth")
 	}
 }
-
