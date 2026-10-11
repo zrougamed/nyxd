@@ -39,9 +39,10 @@ type State struct {
 
 // Runtime wraps crun/runc CLI.
 type Runtime struct {
-	binary  string // path to crun
-	rootDir string // --root: crun state directory (only OCI layout; no extra files here)
-	pidDir  string // --pid-file targets; must not live under rootDir or crun list breaks on *.pid names
+	binary  string   // path to crun
+	globals []string // global options placed before every subcommand
+	rootDir string   // --root: crun state directory (only OCI layout; no extra files here)
+	pidDir  string   // --pid-file targets; must not live under rootDir or crun list breaks on *.pid names
 }
 
 // New creates a Runtime using the given binary (e.g. "/usr/bin/crun").
@@ -66,6 +67,22 @@ func New(binary, stateDir string) (*Runtime, error) {
 	return &Runtime{binary: binary, rootDir: stateDir, pidDir: pidDir}, nil
 }
 
+// SetCgroupManager sets crun's --cgroup-manager (cgroupfs, systemd or
+// disabled). Empty keeps crun's default.
+func (r *Runtime) SetCgroupManager(m string) {
+	r.globals = nil
+	if m != "" {
+		r.globals = []string{"--cgroup-manager=" + m}
+	}
+}
+
+// GlobalArgs returns the global crun options used for every call.
+func (r *Runtime) GlobalArgs() []string { return append([]string(nil), r.globals...) }
+
+func (r *Runtime) args(a ...string) []string {
+	return append(append(make([]string, 0, len(r.globals)+len(a)), r.globals...), a...)
+}
+
 // Binary returns the resolved crun executable path.
 func (r *Runtime) Binary() string { return r.binary }
 
@@ -80,34 +97,34 @@ func (r *Runtime) pidFilePath(containerID string) string {
 // Equivalent to: crun create --bundle <dir> <id>
 func (r *Runtime) Create(ctx context.Context, containerID, bundleDir string) error {
 	pidFile := r.pidFilePath(containerID)
-	args := []string{
+	args := r.args(
 		"--root", r.rootDir,
 		"create",
 		"--bundle", bundleDir,
 		"--pid-file", pidFile,
 		containerID,
-	}
+	)
 	return r.run(ctx, args, nil)
 }
 
 // Start runs the user-defined command in a created container.
 // Equivalent to: crun start <id>
 func (r *Runtime) Start(ctx context.Context, containerID string) error {
-	return r.run(ctx, []string{"--root", r.rootDir, "start", containerID}, nil)
+	return r.run(ctx, r.args("--root", r.rootDir, "start", containerID), nil)
 }
 
 // Run creates and starts a container in one step (detached).
 // Returns when the container's init process has started.
 func (r *Runtime) Run(ctx context.Context, containerID, bundleDir string) error {
 	pidFile := r.pidFilePath(containerID)
-	args := []string{
+	args := r.args(
 		"--root", r.rootDir,
 		"run",
 		"--detach",
 		"--bundle", bundleDir,
 		"--pid-file", pidFile,
 		containerID,
-	}
+	)
 	return r.run(ctx, args, nil)
 }
 
@@ -123,13 +140,13 @@ func (r *Runtime) RunForeground(ctx context.Context, containerID, bundleDir stri
 		stderr = io.Discard
 	}
 	pidFile := r.pidFilePath(containerID)
-	cmd := exec.CommandContext(ctx, r.binary,
+	cmd := exec.CommandContext(ctx, r.binary, r.args(
 		"--root", r.rootDir,
 		"run",
 		"--bundle", bundleDir,
 		"--pid-file", pidFile,
 		containerID,
-	)
+	)...)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	cmd.Stdin = nil
@@ -150,13 +167,13 @@ func (r *Runtime) Kill(ctx context.Context, containerID, signal string) error {
 	if signal == "" {
 		signal = "TERM"
 	}
-	return r.run(ctx, []string{"--root", r.rootDir, "kill", containerID, signal}, nil)
+	return r.run(ctx, r.args("--root", r.rootDir, "kill", containerID, signal), nil)
 }
 
 // Delete removes a container and cleans up its state.
 // force=true sends SIGKILL first.
 func (r *Runtime) Delete(ctx context.Context, containerID string, force bool) error {
-	args := []string{"--root", r.rootDir, "delete"}
+	args := r.args("--root", r.rootDir, "delete")
 	if force {
 		args = append(args, "--force")
 	}
@@ -171,7 +188,7 @@ func (r *Runtime) Delete(ctx context.Context, containerID string, force bool) er
 
 // State returns current state of a container.
 func (r *Runtime) State(ctx context.Context, containerID string) (*State, error) {
-	args := []string{"--root", r.rootDir, "state", containerID}
+	args := r.args("--root", r.rootDir, "state", containerID)
 	var buf bytes.Buffer
 	if err := r.run(ctx, args, &buf); err != nil {
 		return nil, err
@@ -185,7 +202,7 @@ func (r *Runtime) State(ctx context.Context, containerID string) (*State, error)
 
 // List returns all container IDs managed by this runtime.
 func (r *Runtime) List(ctx context.Context) ([]State, error) {
-	args := []string{"--root", r.rootDir, "list", "--format", "json"}
+	args := r.args("--root", r.rootDir, "list", "--format", "json")
 	var buf bytes.Buffer
 	if err := r.run(ctx, args, &buf); err != nil {
 		return nil, err
@@ -302,7 +319,7 @@ func exitCodeFromStateFile(path string) (int, bool) {
 }
 
 func (r *Runtime) exitCodeFromRawState(ctx context.Context, containerID string) (int, bool) {
-	args := []string{"--root", r.rootDir, "state", containerID}
+	args := r.args("--root", r.rootDir, "state", containerID)
 	var buf bytes.Buffer
 	if err := r.run(ctx, args, &buf); err != nil {
 		return 0, false
@@ -338,7 +355,7 @@ func (r *Runtime) Exec(ctx context.Context, containerID string, argv []string, s
 	if len(argv) == 0 {
 		return fmt.Errorf("exec: empty argv")
 	}
-	base := []string{"--root", r.rootDir, "exec"}
+	base := r.args("--root", r.rootDir, "exec")
 	if tty {
 		base = append(base, "--tty")
 	}

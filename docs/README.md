@@ -5,7 +5,8 @@
 | [INSTALL.md](INSTALL.md) | Linux install, systemd, cross-build |
 | [USAGE.md](USAGE.md) | `nyx` CLI (including **`nyx compose`**), `curl` examples |
 | [openapi.yaml](openapi.yaml) | Control HTTP API (Unix socket) — OpenAPI 3 |
-| [networking.md](networking.md) | Native vs CNI, flags, `nyx run` / stop |
+| [rootless.md](rootless.md) | Run nyxd as a normal user (user namespace, limits, `nyxd unshare`) |
+| [networking.md](networking.md) | Native vs CNI vs host, flags, `nyx run` / stop |
 | [kernel-requirements.md](kernel-requirements.md) | Kernel modules, sysctl, disk |
 | [native-network.md](native-network.md) | In-process bridge / IPAM internals |
 | [image-layers.md](image-layers.md) | In-process layer extraction, whiteouts, security rules |

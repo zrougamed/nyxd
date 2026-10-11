@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/zrougamed/nyxd/internal/network"
 	"github.com/zrougamed/nyxd/internal/network/native"
 	"github.com/zrougamed/nyxd/internal/overlay"
+	"github.com/zrougamed/nyxd/internal/rootless"
 	"github.com/zrougamed/nyxd/internal/runtime"
 	"github.com/zrougamed/nyxd/internal/supervisor"
 )
@@ -47,9 +50,15 @@ type Config struct {
 	SocketGroup  string // optional POSIX group for socket (0660); lets non-root users in that group run nyx
 	PullPlatform string // OCI platform for multi-arch indexes, e.g. linux/arm64; empty uses GOOS/GOARCH
 	DNS          string // auto (default), embedded, cni, off — see docs/networking.md
+
+	Rootless rootless.Info // set when running in nyxd's own user namespace
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "unshare" {
+		os.Exit(unshareCmd(os.Args[2:]))
+	}
+
 	cfg := parseFlags()
 
 	if cfg.Version {
@@ -57,13 +66,20 @@ func main() {
 		os.Exit(0)
 	}
 
-	log := newLogger(cfg.LogLevel)
-	log.Info("nyxd starting", "version", version, "baseDir", cfg.BaseDir)
-
-	if os.Geteuid() != 0 {
-		log.Error("nyxd must run as root (overlayfs + namespace setup requires it)")
-		os.Exit(1)
+	if rootless.Wanted() {
+		// Not root: re-exec inside a user namespace (does not return in the
+		// host process). See internal/rootless and docs/rootless.md.
+		info, err := rootless.Enter()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "nyxd:", err)
+			os.Exit(1)
+		}
+		cfg.Rootless = info
 	}
+
+	log := newLogger(cfg.LogLevel)
+	log.Info("nyxd starting", "version", version, "baseDir", cfg.BaseDir,
+		"rootless", cfg.Rootless.Rootless, "subids", cfg.Rootless.SubIDs)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -73,6 +89,35 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("nyxd stopped cleanly")
+}
+
+// unshareCmd runs a command inside the rootless user namespace (as root
+// there), e.g. to delete files a rootless nyxd created with subordinate IDs:
+//
+//	nyxd unshare rm -rf ~/.local/share/nyxd
+func unshareCmd(args []string) int {
+	if !rootless.Wanted() {
+		fmt.Fprintln(os.Stderr, "nyxd unshare: only meaningful for a non-root user")
+		return 1
+	}
+	if _, err := rootless.Enter(); err != nil {
+		fmt.Fprintln(os.Stderr, "nyxd unshare:", err)
+		return 1
+	}
+	if len(args) == 0 {
+		args = []string{"/bin/sh"}
+		if sh := os.Getenv("SHELL"); sh != "" {
+			args = []string{sh}
+		}
+	}
+	bin, err := exec.LookPath(args[0])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "nyxd unshare:", err)
+		return 127
+	}
+	err = syscall.Exec(bin, args, os.Environ())
+	fmt.Fprintln(os.Stderr, "nyxd unshare:", err)
+	return 1
 }
 
 func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
@@ -92,7 +137,10 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	imgStore.SetPlatform(cfg.PullPlatform)
 
-	ovl, err := overlay.NewManager(cfg.BaseDir + "/overlay")
+	ovl, err := overlay.NewManager(cfg.BaseDir+"/overlay", overlay.Options{
+		Rootless: cfg.Rootless.Rootless,
+		SingleID: cfg.Rootless.Rootless && !cfg.Rootless.SubIDs,
+	})
 	if err != nil {
 		return fmt.Errorf("overlay: %w", err)
 	}
@@ -103,10 +151,15 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	case "cni":
 		net = network.NewManager(cfg.NetworkName, cfg.CNIConfDir, cfg.CNIBinDir)
 	case "", "native":
+		if cfg.Rootless.Rootless {
+			return fmt.Errorf("-net-driver=native needs root; rootless nyxd supports -net-driver=host")
+		}
 		driver = "native"
 		net = native.NewManager(logger)
+	case "host":
+		net = network.HostBackend{}
 	default:
-		return fmt.Errorf("unknown -net-driver %q (use native or cni)", cfg.NetDriver)
+		return fmt.Errorf("unknown -net-driver %q (use native, cni or host)", cfg.NetDriver)
 	}
 	logger.Info("network backend", "driver", driver)
 	if err := net.EnsureNetwork(); err != nil {
@@ -117,6 +170,13 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("runtime: %w", err)
 	}
+	cgroups := !cfg.Rootless.Rootless
+	if cfg.Rootless.Rootless {
+		// The daemon's user namespace does not own any cgroup; without
+		// delegation crun must not try to create one.
+		rt.SetCgroupManager("disabled")
+		logger.Warn("rootless: cgroups disabled, container resource limits are not applied")
+	}
 
 	logColl, err := logs.NewCollector(cfg.BaseDir+"/logs", logger)
 	if err != nil {
@@ -124,8 +184,12 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 
 	gw := netdns.DefaultGateway()
-	dns := netdns.NewBackend(cfg.DNS, driver, logger, gw)
+	var dns netdns.Backend = netdns.Noop{}
+	if driver != "host" {
+		dns = netdns.NewBackend(cfg.DNS, driver, logger, gw)
+	}
 	sup := supervisor.New(rt, ovl, net, cfg.BaseDir, logger, logColl, imgStore, dns, driver, cfg.DNS, gw.String())
+	sup.SetRootless(cfg.Rootless.Rootless, cgroups)
 
 	ctl := control.New(logger, rt, imgStore, sup, ctx, nil, version, gitCommit, buildDate, cfg.BaseDir, cfg.Socket, cfg.SocketGroup, driver, cfg.DNS)
 	if err := ctl.Start(); err != nil {
@@ -156,7 +220,7 @@ func parseFlags() Config {
 	cfg := Config{}
 	flag.StringVar(&cfg.BaseDir, "base-dir", "/var/lib/nyxd", "Base data directory")
 	flag.StringVar(&cfg.CrunBin, "crun", "crun", "Path to crun binary")
-	flag.StringVar(&cfg.NetDriver, "net-driver", "native", "Container networking: native (in-process, no CNI plugins) or cni (exec plugins under -cni-bin-dir)")
+	flag.StringVar(&cfg.NetDriver, "net-driver", "native", "Container networking: native (in-process, no CNI plugins), cni (exec plugins under -cni-bin-dir) or host (share host network; default when rootless)")
 	flag.StringVar(&cfg.CNIBinDir, "cni-bin-dir", "/opt/cni/bin", "CNI plugin binaries directory (only for -net-driver=cni)")
 	flag.StringVar(&cfg.CNIConfDir, "cni-conf-dir", "/etc/cni/net.d", "CNI config directory (only for -net-driver=cni)")
 	flag.StringVar(&cfg.NetworkName, "network", "nyx", "CNI network name (only for -net-driver=cni)")
@@ -167,7 +231,54 @@ func parseFlags() Config {
 	flag.StringVar(&cfg.DNS, "dns", "auto", "DNS: auto (embedded; on CNI only for compose internal networks), embedded, cni (no embedded), off")
 	flag.BoolVar(&cfg.Version, "version", false, "Print version and exit")
 	flag.Parse()
+
+	if rootless.Wanted() {
+		applyRootlessDefaults(&cfg)
+	}
 	return cfg
+}
+
+// applyRootlessDefaults moves defaults that need root to per-user locations,
+// keeping any flag the user set explicitly.
+func applyRootlessDefaults(cfg *Config) {
+	set := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { set[f.Name] = true })
+
+	if !set["base-dir"] {
+		dataHome := os.Getenv("XDG_DATA_HOME")
+		if dataHome == "" {
+			if home, err := os.UserHomeDir(); err == nil {
+				dataHome = filepath.Join(home, ".local", "share")
+			}
+		}
+		cfg.BaseDir = filepath.Join(dataHome, "nyxd")
+	}
+	if !set["socket"] {
+		cfg.Socket = filepath.Join(rootlessRuntimeDir(), "nyxd.sock")
+	}
+	if !set["net-driver"] {
+		cfg.NetDriver = "host"
+	}
+}
+
+// rootlessRuntimeDir is $XDG_RUNTIME_DIR/nyxd, or /tmp/nyxd-<uid> without it.
+// The uid comes from the environment set before the user namespace (where
+// getuid() reports 0).
+func rootlessRuntimeDir() string {
+	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
+		return filepath.Join(d, "nyxd")
+	}
+	return filepath.Join(os.TempDir(), fmt.Sprintf("nyxd-%d", hostUID()))
+}
+
+func hostUID() int {
+	if v := os.Getenv(rootless.EnvHostUID); v != "" {
+		var uid int
+		if _, err := fmt.Sscan(v, &uid); err == nil {
+			return uid
+		}
+	}
+	return os.Getuid()
 }
 
 func newLogger(level string) *slog.Logger {

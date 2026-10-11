@@ -157,6 +157,12 @@ type Options struct {
 	Privileged     bool
 	// NoNewPrivileges defaults to true when nil; ignored (forced false) when Privileged.
 	NoNewPrivileges *bool
+	// HostNetwork shares the host network namespace (no network namespace in the spec).
+	HostNetwork bool
+	// Rootless is set when nyxd runs in its own user namespace. sysfs can only
+	// be mounted by the owner of the network namespace, so with HostNetwork the
+	// host /sys is bind-mounted read-only instead.
+	Rootless bool
 	// UIDMappings/GIDMappings enable user namespaces when non-empty (crun + newuidmap).
 	UIDMappings []LinuxIDMapping
 	GIDMappings []LinuxIDMapping
@@ -222,9 +228,12 @@ func buildSpec(opts Options, sec *Seccomp) Spec {
 	if len(opts.UIDMappings) > 0 {
 		namespaces = append([]Namespace{{Type: "user"}}, namespaces...)
 	}
-	if opts.NetNS != "" {
+	switch {
+	case opts.HostNetwork:
+		// no network namespace: share the daemon's (host) network
+	case opts.NetNS != "":
 		namespaces = append(namespaces, Namespace{Type: "network", Path: opts.NetNS})
-	} else {
+	default:
 		namespaces = append(namespaces, Namespace{Type: "network"})
 	}
 
@@ -274,7 +283,7 @@ func buildSpec(opts Options, sec *Seccomp) Spec {
 				{Type: "RLIMIT_NPROC", Hard: 512, Soft: 512},
 			},
 		},
-		Mounts: appendMounts(resolvThenDefault(opts.ResolvConfPath), opts.ExtraMounts),
+		Mounts: appendMounts(resolvThenDefault(opts.ResolvConfPath, opts.Rootless && opts.HostNetwork), opts.ExtraMounts),
 		Linux:  linux,
 	}
 }
@@ -292,8 +301,25 @@ func defaultMounts() []Mount {
 	}
 }
 
-func resolvThenDefault(resolvHost string) []Mount {
+func resolvThenDefault(resolvHost string, bindSys bool) []Mount {
 	base := defaultMounts()
+	if bindSys {
+		for i := range base {
+			switch base[i].Destination {
+			case "/sys":
+				base[i] = Mount{Destination: "/sys", Type: "bind", Source: "/sys", Options: []string{"rbind", "nosuid", "noexec", "nodev", "ro"}}
+			case "/sys/fs/cgroup":
+				base[i].Destination = "" // covered by the /sys rbind
+			}
+		}
+		out := base[:0]
+		for _, m := range base {
+			if m.Destination != "" {
+				out = append(out, m)
+			}
+		}
+		base = out
+	}
 	if strings.TrimSpace(resolvHost) == "" {
 		return base
 	}

@@ -9,6 +9,9 @@ import (
 )
 
 func (s *Supervisor) shouldRegisterDNS(spec ContainerSpec) bool {
+	if s.hostNetwork() {
+		return false
+	}
 	dm := strings.ToLower(strings.TrimSpace(s.dnsMode))
 	if dm == "" {
 		dm = "auto"
@@ -60,6 +63,14 @@ func (s *Supervisor) dnsDeregisterForSpec(spec ContainerSpec) {
 }
 
 func (s *Supervisor) writeBundleResolv(bundleDir string, spec ContainerSpec) (string, error) {
+	if s.hostNetwork() {
+		// Same network as the host, so the host resolver config applies as is
+		// (including loopback resolvers such as systemd-resolved's 127.0.0.53).
+		if _, err := os.Stat("/etc/resolv.conf"); err == nil {
+			return "/etc/resolv.conf", nil
+		}
+		return "", nil
+	}
 	if !s.shouldRegisterDNS(spec) {
 		return "", nil
 	}

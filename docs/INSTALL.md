@@ -26,9 +26,15 @@ sudo make install-usr
 # equivalent: sudo make install BINDIR=/usr/bin
 ```
 
-## Use `nyx` without sudo
+## Rootless (no root at all)
 
-**nyxd** must still run as **root**. Only the **`nyx` client** can run as a normal user if it can open the control socket.
+Run **`nyxd` as your normal user** and it switches to rootless mode on its own: it creates a user namespace,
+keeps data in `~/.local/share/nyxd`, and listens on `$XDG_RUNTIME_DIR/nyxd/nyxd.sock`, which `nyx` finds
+automatically. Requirements, limits and the systemd user unit are in **[rootless.md](rootless.md)**.
+
+## Use `nyx` without sudo (rootful daemon)
+
+With a **rootful** `nyxd`, the **`nyx` client** can run as a normal user if it can open the control socket.
 
 1. **Create a POSIX group** (once), e.g. `nyxd`:
 
