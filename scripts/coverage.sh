@@ -17,8 +17,8 @@ cd "$ROOT"
 OUT=${COVER_DIR:-$ROOT/coverage}
 MIN=${COVER_MIN:-0}
 
-# Test helpers that only run inside the harnesses are not product code.
-PKGS=$(go list ./... | grep -v '/scripts/' | paste -sd, -)
+# Test helpers (harness programs, internal/testutil) are not product code.
+PKGS=$(go list ./... | grep -v -e '/scripts/' -e '/internal/testutil/' | paste -sd, -)
 
 rm -rf "$OUT"
 mkdir -p "$OUT/unit" "$OUT/e2e" "$OUT/bin"
