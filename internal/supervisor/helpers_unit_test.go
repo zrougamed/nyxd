@@ -297,3 +297,22 @@ func TestKillForRestartUnknown(t *testing.T) {
 		t.Error("remove unknown container")
 	}
 }
+
+func TestComposeComparableOrdering(t *testing.T) {
+	a := ContainerSpec{
+		PortMappings: []network.PortMapping{{HostPort: 9, ContainerPort: 1, Protocol: "udp"}, {HostPort: 8, ContainerPort: 1, Protocol: "tcp"}, {HostPort: 8, ContainerPort: 1, Protocol: "udp"}},
+		UIDMappings:  []bundle.LinuxIDMapping{{ContainerID: 0, HostID: 2}, {ContainerID: 0, HostID: 1}},
+		GIDMappings:  []bundle.LinuxIDMapping{{ContainerID: 0, HostID: 2}, {ContainerID: 0, HostID: 1}},
+	}
+	b := a
+	b.PortMappings = []network.PortMapping{a.PortMappings[2], a.PortMappings[0], a.PortMappings[1]}
+	b.UIDMappings = []bundle.LinuxIDMapping{a.UIDMappings[1], a.UIDMappings[0]}
+	b.GIDMappings = []bundle.LinuxIDMapping{a.GIDMappings[1], a.GIDMappings[0]}
+	if !composeSpecsEqual(a, b) {
+		t.Error("order of ports and ID mappings must not matter")
+	}
+	s := &Supervisor{netDriver: "host"}
+	if s.IsBindSourceInUse("") || s.IsBindSourceInUse(".") {
+		t.Error("empty bind source")
+	}
+}

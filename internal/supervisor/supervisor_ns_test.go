@@ -442,3 +442,55 @@ func TestNetworkSetupFailure(t *testing.T) {
 		t.Error("netns left behind")
 	}
 }
+
+func TestShutdownAndForcedPaths(t *testing.T) {
+	if !nsrun.Run(t) {
+		return
+	}
+	d := setup(t)
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	// No log collector; resource limits dropped without cgroups; compose
+	// internal network options passed to the backend.
+	plain := supervisor.New(d.Runtime, d.Overlay, network.HostBackend{}, d.Base, log, nil, d.Store, nil, "host", "auto", "")
+	plain.SetRootless(true, false)
+	sp := spec(t, d, "nolog", supervisor.RestartNever, "", "sh", "-c", "echo x; sleep 300")
+	sp.Resources = &bundle.Resources{}
+	sp.ComposeInternalNet = true
+	if err := plain.Start(context.Background(), sp); err != nil {
+		t.Fatal(err)
+	}
+	if err := plain.Remove(context.Background(), "nolog"); err != nil {
+		t.Fatal(err)
+	}
+
+	// The daemon context ends while a container runs, and while a restart waits.
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := plain.Start(ctx, spec(t, d, "running", supervisor.RestartNever, "", "sleep", "300")); err != nil {
+		t.Fatal(err)
+	}
+	if err := plain.Start(ctx, spec(t, d, "looping", supervisor.RestartAlways, "", "sh", "-c", "sleep 0.3; exit 1")); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(600 * time.Millisecond) // first exit, then the restart backoff
+	cancel()
+	time.Sleep(300 * time.Millisecond)
+	for _, id := range []string{"running", "looping"} {
+		_ = d.Runtime.Delete(context.Background(), id, true)
+	}
+
+	// A re-adopted container that ignores SIGTERM: grace period, then a forced delete.
+	stub := spec(t, d, "stubborn2", supervisor.RestartNever, "", "ignoreterm")
+	stub.StopTimeout = 300 * time.Millisecond
+	if err := d.Sup.Start(context.Background(), stub); err != nil {
+		t.Fatal(err)
+	}
+	sup2 := supervisor.New(d.Runtime, d.Overlay, network.HostBackend{}, d.Base, log, d.Logs, d.Store, nil, "host", "auto", "")
+	sup2.SetRootless(true, false)
+	if err := sup2.Stop(context.Background(), "stubborn2"); err != nil {
+		t.Fatalf("forced stop: %v", err)
+	}
+	if err := sup2.KillForRestart(context.Background(), "stubborn2"); err == nil {
+		t.Log("container still tracked after forced stop") // either way is fine
+	}
+}
