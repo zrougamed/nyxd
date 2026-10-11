@@ -29,11 +29,21 @@ NYX="$BIN/nyx"
 WSL="$NYX_WSL_EXE"
 HTTPD=""
 
+# Coverage (scripts/coverage.sh): nyx and the distro share a directory on the
+# fake C: drive (WSLENV /p maps it to /mnt/c/...); copied out at the end.
+COVER_OUT=${GOCOVERDIR:-}
+if [ -n "$COVER_OUT" ]; then
+	mkdir -p "$FAKE_WSL_DRIVE_C/cover"
+	chmod 0777 "$FAKE_WSL_DRIVE_C/cover"
+	export GOCOVERDIR="$FAKE_WSL_DRIVE_C/cover" WSLENV=GOCOVERDIR/p
+fi
+
 cleanup() {
 	[ -n "$HTTPD" ] && kill "$HTTPD" 2>/dev/null || true
 	for d in "$FAKE_WSL_HOME"/distros/*/; do
 		[ -d "$d" ] && "$WSL" --unregister "$(basename "$d")" 2>/dev/null || true
 	done
+	[ -z "$COVER_OUT" ] || cp "$FAKE_WSL_DRIVE_C"/cover/* "$COVER_OUT"/ 2>/dev/null || true
 	rm -rf "$WORK" 2>/dev/null || true
 }
 trap cleanup EXIT

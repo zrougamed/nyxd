@@ -345,7 +345,9 @@ func (s *Supervisor) Stop(ctx context.Context, id string) error {
 }
 
 // Kill sends a signal (default KILL) and waits for crun to report stopped.
-// Sets stopped=true so restart policies do not respawn the container.
+// Sets stopped=true so restart policies do not respawn the container. A
+// container that is still running 10s after a signal other than KILL handled
+// it, and is left running.
 func (s *Supervisor) Kill(_ context.Context, id string, signal string) error {
 	if signal == "" {
 		signal = "KILL"
@@ -375,9 +377,20 @@ func (s *Supervisor) Kill(_ context.Context, id string, signal string) error {
 		s.log.Warn("crun kill: OCI state missing on disk; cancelling foreground run", "id", id, "err", err)
 	}
 
-	if exited := entry.exitedChan(); exited != nil && waitClosed(exited, 10*time.Second) {
-		s.log.Info("container stopped after kill", "id", id, "signal", signal)
-		return nil
+	if exited := entry.exitedChan(); exited != nil {
+		if waitClosed(exited, 10*time.Second) {
+			s.log.Info("container stopped after kill", "id", id, "signal", signal)
+			return nil
+		}
+		if signal != "KILL" && signal != "9" {
+			// The workload handled the signal (e.g. HUP to reload) and keeps
+			// running: delivered, and still subject to its restart policy.
+			entry.mu.Lock()
+			entry.stopped = false
+			entry.mu.Unlock()
+			s.log.Info("signal delivered, container still running", "id", id, "signal", signal)
+			return nil
+		}
 	}
 
 	// Unblock the supervisor's foreground `crun run` (CommandContext(logCtx)) so

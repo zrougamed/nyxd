@@ -16,7 +16,9 @@
 # generated /etc/resolv.conf and /etc/hosts are reproduced.
 #
 # Environment: FAKE_WSL_HOME (state, required), FAKE_WSL_DRIVE_C (directory
-# mounted at /mnt/c, default FAKE_WSL_HOME/c).
+# mounted at /mnt/c, default FAKE_WSL_HOME/c). As with WSL, variables named in
+# WSLENV (NAME[/p]:...) are passed through; /p translates a path on the fake
+# C: drive to its /mnt/c form.
 set -eu
 
 HOME_DIR=${FAKE_WSL_HOME:?FAKE_WSL_HOME must be set}
@@ -168,7 +170,18 @@ cmd_run() {
 		set -- "$shell"
 	fi
 	boot "$d"
-	exec env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+	pass=""
+	for e in $(echo "${WSLENV:-}" | tr ':' ' '); do
+		v=${e%%/*}
+		eval "[ -n \"\${$v+x}\" ]" || continue
+		val=$(eval "printf %s \"\$$v\"")
+		case $e in
+		*/p) case $val in "$DRIVE_C"/* | "$DRIVE_C") val=/mnt/c${val#"$DRIVE_C"} ;; esac ;;
+		esac
+		pass="$pass $v=$val"
+	done
+	# shellcheck disable=SC2086 # $pass: NAME=value words, values without spaces
+	exec env -i $pass PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
 		HOME=/root USER=root LOGNAME=root LANG=C.UTF-8 TERM="${TERM:-dumb}" WSL_DISTRO_NAME="$name" \
 		nsenter -t "$(holder_pid "$d")" --user --mount --pid --root --wd -- "$@"
 }

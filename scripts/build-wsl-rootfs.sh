@@ -39,9 +39,13 @@ done
 chmod 1777 "$R/tmp"
 chmod 0700 "$R/root"
 
-# nyxd, static.
-(cd "$ROOT_DIR" && CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -trimpath \
-	-ldflags "-w -s -X main.version=$VERSION" -o "$R/usr/local/bin/nyxd" ./cmd/nyxd)
+# nyxd, static (NYXD_BIN: use a prebuilt one, e.g. a -cover build for scripts/coverage.sh).
+if [ -n "${NYXD_BIN:-}" ]; then
+	install -m 0755 "$NYXD_BIN" "$R/usr/local/bin/nyxd"
+else
+	(cd "$ROOT_DIR" && CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -trimpath \
+		-ldflags "-w -s -X main.version=$VERSION" -o "$R/usr/local/bin/nyxd" ./cmd/nyxd)
+fi
 
 # crun, static, pinned.
 CRUN_URL="https://github.com/containers/crun/releases/download/$CRUN_VERSION/crun-$CRUN_VERSION-linux-$ARCH-disable-systemd"
