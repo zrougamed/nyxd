@@ -108,9 +108,9 @@ flowchart LR
 
 ## Overlay
 
-- [x] **Safe tree walk + dedup cache** — overlay extraction uses `WalkDir`, skips symlink directory targets, whiteout path checks with `filepath.Rel`; per-digest extraction cache under `_cache/<sha256>/` with mutex.
-- [x] **Layer deduplication (cross-image)** — shared `_cache/<digest>` for extracted layers.
-- [~] **`extractTar` via host `tar`** — pragmatic but not all OCI whiteout variants (e.g. `.wh..wh..plnk` hardlink whiteouts) guaranteed; pure-Go or container-aware extractor still TBD.
+- [x] **In-process layer engine** — `internal/layer` (no host `tar`): `os.Root`-confined writes, OCI whiteouts → overlay whiteouts / opaque xattr, ownership + modes preserved, devices skipped, overlay xattrs from images rejected; `Diff` / `WriteBlob` build layers from an upper dir. See image-layers doc.
+- [x] **Layer deduplication (cross-image)** — shared `_layers/<digest>` for extracted layers, extracted to a temp dir and renamed atomically; legacy `_cache/` removed at startup when unused.
+- [ ] **zstd layers** — rejected with a clear error today.
 
 **Done / partial**
 

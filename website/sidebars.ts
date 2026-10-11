@@ -26,6 +26,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'operations/networking',
         'operations/native-network',
+        'operations/image-layers',
         'operations/kernel-requirements',
         'operations/qemu-alpine',
       ],
