@@ -57,3 +57,31 @@ func (l *Lock) Close() error {
 	l.f = nil
 	return err
 }
+
+// Holder returns the PID of the nyxd holding the lock under baseDir, or 0
+// when no daemon holds it.
+func Holder(baseDir string) (int, error) {
+	path := filepath.Join(baseDir, "run", "nyxd-daemon.lock")
+	f, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err == nil {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		return 0, nil // nobody holds it
+	}
+	var pid int
+	if _, err := fmt.Fscan(f, &pid); err != nil || pid <= 0 {
+		return 0, fmt.Errorf("daemon lock %s is held but has no pid", path)
+	}
+	return pid, nil
+}
+
+// Signal asks the daemon with pid to shut down (SIGTERM).
+func Signal(pid int) error {
+	return syscall.Kill(pid, syscall.SIGTERM)
+}

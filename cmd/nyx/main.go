@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -29,6 +30,9 @@ const systemSocket = "/run/nyxd/nyxd.sock"
 func defaultSocket() string {
 	if v := os.Getenv("NYXD_SOCKET"); v != "" {
 		return v
+	}
+	if runtime.GOOS == "windows" {
+		return wslScheme + "nyx" // see nyx machine
 	}
 	if os.Geteuid() != 0 {
 		if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
@@ -110,6 +114,8 @@ func run(args []string) error {
 		return doCompose(socket, args[1:])
 	case "build":
 		return doBuild(socket, args[1:])
+	case "machine":
+		return doMachine(args[1:])
 	case "tag":
 		return doTag(socket, args[1:])
 	case "push":
@@ -136,6 +142,8 @@ global-options (before <command>):
 commands:
   ping
       check that nyxd is reachable
+  machine <init|start|stop|rm|status|logs> [--name NAME]
+      Windows: manage the WSL2 distro that runs nyxd (no admin rights needed after WSL is enabled)
   version
       print daemon version / build info
   pull [--json] [--username USER] [--password PASS] <ref>
@@ -201,8 +209,7 @@ func httpClient(socket string) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				var d net.Dialer
-				return d.DialContext(ctx, "unix", socket)
+				return dialEndpoint(ctx, socket)
 			},
 		},
 		Timeout: 30 * time.Minute,
@@ -229,6 +236,7 @@ func doPing(socket string) error {
 }
 
 func doVersion(socket string) error {
+	fmt.Printf("nyx %s\n", version)
 	c := httpClient(socket)
 	resp, err := c.Get("http://unix/v1/version")
 	if err != nil {

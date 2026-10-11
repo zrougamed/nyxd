@@ -23,8 +23,7 @@ import (
 func streamClient(socket string) *http.Client {
 	return &http.Client{Transport: &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, "unix", socket)
+			return dialEndpoint(ctx, socket)
 		},
 	}}
 }
