@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/zrougamed/nyxd/internal/build"
 	"github.com/zrougamed/nyxd/internal/cgroup"
 	"github.com/zrougamed/nyxd/internal/control"
 	"github.com/zrougamed/nyxd/internal/daemonlock"
@@ -192,6 +193,19 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	sup.SetRootless(cfg.Rootless.Rootless, cgroups)
 
 	ctl := control.New(logger, rt, imgStore, sup, ctx, nil, version, gitCommit, buildDate, cfg.BaseDir, cfg.Socket, cfg.SocketGroup, driver, cfg.DNS)
+	builder, err := build.New(build.Config{
+		Store:    imgStore,
+		Overlay:  ovl,
+		Runtime:  rt,
+		BaseDir:  cfg.BaseDir,
+		Rootless: cfg.Rootless.Rootless,
+		SingleID: cfg.Rootless.Rootless && !cfg.Rootless.SubIDs,
+		Log:      logger,
+	})
+	if err != nil {
+		return fmt.Errorf("builder: %w", err)
+	}
+	ctl.SetBuilder(builder)
 	if err := ctl.Start(); err != nil {
 		logger.Warn("control API not started", "err", err)
 	} else {

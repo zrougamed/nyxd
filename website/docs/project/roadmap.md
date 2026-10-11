@@ -87,6 +87,13 @@ flowchart LR
 
 ---
 
+## Image build (`nyx build`)
+
+- [x] **Dockerfile builds** — `internal/build`: own parser (directives, continuations, JSON/shell forms, ARG before FROM, variable expansion), multi-stage, RUN via crun in the container sandbox (host network), COPY/ADD (wildcards, `--from`, `--chown`, `--chmod`, archives, URLs + `--checksum`), content-addressed build cache, `.dockerignore`, `POST /v1/build` NDJSON stream, works rootless.
+- [ ] **RUN --mount** (cache / secret / bind) and heredocs.
+- [ ] **Push / tag / save / load** — registry push, `nyx tag`, OCI archive export/import.
+- [ ] **Reproducible image IDs** (`SOURCE_DATE_EPOCH`).
+
 ## Image puller
 
 - [~] **Private / credentialed registries** — `PullWithProgress` accepts `RegistryAuth` (Basic + Bearer token flow); **`POST /v1/images/pull`** / **`POST /v1/containers/run`** / compose per-service `registry_username` / `registry_password`; **`nyx pull -u/--password`**. No `DOCKER_CONFIG` / OAuth refresh yet.

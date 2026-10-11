@@ -52,6 +52,12 @@ const sidebar: SidebarsConfig = {
           label: "Remove local image metadata not referenced by any supervised container",
           className: "api-method post",
         },
+        {
+          type: "doc",
+          id: "reference/api/build-image",
+          label: "Build an image from a Dockerfile",
+          className: "api-method post",
+        },
       ],
     },
     {

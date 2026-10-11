@@ -39,13 +39,22 @@ jobs:
           grep -q "^$(id -un):" /etc/subuid || sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$(id -un)"
           make test-rootless
 
+      - name: Image build end-to-end (rootless)
+        run: make test-build
+
       - name: Build binaries
         run: make build build-nyx
 
       - name: govulncheck
         uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
         with:
+          # Reuse the toolchain from setup-go above: no second Go install or
+          # cache restore (avoids "Cannot open: File exists" noise).
+          go-version-input: ""
           go-version-file: go.mod
+          cache: false
+          check-latest: false
+          repo-checkout: false
           go-package: ./...
 
       - name: Trivy filesystem scan

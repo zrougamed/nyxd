@@ -408,3 +408,19 @@ func (a *applier) pruneOpaque(dir string) error {
 	}
 	return nil
 }
+
+// DiffOptions controls Diff.
+type DiffOptions struct {
+	// XattrPrefix is the overlay xattr namespace used by the upper dir mount.
+	XattrPrefix string
+	// Epoch, when non-zero, clamps every mtime to at most Epoch
+	// (SOURCE_DATE_EPOCH semantics) for reproducible layers.
+	Epoch time.Time
+}
+
+// Descriptor describes a written layer blob.
+type Descriptor struct {
+	Digest string // sha256 of the compressed blob
+	DiffID string // sha256 of the uncompressed tar
+	Size   int64  // compressed size in bytes
+}

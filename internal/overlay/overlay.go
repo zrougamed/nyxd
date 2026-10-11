@@ -107,6 +107,16 @@ func (m *Manager) Prepare(containerID string, blobPaths []string, cfg *oci.Image
 		lowerDirs = append(lowerDirs, ldir)
 	}
 
+	// overlayfs needs at least one lowerdir: an image without layers
+	// (FROM scratch) gets a shared empty directory.
+	if len(lowerDirs) == 0 {
+		empty := filepath.Join(m.base, layersDirName, "empty")
+		if err := os.MkdirAll(empty, 0o755); err != nil {
+			return "", err
+		}
+		lowerDirs = append(lowerDirs, empty)
+	}
+
 	// overlayfs lowerdir is colon-separated, upper-most layer listed first.
 	reversedLowers := reverseStrings(lowerDirs)
 	lowerOpt := strings.Join(reversedLowers, ":")
@@ -135,6 +145,30 @@ func (m *Manager) Remove(containerID string) error {
 	}
 
 	return os.RemoveAll(cDir)
+}
+
+// Unmount detaches the merged mount of containerID but keeps its upper dir,
+// so the changes can still be read (e.g. committed as an image layer).
+func (m *Manager) Unmount(containerID string) error {
+	mergedDir := filepath.Join(m.base, containerID, "merged")
+	if err := syscall.Unmount(mergedDir, syscall.MNT_DETACH); err != nil && err != syscall.EINVAL && err != syscall.ENOENT {
+		return fmt.Errorf("overlay unmount %s: %w", containerID, err)
+	}
+	return nil
+}
+
+// UpperDir returns the writable layer (overlay upperdir) of containerID.
+func (m *Manager) UpperDir(containerID string) string {
+	return filepath.Join(m.base, containerID, "diff")
+}
+
+// XattrPrefix is the namespace overlayfs uses for its xattrs on this
+// manager's mounts ("trusted." rootful, "user." rootless).
+func (m *Manager) XattrPrefix() string {
+	if m.opts.Rootless {
+		return "user."
+	}
+	return layer.DefaultXattrPrefix
 }
 
 // MergedDir returns the merged mount path for a container without mounting.

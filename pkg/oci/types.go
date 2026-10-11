@@ -70,6 +70,20 @@ type ContainerConfig struct {
 	Labels       map[string]string `json:"Labels,omitempty"`
 	ExposedPorts map[string]struct{} `json:"ExposedPorts,omitempty"`
 	StopSignal   string            `json:"StopSignal,omitempty"`
+	Volumes      map[string]struct{} `json:"Volumes,omitempty"`
+	Healthcheck  *HealthConfig       `json:"Healthcheck,omitempty"`
+	Shell        []string            `json:"Shell,omitempty"`
+	OnBuild      []string            `json:"OnBuild,omitempty"`
+}
+
+// HealthConfig is the image HEALTHCHECK (Docker image config extension).
+// Durations are in nanoseconds.
+type HealthConfig struct {
+	Test        []string `json:"Test,omitempty"`
+	Interval    int64    `json:"Interval,omitempty"`
+	Timeout     int64    `json:"Timeout,omitempty"`
+	StartPeriod int64    `json:"StartPeriod,omitempty"`
+	Retries     int      `json:"Retries,omitempty"`
 }
 
 // RootFS describes the layers that make up the image rootfs.

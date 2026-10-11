@@ -43,6 +43,17 @@ func (m *Manager) Remove(containerID string) error {
 	return os.RemoveAll(cDir)
 }
 
+// Unmount is a no-op off Linux.
+func (m *Manager) Unmount(containerID string) error { return nil }
+
+// UpperDir returns the writable layer directory of containerID.
+func (m *Manager) UpperDir(containerID string) string {
+	return filepath.Join(m.base, containerID, "diff")
+}
+
+// XattrPrefix returns the overlay xattr namespace.
+func (m *Manager) XattrPrefix() string { return "trusted." }
+
 // MergedDir returns the merged mount path for a container without mounting.
 func (m *Manager) MergedDir(containerID string) string {
 	return filepath.Join(m.base, containerID, "merged")

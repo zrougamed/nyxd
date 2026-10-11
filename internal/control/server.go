@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zrougamed/nyxd/internal/build"
 	"github.com/zrougamed/nyxd/internal/compose"
 	"github.com/zrougamed/nyxd/internal/health"
 	"github.com/zrougamed/nyxd/internal/image"
@@ -56,6 +57,8 @@ type Server struct {
 
 	netDriver string
 	dnsMode   string
+
+	builder *build.Builder // optional: POST /v1/build
 
 	srv    *http.Server
 	ln     net.Listener
@@ -139,6 +142,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /v1/images", s.handleImagesList)
 	mux.HandleFunc("POST /v1/images/remove", s.handleImagesRemove)
 	mux.HandleFunc("POST /v1/images/prune", s.handleImagesPrune)
+	mux.HandleFunc("POST /v1/build", s.handleBuild)
 
 	// ReadHeaderTimeout caps slow clients parsing headers; ReadTimeout must stay 0 so
 	// POST bodies can stream indefinitely (e.g. nyx exec -i stdin). A positive ReadTimeout

@@ -7,7 +7,7 @@ Minimal OCI container orchestrator for **Linux** (x86_64, arm64, and similar) �
 
 **Zero Docker. Zero Podman. Zero containerd.**
 
-Runs as **root** or **rootless** (start `nyxd` as a normal user; see **[docs/rootless.md](docs/rootless.md)**). Uses `crun` as the OCI runtime. **Networking** defaults to in-process **native** mode; optional **CNI** plugins are supported. See **[docs/networking.md](docs/networking.md)** for `-net-driver`, the startup log line, and `nyx run` / stop behavior.
+Builds images from Dockerfiles with **`nyx build`** (no Docker/BuildKit; see **[docs/build.md](docs/build.md)**). Runs as **root** or **rootless** (start `nyxd` as a normal user; see **[docs/rootless.md](docs/rootless.md)**). Uses `crun` as the OCI runtime. **Networking** defaults to in-process **native** mode; optional **CNI** plugins are supported. See **[docs/networking.md](docs/networking.md)** for `-net-driver`, the startup log line, and `nyx run` / stop behavior.
 
 **Docs index:** **[docs/README.md](docs/README.md)** — install, usage, OpenAPI, QEMU Alpine, kernel notes.
 
@@ -26,7 +26,8 @@ nyxd
 ├── supervisor/   restart policy + lifecycle management
 ├── health/       exec/http/tcp healthchecks
 ├── log/          container log streaming
-└── compose/      Compose subset: parse, env/subst, mounts, stack → supervisor specs
+├── compose/      Compose subset: parse, env/subst, mounts, stack → supervisor specs
+└── build/        Dockerfile builds (parser, RUN via crun, COPY/ADD, cache) — no BuildKit
 ```
 
 ## Dependencies (external)
@@ -126,8 +127,8 @@ make scan-grype
 │   ├── blobs/sha256/<hex>        # compressed layer blobs
 │   └── images/<repo>/<tag>/     # manifest.json + config.json
 ├── overlay/
+│   ├── _layers/<sha256-hex>/       # extracted layers, shared by all containers (lowerdirs)
 │   └── <containerID>/
-│       ├── layers/0000/ ... 000N/  # extracted read-only layers
 │       ├── diff/                   # writable upper layer
 │       ├── work/                   # overlayfs workdir
 │       └── merged/                 # container rootfs (mount point)
@@ -136,6 +137,9 @@ make scan-grype
 │   └── nyxd-meta.json            # image + publish + IP (re-adopt if supervisor JSON missing)
 ├── supervisor/containers/
 │   └── <containerID>.json        # persisted spec + paths (re-adopt after unclean restart)
+├── build/
+│   ├── cache/<key>.json          # build cache: step key → layer digest
+│   └── contexts/, bundles/       # temporary build contexts and RUN bundles
 ├── run/
 │   ├── crun/                     # crun --root state
 │   └── nyxd-daemon.lock          # exclusive flock: one nyxd per base-dir
