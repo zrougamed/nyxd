@@ -13,7 +13,7 @@ Typical setups: run **nyxd** on the host and **nyx** locally, or call the Unix-s
 | **crun** | `apt install crun`, `dnf install crun`, or build from source. |
 | **Kernel modules** | See [kernel requirements](/docs/operations/kernel-requirements) — `overlay`, `bridge`, `veth`, `br_netfilter`, nftables NAT, etc. |
 | **nft** (optional but recommended) | Used for port maps with the **native** network driver. |
-| **Go 1.22+** (build only) | On the target host or cross-compile from a dev machine. |
+| **Go 1.27+** (build only) | On the target host or cross-compile from a dev machine. |
 
 Networking defaults to **`-net-driver=native`** (no `/opt/cni/bin`). See [networking](/docs/operations/networking).
 
