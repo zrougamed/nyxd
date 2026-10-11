@@ -170,6 +170,24 @@ func TestControlContainerLifecycle(t *testing.T) {
 	if code, out := raw(t, d, "POST", "/v1/containers/web-1/exec", "application/x-nyxd-exec+v1", strings.NewReader(hdr)); code != 200 || !strings.Contains(out, "from stdin") {
 		t.Errorf("exec stream: %d %s", code, out)
 	}
+	// nyx exec -i with a one-shot command: the client keeps its stdin open,
+	// the response still ends when the command does.
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	go func() { _, _ = pw.Write([]byte(`{"argv":["echo","stdin-open"]}` + "\n")) }()
+	finished := make(chan string, 1)
+	go func() {
+		_, out := raw(t, d, "POST", "/v1/containers/web-1/exec", "application/x-nyxd-exec+v1", pr)
+		finished <- out
+	}()
+	select {
+	case out := <-finished:
+		if !strings.Contains(out, "stdin-open") {
+			t.Errorf("exec with open stdin: %q", out)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("exec did not return while the client kept stdin open")
+	}
 	if code, out := d.Do(t, "POST", "/v1/containers/web-1/exec", map[string]any{"argv": []string{"/nope"}}); code != 200 || !strings.Contains(out, "nyxd: exec:") {
 		t.Errorf("exec failure: %d %s", code, out)
 	}

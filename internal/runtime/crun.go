@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -352,8 +351,19 @@ func (r *Runtime) Exec(ctx context.Context, containerID string, argv []string, s
 	}
 
 	cmd := exec.CommandContext(ctx, r.binary, args...)
+	// stdin goes through a pipe we feed: os/exec would otherwise copy it in a
+	// goroutine that Wait waits for, which never ends while the client keeps
+	// the request body open after the command exited (nyx exec -i ... ls).
+	var stdinW *os.File
 	if stdin != nil {
-		cmd.Stdin = stdin
+		pr, pw, err := os.Pipe()
+		if err != nil {
+			return fmt.Errorf("crun exec: %w", err)
+		}
+		defer pr.Close()
+		defer pw.Close()
+		cmd.Stdin = pr
+		stdinW = pw
 		cmd.WaitDelay = 800 * time.Millisecond
 	}
 	switch {
@@ -370,11 +380,21 @@ func (r *Runtime) Exec(ctx context.Context, containerID string, argv []string, s
 		cmd.Stdout = io.Discard
 		cmd.Stderr = io.Discard
 	}
-	if err := cmd.Run(); err != nil {
-		if stdin != nil && errors.Is(err, exec.ErrWaitDelay) {
-			if cmd.ProcessState != nil && cmd.ProcessState.Success() {
-				return nil
-			}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("crun exec: %w", err)
+	}
+	if stdinW != nil {
+		_ = cmd.Stdin.(*os.File).Close() // the child holds its own copy
+		go func() {
+			// Ends at the next read once stdinW is closed below, or when the
+			// client closes stdin; not waited for.
+			_, _ = io.Copy(stdinW, stdin)
+			_ = stdinW.Close()
+		}()
+	}
+	if err := cmd.Wait(); err != nil {
+		if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
+			return nil
 		}
 		return fmt.Errorf("crun exec: %w", err)
 	}
@@ -409,13 +429,10 @@ func (r *Runtime) execTTY(ctx context.Context, args []string, stdin io.Reader, s
 		out = io.MultiWriter(out, stderr)
 	}
 
-	var wg sync.WaitGroup
 	if stdin != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, _ = io.Copy(ptyMaster, stdin)
-		}()
+		// Not waited for: it may be blocked reading a client stream that stays
+		// open after the command exited; it ends at its next write or read.
+		go func() { _, _ = io.Copy(ptyMaster, stdin) }()
 	}
 
 	copyDone := make(chan struct{})
@@ -427,7 +444,6 @@ func (r *Runtime) execTTY(ctx context.Context, args []string, stdin io.Reader, s
 	waitErr := cmd.Wait()
 	_ = ptyMaster.Close()
 	<-copyDone
-	wg.Wait()
 
 	if waitErr != nil {
 		if errors.Is(waitErr, exec.ErrWaitDelay) {
@@ -450,7 +466,20 @@ func (r *Runtime) run(ctx context.Context, args []string, out *bytes.Buffer) err
 	}
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("crun %s: %w: %s", args[1], err, stderr.String())
+		return fmt.Errorf("crun %s: %w: %s", subcommand(args), err, stderr.String())
 	}
 	return nil
+}
+
+// subcommand is the crun command in args (after global options and --root DIR).
+func subcommand(args []string) string {
+	for i := 0; i < len(args); i++ {
+		switch {
+		case args[i] == "--root":
+			i++
+		case !strings.HasPrefix(args[i], "-"):
+			return args[i]
+		}
+	}
+	return "?"
 }
