@@ -473,9 +473,6 @@ func newProgressReader(r io.Reader, fn func(int64)) io.Reader {
 		return r
 	}
 	const step = 256 * 1024
-	if step < 1 {
-		return r
-	}
 	return &progressReader{r: r, step: step, next: step, fn: fn}
 }
 

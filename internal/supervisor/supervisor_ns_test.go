@@ -20,6 +20,7 @@ import (
 	"github.com/zrougamed/nyxd/internal/testutil/daemon"
 	"github.com/zrougamed/nyxd/internal/testutil/nsrun"
 	"github.com/zrougamed/nyxd/pkg/oci"
+	"golang.org/x/sys/unix"
 )
 
 // These tests run real containers (crun, overlay) in a private user
@@ -492,5 +493,41 @@ func TestShutdownAndForcedPaths(t *testing.T) {
 	}
 	if err := sup2.KillForRestart(context.Background(), "stubborn2"); err == nil {
 		t.Log("container still tracked after forced stop") // either way is fine
+	}
+}
+
+func roMount(t *testing.T, dir string) {
+	t.Helper()
+	_ = os.MkdirAll(dir, 0o700)
+	if err := unix.Mount(dir, dir, "", unix.MS_BIND, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Mount("", dir, "", unix.MS_BIND|unix.MS_REMOUNT|unix.MS_RDONLY, ""); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = unix.Unmount(dir, unix.MNT_DETACH) })
+}
+
+func TestReadOnlyState(t *testing.T) {
+	if !nsrun.Run(t) {
+		return
+	}
+	d := setup(t)
+	ctx := context.Background()
+	// Records cannot be written: the container still runs (logged).
+	roMount(t, filepath.Join(d.Base, "supervisor", "containers"))
+	if err := d.Sup.Start(ctx, spec(t, d, "norecord", supervisor.RestartNever, "", "sleep", "300")); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Sup.Remove(ctx, "norecord"); err != nil {
+		t.Fatal(err)
+	}
+	// Bundles cannot be created: the start fails and is rolled back.
+	roMount(t, filepath.Join(d.Base, "bundles"))
+	if err := d.Sup.Start(ctx, spec(t, d, "nobundle", supervisor.RestartNever, "", "true")); err == nil {
+		t.Error("start without a bundle dir")
+	}
+	if listed(d, "nobundle") {
+		t.Error("failed start still listed")
 	}
 }
