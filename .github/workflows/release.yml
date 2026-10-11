@@ -47,6 +47,19 @@ jobs:
               -o "${out}" ./cmd/nyx
             sha256sum "${out}" > "${out}.sha256"
           done
+          for goarch in amd64 arm64; do
+            out="dist/nyx-windows-${goarch}.exe"
+            CGO_ENABLED=0 GOOS=windows GOARCH="${goarch}" \
+              go build -trimpath -ldflags "${LDFLAGS}" \
+              -o "${out}" ./cmd/nyx
+            sha256sum "${out}" > "${out}.sha256"
+          done
+          # WSL2 distro tarballs; `nyx machine init` downloads
+          # nyx-wsl-<arch>.tar.gz from the release matching its version and
+          # checks it against the .sha256 next to it.
+          for goarch in amd64 arm64; do
+            scripts/build-wsl-rootfs.sh "${goarch}" dist "${VERSION}"
+          done
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -61,3 +74,11 @@ jobs:
             dist/nyx-linux-amd64.sha256
             dist/nyx-linux-arm64
             dist/nyx-linux-arm64.sha256
+            dist/nyx-windows-amd64.exe
+            dist/nyx-windows-amd64.exe.sha256
+            dist/nyx-windows-arm64.exe
+            dist/nyx-windows-arm64.exe.sha256
+            dist/nyx-wsl-amd64.tar.gz
+            dist/nyx-wsl-amd64.tar.gz.sha256
+            dist/nyx-wsl-arm64.tar.gz
+            dist/nyx-wsl-arm64.tar.gz.sha256

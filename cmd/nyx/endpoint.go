@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/zrougamed/nyxd/internal/wslpath"
 )
 
 // Endpoints accepted by -socket / NYXD_SOCKET:
@@ -137,27 +139,5 @@ func daemonPath(endpoint, p string) (string, error) {
 	if !isWSLEndpoint(endpoint) {
 		return p, nil
 	}
-	return toWSLPath(p)
+	return wslpath.ToWSL(p)
 }
-
-// toWSLPath maps an absolute Windows drive path to /mnt/<drive>/...
-func toWSLPath(p string) (string, error) {
-	if strings.HasPrefix(p, `\\`) || strings.HasPrefix(p, "//") {
-		return "", fmt.Errorf("%s: network (UNC) paths are not reachable from WSL; copy the files to a local drive", p)
-	}
-	if strings.HasPrefix(p, "/") {
-		return p, nil // already a Linux path
-	}
-	if len(p) < 2 || p[1] != ':' || !isLetter(p[0]) {
-		return "", fmt.Errorf("%s: expected an absolute Windows path like C:\\dir", p)
-	}
-	rest := strings.ReplaceAll(p[2:], `\`, "/")
-	rest = strings.TrimPrefix(rest, "/")
-	out := "/mnt/" + strings.ToLower(p[:1])
-	if rest != "" {
-		out += "/" + rest
-	}
-	return out, nil
-}
-
-func isLetter(b byte) bool { return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') }

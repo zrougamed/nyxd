@@ -57,6 +57,9 @@ type Config struct {
 }
 
 func main() {
+	if isNologin(os.Args[0]) {
+		os.Exit(nologin())
+	}
 	if len(os.Args) > 1 && os.Args[1] == "unshare" {
 		os.Exit(unshareCmd(os.Args[2:]))
 	}

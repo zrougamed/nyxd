@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/zrougamed/nyxd/internal/bundle"
+	"github.com/zrougamed/nyxd/internal/wslpath"
 )
 
 // ServiceExtraMounts turns compose volume lines into OCI bind mounts (and creates
@@ -35,12 +36,26 @@ func parseVolumeMount(line string, stack *Stack, composeDir, project, dataDir st
 		line = strings.TrimSpace(after)
 	}
 
+	// A Windows drive source (C:\data:/data) has a colon of its own; nyxd then
+	// runs in WSL2, which mounts that drive at /mnt/c.
+	drive := ""
+	if wslpath.HasDrive(line) {
+		drive, line = line[:2], line[2:]
+	}
+
 	parts := strings.Split(line, ":")
 	if len(parts) < 2 {
-		return bundle.Mount{}, fmt.Errorf("invalid volume %q (expected source:destination)", line)
+		return bundle.Mount{}, fmt.Errorf("invalid volume %q (expected source:destination)", drive+line)
 	}
 
 	src := parts[0]
+	if drive != "" {
+		p, err := wslpath.ToWSL(drive + src)
+		if err != nil {
+			return bundle.Mount{}, err
+		}
+		src = p
+	}
 	dest := parts[1]
 	if len(parts) == 3 {
 		mode := strings.ToLower(strings.TrimSpace(parts[2]))

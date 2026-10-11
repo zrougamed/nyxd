@@ -268,6 +268,19 @@ flowchart LR
 
 ---
 
+## Windows (WSL2)
+
+- [x] **`nyx.exe`** — Windows client (amd64, arm64); default endpoint `wsl://nyx` runs `nyxd stdio-proxy` in the distro per connection (no TCP listener); compose file paths and `C:\…` bind sources → `/mnt/c/…`; build context modes `0755`.
+- [x] **`nyx machine init|start|stop|rm|status|logs`** — imports the release-matching distro tarball (sha256-verified), starts `nyxd -userns-remap=default` detached.
+- [x] **WSL distro tarball** — `scripts/build-wsl-rootfs.sh` / `make wsl-rootfs`: static nyxd + pinned static crun + pinned Mozilla CA bundle, no shell (login shell = `nologin` hint), Windows interop off, reproducible; built and Grype-scanned in CI, published by the release workflow with `.sha256`.
+- [x] **End-to-end harness** — `make test-wsl` (CI): `nyx machine` drives `scripts/fake-wsl.sh`, which boots the real tarball as WSL2 does (own user/mount/pid namespace, tarball as root, no shell) and runs init/start/pull/run/exec/build/compose/stop/terminate/rm unprivileged.
+- [~] **Verified on real Windows** — not yet: `wsl.exe` itself, the WSL kernel/cgroup layout, `localhost` forwarding and detach behaviour (hosted runners lack WSL2).
+- [ ] **QEMU + WHPX provider** — optional alternative where WSL is unavailable.
+
+See [windows](/docs/getting-started/windows).
+
+---
+
 ## Security
 
 - [ ] **Default seccomp JSON artifact** — bundle supports hardening fields; no curated default profile shipped beside comments in older specs.
@@ -287,7 +300,7 @@ flowchart LR
 ### Defaults & isolation
 
 - [ ] **Read-only rootfs by default** — flip policy so **read-write root** is opt-in; add bundle tmpfs for **`/tmp`**, **`/run`** (and any writable paths images require) when `read_only` is default.
-- [ ] **User-namespace UID/GID remap (rootful nyxd)** — map container `root` → high UIDs on host **without** full **rootless** nyxd (breaks many escape-to-host primitives); distinct from **`[ ]` Rootless** above.
+- [x] **User-namespace UID/GID remap (rootful nyxd)** — `nyxd -userns-remap=default|START:COUNT`: root writes the ID maps itself (no setuid helpers) and runs the daemon + containers in that namespace, so container `root` is an unprivileged host uid. Same limits as rootless (host network, no cgroup limits). See [rootless.md](/docs/operations/rootless#-userns-remap-root-without-root-containers).
 - [ ] **`restart=on-failure:N` parity** — surface **`MaxRestarts`** (or equivalent) through **`nyx run`** / compose in a way that matches operator mental models (`on-failure:3`).
 
 ### Service discovery without an in-daemon DNS server
