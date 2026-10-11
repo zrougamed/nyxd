@@ -10,17 +10,17 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/zrougamed/nyxd/internal/testutil/nsrun"
 )
 
-// TestOverlayMountSemantics mounts real overlayfs on layers produced by Apply.
-// It needs mount privileges, so it only runs when NYXD_OVERLAY_IT=1, e.g.:
-//
-//	unshare -Urm env NYXD_OVERLAY_IT=1 go test ./internal/layer -run OverlayMount
-//
+// TestOverlayMountSemantics mounts real overlayfs on layers produced by Apply,
+// in a private user + mount namespace (nsrun) unless already run with mount
+// privileges (make test-overlay sets NYXD_OVERLAY_IT=1 under unshare -Urm).
 // Inside an unprivileged user namespace the mount uses "userxattr".
 func TestOverlayMountSemantics(t *testing.T) {
-	if os.Getenv("NYXD_OVERLAY_IT") != "1" {
-		t.Skip("set NYXD_OVERLAY_IT=1 and run with mount privileges")
+	if os.Getenv("NYXD_OVERLAY_IT") != "1" && !nsrun.Run(t) {
+		return
 	}
 	base := t.TempDir()
 	l1, l2 := filepath.Join(base, "l1"), filepath.Join(base, "l2")

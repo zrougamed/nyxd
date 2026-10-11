@@ -194,6 +194,9 @@ func Generate(bundleDir string, opts Options) (string, error) {
 
 func buildSpec(opts Options, sec *Seccomp) Spec {
 	imgCfg := opts.ImageConfig
+	if imgCfg == nil {
+		imgCfg = &oci.ImageConfig{} // no image metadata: everything from opts
+	}
 
 	args := opts.Args
 	if len(args) == 0 {

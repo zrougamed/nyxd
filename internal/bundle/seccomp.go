@@ -21,8 +21,11 @@ type SyscallRule struct {
 	Action string   `json:"action"`
 }
 
-func seccompArchitecturesForHost() []string {
-	switch runtime.GOARCH {
+func seccompArchitecturesForHost() []string { return seccompArchitectures(runtime.GOARCH) }
+
+// seccompArchitectures lists the syscall ABIs a process on goarch can use.
+func seccompArchitectures(goarch string) []string {
+	switch goarch {
 	case "amd64":
 		return []string{"SCMP_ARCH_X86_64", "SCMP_ARCH_X86", "SCMP_ARCH_X32"}
 	case "arm64":
