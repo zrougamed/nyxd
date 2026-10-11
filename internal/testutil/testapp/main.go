@@ -2,7 +2,7 @@
 // internal/testutil/daemon. It is a multi-call binary (like busybox): /bin/sh,
 // /bin/echo, /bin/cat, ... are links to it and it acts on argv[0]. The shell
 // understands just enough for tests: commands separated by ";" or "&&",
-// single/double quotes, and "> file" / ">> file" redirects.
+// $VAR expansion, single/double quotes, and "> file" / ">> file" redirects.
 package main
 
 import (
@@ -55,7 +55,7 @@ func script(s string) int {
 }
 
 func command(s string) int {
-	words := split(s)
+	words := split(os.ExpandEnv(s))
 	if len(words) == 0 {
 		return 0
 	}

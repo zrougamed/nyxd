@@ -206,8 +206,7 @@ func (s *Store) HasBlob(digest string) bool {
 
 // LoadImageMeta loads a previously pulled image's manifest + config.
 func (s *Store) LoadImageMeta(ref string) (*oci.Manifest, *oci.ImageConfig, error) {
-	_, repo, tag := parseRef(ref)
-	dir := filepath.Join(s.root, "images", sanitisePath(repo), sanitisePath(tag))
+	dir := s.imageDir(ref)
 
 	mData, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
@@ -247,18 +246,34 @@ func (s *Store) ResolvePulledImage(ref string) (*oci.Manifest, *oci.ImageConfig,
 	return m, cfg, paths, nil
 }
 
-// ListImageRefs returns pulled image references (repo:tag) discovered on disk.
-func (s *Store) ListImageRefs() ([]string, error) {
+// refFile records, next to an image's manifest, the reference it was stored
+// under: directory names are sanitised and drop the registry, so they cannot
+// be turned back into the reference.
+const refFile = "ref"
+
+// imageDir is the metadata directory for ref.
+func (s *Store) imageDir(ref string) string {
+	_, repo, tag := parseRef(ref)
+	return filepath.Join(s.root, "images", sanitisePath(repo), sanitisePath(tag))
+}
+
+type storedImage struct{ ref, dir string }
+
+// storedImages lists image metadata directories with their references
+// (repo:tag from the directory for images stored before refFile existed).
+func (s *Store) storedImages() ([]storedImage, error) {
 	imagesRoot := filepath.Join(s.root, "images")
-	var out []string
+	var out []storedImage
 	err := filepath.WalkDir(imagesRoot, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil || d.IsDir() || d.Name() != "manifest.json" {
 			return nil
 		}
-		if d.Name() != "manifest.json" {
+		dir := filepath.Dir(path)
+		if b, err := os.ReadFile(filepath.Join(dir, refFile)); err == nil && len(strings.TrimSpace(string(b))) > 0 {
+			out = append(out, storedImage{ref: strings.TrimSpace(string(b)), dir: dir})
 			return nil
 		}
-		rel, err := filepath.Rel(imagesRoot, filepath.Dir(path))
+		rel, err := filepath.Rel(imagesRoot, dir)
 		if err != nil {
 			return nil
 		}
@@ -266,15 +281,23 @@ func (s *Store) ListImageRefs() ([]string, error) {
 		if len(segs) < 2 {
 			return nil
 		}
-		tag := segs[len(segs)-1]
-		repo := strings.Join(segs[:len(segs)-1], "/")
-		out = append(out, repo+":"+tag)
+		out = append(out, storedImage{ref: strings.Join(segs[:len(segs)-1], "/") + ":" + segs[len(segs)-1], dir: dir})
 		return nil
 	})
+	sort.Slice(out, func(i, j int) bool { return out[i].ref < out[j].ref })
+	return out, err
+}
+
+// ListImageRefs returns the references of the images in the store.
+func (s *Store) ListImageRefs() ([]string, error) {
+	imgs, err := s.storedImages()
 	if err != nil {
 		return nil, err
 	}
-	sort.Strings(out)
+	out := make([]string, len(imgs))
+	for i, im := range imgs {
+		out[i] = im.ref
+	}
 	return out, nil
 }
 
@@ -284,9 +307,7 @@ func (s *Store) RemoveImage(ref string) error {
 	if _, _, err := s.LoadImageMeta(ref); err != nil {
 		return err
 	}
-	_, repo, tag := parseRef(ref)
-	dir := filepath.Join(s.root, "images", sanitisePath(repo), sanitisePath(tag))
-	if err := os.RemoveAll(dir); err != nil {
+	if err := os.RemoveAll(s.imageDir(ref)); err != nil {
 		return fmt.Errorf("remove image dir: %w", err)
 	}
 	if _, err := s.PruneUnreferencedBlobs(); err != nil {
@@ -357,24 +378,33 @@ func (s *Store) collectReferencedDigests() (map[string]bool, error) {
 
 // PruneImagesNotIn removes local image metadata for refs not in keepRefs.
 // If dryRun is true, returns refs that would be removed without deleting.
+// Images are matched by storage location, so a kept "alpine:3.20" also keeps
+// the image listed as "docker.io/library/alpine:3.20".
 func (s *Store) PruneImagesNotIn(keepRefs map[string]struct{}, dryRun bool) ([]string, error) {
-	refs, err := s.ListImageRefs()
+	imgs, err := s.storedImages()
 	if err != nil {
 		return nil, err
 	}
+	keep := make(map[string]bool, len(keepRefs))
+	for ref := range keepRefs {
+		keep[s.imageDir(ref)] = true
+	}
 	var removed []string
-	for _, ref := range refs {
-		if _, keep := keepRefs[ref]; keep {
+	for _, im := range imgs {
+		if keep[im.dir] {
 			continue
 		}
-		if dryRun {
-			removed = append(removed, ref)
-			continue
+		if !dryRun {
+			if err := os.RemoveAll(im.dir); err != nil {
+				return removed, fmt.Errorf("prune %q: %w", im.ref, err)
+			}
 		}
-		if err := s.RemoveImage(ref); err != nil {
-			return removed, fmt.Errorf("prune %q: %w", ref, err)
+		removed = append(removed, im.ref)
+	}
+	if !dryRun && len(removed) > 0 {
+		if _, err := s.PruneUnreferencedBlobs(); err != nil {
+			return removed, fmt.Errorf("prune blobs: %w", err)
 		}
-		removed = append(removed, ref)
 	}
 	return removed, nil
 }
@@ -599,9 +629,11 @@ func (s *Store) fetchBlobToDiskOnce(ctx context.Context, client *registryClient,
 }
 
 func (s *Store) writeImageMeta(ref string, m *oci.Manifest, cfg *oci.ImageConfig) error {
-	_, repo, tag := parseRef(ref)
-	dir := filepath.Join(s.root, "images", sanitisePath(repo), sanitisePath(tag))
+	dir := s.imageDir(ref)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if err := atomicWrite(filepath.Join(dir, refFile), []byte(ref+"\n")); err != nil {
 		return err
 	}
 	mData, _ := json.MarshalIndent(m, "", "  ")
