@@ -64,3 +64,46 @@ func TestGeneratePrivilegedNoSeccomp(t *testing.T) {
 		t.Fatal("privileged should disable noNewPrivileges")
 	}
 }
+
+func TestBuildSpecHostNetworkRootless(t *testing.T) {
+	img := &oci.ImageConfig{Config: oci.ContainerConfig{Cmd: []string{"true"}}}
+	cases := []struct {
+		name               string
+		opts               Options
+		wantNetNS, sysBind bool
+	}{
+		{"default", Options{ImageConfig: img}, true, false},
+		{"host rootful", Options{ImageConfig: img, HostNetwork: true}, false, false},
+		{"host rootless", Options{ImageConfig: img, HostNetwork: true, Rootless: true}, false, true},
+		{"netns rootless", Options{ImageConfig: img, NetNS: "/run/x", Rootless: true}, true, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			spec := buildSpec(c.opts, nil)
+			hasNet := false
+			for _, ns := range spec.Linux.Namespaces {
+				if ns.Type == "network" {
+					hasNet = true
+				}
+			}
+			if hasNet != c.wantNetNS {
+				t.Fatalf("network namespace = %v, want %v", hasNet, c.wantNetNS)
+			}
+			var sys *Mount
+			for i, m := range spec.Mounts {
+				if m.Destination == "/sys/fs/cgroup" && c.sysBind {
+					t.Fatal("/sys/fs/cgroup mount kept alongside /sys rbind")
+				}
+				if m.Destination == "/sys" {
+					sys = &spec.Mounts[i]
+				}
+			}
+			if sys == nil {
+				t.Fatal("no /sys mount")
+			}
+			if (sys.Type == "bind") != c.sysBind {
+				t.Fatalf("/sys type = %q, want bind=%v", sys.Type, c.sysBind)
+			}
+		})
+	}
+}

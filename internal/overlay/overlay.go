@@ -32,18 +32,29 @@ import (
 // extraction completed, via atomic rename).
 type Manager struct {
 	base string // e.g. /var/lib/nyxd/overlay
+	opts Options
 
 	dlMu        sync.Mutex
 	digestLocks map[string]*sync.Mutex
 }
 
+// Options configure a Manager.
+type Options struct {
+	// Rootless mounts overlayfs with "userxattr" (overlay metadata in user.*
+	// xattrs), which is required inside an unprivileged user namespace.
+	Rootless bool
+	// SingleID is set when the user namespace maps only one ID: every file in
+	// an image is then owned by 0, since no other ID exists to chown to.
+	SingleID bool
+}
+
 // NewManager creates an overlay manager rooted at base.
-func NewManager(base string) (*Manager, error) {
+func NewManager(base string, opts Options) (*Manager, error) {
 	if err := os.MkdirAll(filepath.Join(base, layersDirName), 0o700); err != nil {
 		return nil, fmt.Errorf("overlay manager init: %w", err)
 	}
 	removeLegacyCache(base)
-	return &Manager{base: base, digestLocks: make(map[string]*sync.Mutex)}, nil
+	return &Manager{base: base, opts: opts, digestLocks: make(map[string]*sync.Mutex)}, nil
 }
 
 const (
@@ -100,6 +111,9 @@ func (m *Manager) Prepare(containerID string, blobPaths []string, cfg *oci.Image
 	reversedLowers := reverseStrings(lowerDirs)
 	lowerOpt := strings.Join(reversedLowers, ":")
 	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", lowerOpt, diffDir, workDir)
+	if m.opts.Rootless {
+		opts = "userxattr," + opts
+	}
 
 	if err := syscall.Mount("overlay", mergedDir, "overlay", 0, opts); err != nil {
 		return "", fmt.Errorf("overlayfs mount: %w", err)
@@ -177,7 +191,7 @@ func (m *Manager) layerDirForDigest(digest, blobPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := extractLayer(blobPath, tmp); err != nil {
+	if err := extractLayer(blobPath, tmp, m.applyOptions()); err != nil {
 		_ = os.RemoveAll(tmp)
 		return "", fmt.Errorf("extract layer %s: %w", digest, err)
 	}
@@ -192,17 +206,25 @@ func (m *Manager) layerDirForDigest(digest, blobPath string) (string, error) {
 	return dir, nil
 }
 
+func (m *Manager) applyOptions() layer.ApplyOptions {
+	o := layer.ApplyOptions{Mode: layer.ModeOverlay, Chown: os.Geteuid() == 0}
+	if m.opts.Rootless {
+		o.XattrPrefix = "user."
+	}
+	if m.opts.SingleID {
+		o.IDMap = func(int, int) (int, int) { return 0, 0 }
+	}
+	return o
+}
+
 // extractLayer applies the layer blob at src into dest as an overlay lowerdir.
-func extractLayer(src, dest string) error {
+func extractLayer(src, dest string, opts layer.ApplyOptions) error {
 	f, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	_, err = layer.Apply(f, dest, layer.ApplyOptions{
-		Mode:  layer.ModeOverlay,
-		Chown: os.Geteuid() == 0,
-	})
+	_, err = layer.Apply(f, dest, opts)
 	return err
 }
 

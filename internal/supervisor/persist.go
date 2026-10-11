@@ -213,10 +213,13 @@ func (s *Supervisor) reconcileCrunOrphans() {
 			continue
 		}
 
-		nsPath := filepath.Join("/run/nyxd/netns", id)
-		if _, err := os.Stat(nsPath); err != nil {
-			s.log.Debug("crun orphan reconcile: skip (no netns)", "id", id)
-			continue
+		var nsPath string
+		if !s.hostNetwork() {
+			nsPath = filepath.Join("/run/nyxd/netns", id)
+			if _, err := os.Stat(nsPath); err != nil {
+				s.log.Debug("crun orphan reconcile: skip (no netns)", "id", id)
+				continue
+			}
 		}
 		merged := filepath.Join(s.baseDir, "overlay", id, "merged")
 		if _, err := os.Stat(merged); err != nil {

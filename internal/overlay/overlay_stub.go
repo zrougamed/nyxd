@@ -17,8 +17,14 @@ type Manager struct {
 	base string
 }
 
+// Options configure a Manager (unused off Linux).
+type Options struct {
+	Rootless bool
+	SingleID bool
+}
+
 // NewManager creates an overlay manager rooted at base.
-func NewManager(base string) (*Manager, error) {
+func NewManager(base string, _ Options) (*Manager, error) {
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		return nil, fmt.Errorf("overlay manager init: %w", err)
 	}

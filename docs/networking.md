@@ -46,6 +46,15 @@ sudo ./nyx run nginx:alpine
 
 Native networking is implemented under `internal/network/native/` (bridge, veth, IPAM, nftables-based port maps). It does **not** require the standard CNI plugin bundle under `/opt/cni/bin`.
 
+## Host network (`-net-driver=host`)
+
+Containers share the host network namespace: no bridge, no NAT, no netns, no extra binaries. It is the
+default (and only) driver for [rootless nyxd](rootless.md), and can be selected explicitly when rootful.
+
+- `-p/--publish` is ignored with a warning; services bind host ports directly.
+- The host `/etc/resolv.conf` is bind-mounted read-only; embedded DNS (`-dns`) is off.
+- Containers see each other on `127.0.0.1`.
+
 ## Optional: CNI plugins (`-net-driver=cni`)
 
 To use the **exec-based** path that shells out to standard CNI plugins (`bridge`, `host-local`, etc.), start the daemon with:

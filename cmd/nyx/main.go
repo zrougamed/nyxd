@@ -21,11 +21,24 @@ import (
 	"golang.org/x/term"
 )
 
+const systemSocket = "/run/nyxd/nyxd.sock"
+
+// defaultSocket picks NYXD_SOCKET, else (for non-root users) the user's own
+// rootless daemon at $XDG_RUNTIME_DIR/nyxd/nyxd.sock when it exists, else the
+// system daemon.
 func defaultSocket() string {
 	if v := os.Getenv("NYXD_SOCKET"); v != "" {
 		return v
 	}
-	return "/run/nyxd/nyxd.sock"
+	if os.Geteuid() != 0 {
+		if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
+			p := filepath.Join(d, "nyxd", "nyxd.sock")
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
+		}
+	}
+	return systemSocket
 }
 
 // mimeExecStreamV1 must match internal/control for streaming stdin (nyx exec -i).
@@ -155,7 +168,8 @@ commands:
       compose down: remove stack containers; -v deletes declared named volume dirs when unreferenced.
 
 environment:
-  NYXD_SOCKET   default control socket path
+  NYXD_SOCKET   default control socket path (else $XDG_RUNTIME_DIR/nyxd/nyxd.sock
+                for a rootless daemon when present, else /run/nyxd/nyxd.sock)
 `, defaultSocket())
 }
 

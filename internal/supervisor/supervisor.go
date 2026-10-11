@@ -114,6 +114,11 @@ type Supervisor struct {
 	dnsMode    string
 	dnsGateway string
 
+	// rootless: nyxd runs in its own user namespace. noCgroups: crun runs
+	// with --cgroup-manager=disabled, so resource limits cannot be applied.
+	rootless  bool
+	noCgroups bool
+
 	mu         sync.RWMutex
 	containers map[string]*containerEntry
 	wg         sync.WaitGroup
@@ -623,6 +628,15 @@ func (e *containerEntry) stopHealth() {
 	}
 }
 
+// SetRootless records that nyxd runs in its own user namespace and whether
+// cgroup resource limits are available to containers.
+func (s *Supervisor) SetRootless(rootless, cgroups bool) {
+	s.rootless = rootless
+	s.noCgroups = !cgroups
+}
+
+func (s *Supervisor) hostNetwork() bool { return s.netDriver == "host" }
+
 // ─── Internal ──────────────────────────────────────────────────────────────────
 
 // startOnce performs a single container start: overlay → network → bundle → crun.
@@ -641,10 +655,19 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 	e.rootFS = rootFS
 
 	// 2. Network namespace + host networking (native or CNI plugins).
-	nsPath, err := network.CreateNetNS(spec.ID)
-	if err != nil {
-		s.ovl.Remove(spec.ID) //nolint:errcheck
-		return false, fmt.Errorf("netns: %w", err)
+	// The host driver shares the host network: no namespace to create.
+	var nsPath string
+	if s.hostNetwork() {
+		if len(spec.PortMappings) > 0 {
+			log.Warn("host network: published ports are ignored; the container binds host ports directly",
+				"publish", portMappingsToPublishStrings(spec.PortMappings))
+		}
+	} else {
+		nsPath, err = network.CreateNetNS(spec.ID)
+		if err != nil {
+			s.ovl.Remove(spec.ID) //nolint:errcheck
+			return false, fmt.Errorf("netns: %w", err)
+		}
 	}
 	e.netNS = nsPath
 
@@ -674,6 +697,11 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		s.ovl.Remove(spec.ID) //nolint:errcheck
 		return false, fmt.Errorf("bundle resolv: %w", err)
 	}
+	resources := spec.Resources
+	if resources != nil && s.noCgroups {
+		log.Warn("cgroups unavailable (rootless without delegation): resource limits are not applied")
+		resources = nil
+	}
 	_, err = bundle.Generate(bundleDir, bundle.Options{
 		ContainerID:     spec.ID,
 		RootFS:          rootFS,
@@ -683,7 +711,7 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		Args:            spec.Args,
 		WorkDir:         spec.WorkDir,
 		User:            spec.User,
-		Resources:       spec.Resources,
+		Resources:       resources,
 		ReadOnly:        spec.ReadOnly,
 		Hostname:        spec.Hostname,
 		ExtraMounts:     spec.ExtraMounts,
@@ -695,6 +723,8 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		NoNewPrivileges: spec.NoNewPrivileges,
 		UIDMappings:     spec.UIDMappings,
 		GIDMappings:     spec.GIDMappings,
+		HostNetwork:     s.hostNetwork(),
+		Rootless:        s.rootless,
 	})
 	if err != nil {
 		s.teardownNetwork(ctx, spec.ID)
@@ -962,6 +992,9 @@ func (s *Supervisor) shouldRestart(e *containerEntry, exitCode int) bool {
 }
 
 func (s *Supervisor) teardownNetwork(ctx context.Context, id string) {
+	if s.hostNetwork() {
+		return
+	}
 	nsPath := fmt.Sprintf("/run/nyxd/netns/%s", id)
 	s.mu.RLock()
 	entry, ok := s.containers[id]

@@ -24,6 +24,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Operations',
       items: [
+        'operations/rootless',
         'operations/networking',
         'operations/native-network',
         'operations/image-layers',

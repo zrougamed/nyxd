@@ -11,7 +11,7 @@ LDFLAGS  := -w -s \
 	-X main.gitCommit=$(COMMIT) \
 	-X main.buildDate=$(DATE)
 
-.PHONY: all build build-nyx lint vet test test-overlay clean install install-usr scan scan-trivy scan-grype
+.PHONY: all build build-nyx lint vet test test-overlay test-rootless clean install install-usr scan scan-trivy scan-grype
 
 BINDIR ?= /usr/local/bin
 
@@ -43,6 +43,10 @@ lint:
 
 test:
 	go test -race -count=1 ./...
+
+# Rootless end-to-end: daemon as current user, pull, run, exec, stop.
+test-rootless: build build-nyx
+	scripts/rootless-smoke.sh
 
 # Real overlayfs mount test, run unprivileged inside a user + mount namespace.
 test-overlay:

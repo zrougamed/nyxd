@@ -7,7 +7,7 @@ Minimal OCI container orchestrator for **Linux** (x86_64, arm64, and similar) �
 
 **Zero Docker. Zero Podman. Zero containerd.**
 
-Uses `crun` as the OCI runtime. **Networking** defaults to in-process **native** mode; optional **CNI** plugins are supported. See **[docs/networking.md](docs/networking.md)** for `-net-driver`, the startup log line, and `nyx run` / stop behavior.
+Runs as **root** or **rootless** (start `nyxd` as a normal user; see **[docs/rootless.md](docs/rootless.md)**). Uses `crun` as the OCI runtime. **Networking** defaults to in-process **native** mode; optional **CNI** plugins are supported. See **[docs/networking.md](docs/networking.md)** for `-net-driver`, the startup log line, and `nyx run` / stop behavior.
 
 **Docs index:** **[docs/README.md](docs/README.md)** — install, usage, OpenAPI, QEMU Alpine, kernel notes.
 
@@ -16,7 +16,9 @@ Uses `crun` as the OCI runtime. **Networking** defaults to in-process **native**
 ```
 nyxd
 ├── image/        OCI image puller (raw HTTP, no registry SDK)
+├── layer/        OCI layer apply/diff in-process (no host tar)
 ├── overlay/      overlayfs rootfs management (syscall direct)
+├── rootless/     user-namespace re-exec for running nyxd without root
 ├── network/      Networking: native (default) or CNI plugin executor
 ├── network/native/  In-process bridge + veth + IPAM (no /opt/cni/bin)
 ├── bundle/       OCI runtime-spec config.json generator

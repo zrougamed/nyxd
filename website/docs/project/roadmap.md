@@ -265,7 +265,7 @@ flowchart LR
 
 - [ ] **Default seccomp JSON artifact** — bundle supports hardening fields; no curated default profile shipped beside comments in older specs.
 - [ ] **AppArmor** — no profile generation or integration.
-- [ ] **Rootless** — requires root today; no user-namespace rootless path.
+- [~] **Rootless** — `nyxd` as a normal user re-execs into its own user namespace (`newuidmap`/`newgidmap` + subordinate IDs, single-ID fallback), overlay `userxattr`, `-net-driver=host`, `nyxd unshare`, systemd user unit, CI smoke test. Not yet: cgroup v2 delegation (limits are dropped), isolated rootless networks / published ports via `pasta`.
 
 **Done / partial**
 
