@@ -25,6 +25,7 @@ import (
 	"github.com/zrougamed/nyxd/internal/netdns"
 	"github.com/zrougamed/nyxd/internal/network"
 	"github.com/zrougamed/nyxd/internal/overlay"
+	"github.com/zrougamed/nyxd/internal/rootfs"
 	"github.com/zrougamed/nyxd/internal/runtime"
 	"github.com/zrougamed/nyxd/pkg/oci"
 )
@@ -654,6 +655,17 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 	}
 	e.rootFS = rootFS
 
+	// The image's USER applies unless the caller chose a user explicitly.
+	user := spec.User
+	if user == nil && spec.ImageConfig != nil && strings.TrimSpace(spec.ImageConfig.Config.User) != "" {
+		u, err := rootfs.ResolveUser(rootFS, spec.ImageConfig.Config.User)
+		if err != nil {
+			s.ovl.Remove(spec.ID) //nolint:errcheck
+			return false, fmt.Errorf("image user: %w", err)
+		}
+		user = &u
+	}
+
 	// 2. Network namespace + host networking (native or CNI plugins).
 	// The host driver shares the host network: no namespace to create.
 	var nsPath string
@@ -710,7 +722,7 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		Env:             spec.Env,
 		Args:            spec.Args,
 		WorkDir:         spec.WorkDir,
-		User:            spec.User,
+		User:            user,
 		Resources:       resources,
 		ReadOnly:        spec.ReadOnly,
 		Hostname:        spec.Hostname,
@@ -930,12 +942,20 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 		for {
 			fastExit, err := s.startOnce(ctx, e)
 			if err != nil {
+				if ctx.Err() != nil {
+					return // daemon shutting down
+				}
 				log.Error("restart failed", "err", err)
-				time.Sleep(5 * time.Second)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(5 * time.Second):
+				}
 				continue outer
 			}
 			if !fastExit {
-				continue outer
+				// Running again: go back to waiting for it to exit.
+				break outer
 			}
 			// Init exited with 0 before "running" again; cleanup already done in startOnce.
 			exitCode := 0

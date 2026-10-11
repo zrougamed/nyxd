@@ -56,6 +56,17 @@ sudo nyx exec <id> sh -c 'hostname'
 sudo nyx exec <id> -- sh -c 'hostname'
 ```
 
+## Building images (`nyx build`)
+
+```bash
+nyx build -t myapp:1.0 .                                  # Dockerfile in the current directory
+nyx build -t myapp:dev -f Dockerfile.dev --build-arg VERSION=1.2 --target runtime .
+nyx build --no-cache -q -t myapp:1.0 .                    # print only the image id
+nyx run myapp:1.0
+```
+
+No Docker or BuildKit involved; works rootless. Supported syntax, cache rules and security notes: [build.md](build.md).
+
 ## Compose stacks (`nyx compose`)
 
 **Compose file:** if you omit `-f` / `--file`, **`nyx`** picks the first existing file in the **current directory**, in this order: `nyx-compose.yaml` / `.yml`, then `docker-compose.yaml` / `.yml`, then `compose.yaml` / `.yml`, then `podman-compose.yaml` / `.yml`. The file must be readable on the **daemon host** (paths are sent to `nyxd`).

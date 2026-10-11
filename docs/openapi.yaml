@@ -486,8 +486,96 @@ paths:
         "503":
           description: Image store or supervisor not configured
 
+  /v1/build:
+    post:
+      tags: [images]
+      summary: Build an image from a Dockerfile
+      description: |
+        The request body is the build context as a tar archive (optionally gzip-compressed).
+        `nyx build` creates it from a directory, honouring `.dockerignore`.
+
+        The response streams `application/x-ndjson`: `{"stream": "..."}` lines with step
+        headers and RUN output, then either `{"done": true, "image_id": "sha256:...", "tags": [...]}`
+        or `{"error": "..."}`. A client disconnect cancels the build.
+
+        RUN steps execute in the container sandbox (same seccomp, capabilities, and user
+        namespace when rootless) with the host network. See docs/build.md.
+      operationId: buildImage
+      parameters:
+        - name: t
+          in: query
+          description: Image reference to tag the result with (repeatable). Default `nyx-build:<id>`.
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+        - name: dockerfile
+          in: query
+          description: Dockerfile path inside the context.
+          schema:
+            type: string
+            default: Dockerfile
+        - name: target
+          in: query
+          description: Build up to this stage (`FROM ... AS <name>`).
+          schema:
+            type: string
+        - name: nocache
+          in: query
+          description: "`1` or `true` disables the build cache."
+          schema:
+            type: string
+        - name: buildarg
+          in: query
+          description: Build argument as `KEY=VALUE` (repeatable).
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+      requestBody:
+        required: true
+        content:
+          application/x-tar:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: NDJSON build progress stream
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: "#/components/schemas/BuildEvent"
+        "400":
+          description: Invalid build context or parameters
+        "503":
+          description: Builder not configured
+
 components:
   schemas:
+    BuildEvent:
+      type: object
+      description: One line of the build stream; exactly one of stream, error, done is set.
+      properties:
+        stream:
+          type: string
+          description: Progress text or RUN output
+        error:
+          type: string
+        done:
+          type: boolean
+        image_id:
+          type: string
+          example: sha256:4a8b8ff444f55f11c8d452a176c932fc49e74cb1e1030932dcd9b6bfcad9d2ec
+        tags:
+          type: array
+          items:
+            type: string
+
     PingResponse:
       type: object
       required: [ok]

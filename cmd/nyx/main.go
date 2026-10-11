@@ -108,6 +108,8 @@ func run(args []string) error {
 		return doExec(socket, args[1:])
 	case "compose":
 		return doCompose(socket, args[1:])
+	case "build":
+		return doBuild(socket, args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -149,6 +151,9 @@ commands:
       send graceful stop (SIGTERM / image stop signal, then wait)
   rm <id> [<id>...]
       remove container(s) and their supervisor state
+  build [-t TAG]... [-f Dockerfile] [--build-arg K=V]... [--target STAGE] [--no-cache] [-q] <context-dir>
+      build an image from a Dockerfile (no Docker/BuildKit; RUN runs in the container sandbox).
+      the context honours .dockerignore; -q prints only the image id
   image ls
       list image refs present in the local store
   image rm <ref> [<ref>...]

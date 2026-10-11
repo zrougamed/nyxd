@@ -35,8 +35,9 @@ type Process struct {
 }
 
 type User struct {
-	UID uint32 `json:"uid"`
-	GID uint32 `json:"gid"`
+	UID            uint32   `json:"uid"`
+	GID            uint32   `json:"gid"`
+	AdditionalGids []uint32 `json:"additionalGids,omitempty"`
 }
 
 type Root struct {
