@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/creack/pty"
@@ -81,6 +82,25 @@ func (r *Runtime) GlobalArgs() []string { return append([]string(nil), r.globals
 
 func (r *Runtime) args(a ...string) []string {
 	return append(append(make([]string, 0, len(r.globals)+len(a)), r.globals...), a...)
+}
+
+// ExitCode maps the error of a foreground crun run to the workload's exit
+// code: nil is 0, an exit status is passed through (crun reports 128+N for a
+// workload killed by signal N), anything else is -1.
+func ExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		if code := ee.ExitCode(); code >= 0 {
+			return code
+		}
+		if ws, ok := ee.Sys().(interface{ Signal() syscall.Signal }); ok {
+			return 128 + int(ws.Signal())
+		}
+	}
+	return -1
 }
 
 // Binary returns the resolved crun executable path.

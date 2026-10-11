@@ -24,8 +24,8 @@ Legend: `[x]` shipped in tree (still may need polish), `[ ]` not done, `[~]` par
 
 ## Runtime / crun
 
-- [ ] **Zero-latency exit wait** — `WaitForExit` still polls `crun state` every 200ms; prefer `crun events --format json`, pidfd, or inotify on state dir where portable.
-- [~] **Robust exit code** — prefers `exit_code` in state JSON when present, then `<root>/<id>/exit_code`, then a second raw JSON parse for alternate keys (`exitCode`, `exit_status`, …). Still no `crun delete` stdout fallback.
+- [x] **Zero-latency exit wait** — the supervisor waits on the foreground `crun run` it started (exit status available immediately); `WaitForExit` polling remains only for containers re-adopted after a daemon restart.
+- [x] **Robust exit code** — taken from the `crun run` process exit status (128+N for signal N). Before, containers running longer than ~40 ms reported -1 because crun removes its state on exit. Stop/kill wait for that exit instead of killing `crun run`, so graceful shutdown handlers get their full grace period.
 - [x] **`crun exec` for one-off commands** — `runtime.Runtime.Exec` + control route `POST /v1/containers/{id}/exec` + `nyx exec …`.
 
 **Done / partial**

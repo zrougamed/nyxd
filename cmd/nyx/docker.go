@@ -113,27 +113,19 @@ func parseRunArgs(args []string) (runOpts, error) {
 doneFlags:
 	rest := args[i:]
 	if len(rest) < 1 {
-		return o, fmt.Errorf("usage: nyx run [flags] <image> [-- <command args>]")
+		return o, fmt.Errorf("usage: nyx run [flags] <image> [command [args...]]")
 	}
-	dash := -1
-	for j, a := range rest {
-		if a == "--" {
-			dash = j
-			break
-		}
-	}
-	switch {
-	case dash == 0:
+	// Like docker run: everything after the image is the command. A "--"
+	// right after the image is accepted (and dropped) for compatibility.
+	o.image = rest[0]
+	if o.image == "--" {
 		return o, fmt.Errorf("missing image before --")
-	case dash > 0:
-		if dash != 1 {
-			return o, fmt.Errorf("expected a single image ref before --")
-		}
-		o.image = rest[0]
-		o.cmdArgs = rest[dash+1:]
-	default:
-		o.image = rest[0]
 	}
+	cmd := rest[1:]
+	if len(cmd) > 0 && cmd[0] == "--" {
+		cmd = cmd[1:]
+	}
+	o.cmdArgs = cmd
 	return o, nil
 }
 

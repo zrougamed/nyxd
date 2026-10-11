@@ -140,7 +140,7 @@ commands:
       print daemon version / build info
   pull [--json] [--username USER] [--password PASS] <ref>
       pull an image into the local store; default shows progress, --json streams raw events
-  run [flags] <image> [-- <argv...>]
+  run [flags] <image> [command [args...]]   (a "--" before the command is optional)
       start a container. default: stay attached and stream logs until the workload exits.
       -d / --detach: start in the background and print the container id.
       flags:
