@@ -8,6 +8,7 @@
 | [networking.md](networking.md) | Native vs CNI, flags, `nyx run` / stop |
 | [kernel-requirements.md](kernel-requirements.md) | Kernel modules, sysctl, disk |
 | [native-network.md](native-network.md) | In-process bridge / IPAM internals |
+| [image-layers.md](image-layers.md) | In-process layer extraction, whiteouts, security rules |
 | [qemu-alpine.md](qemu-alpine.md) | QEMU + Alpine 3.23 for safe testing |
 | [ROADMAP.md](ROADMAP.md) | Delivery checklist, **eBPF**, defaults / hardening, anti-goals |
 | [../benchmarks/README.md](../benchmarks/README.md) | Docker vs Podman vs nyxd QEMU methodology + result tables |

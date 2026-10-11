@@ -11,7 +11,7 @@ LDFLAGS  := -w -s \
 	-X main.gitCommit=$(COMMIT) \
 	-X main.buildDate=$(DATE)
 
-.PHONY: all build build-nyx lint vet clean install install-usr scan scan-trivy scan-grype
+.PHONY: all build build-nyx lint vet test test-overlay clean install install-usr scan scan-trivy scan-grype
 
 BINDIR ?= /usr/local/bin
 
@@ -43,6 +43,10 @@ lint:
 
 test:
 	go test -race -count=1 ./...
+
+# Real overlayfs mount test, run unprivileged inside a user + mount namespace.
+test-overlay:
+	unshare -Urm env NYXD_OVERLAY_IT=1 go test -count=1 -run OverlayMount -v ./internal/layer
 
 # Vulnerability scans (install Trivy + Grype; see docs/INSTALL.md)
 scan: scan-trivy scan-grype

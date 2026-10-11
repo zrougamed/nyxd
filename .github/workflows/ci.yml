@@ -27,6 +27,12 @@ jobs:
       - name: Test
         run: make test
 
+      - name: Overlay mount test (user namespace)
+        run: |
+          # Ubuntu 24.04 runners restrict unprivileged user namespaces via AppArmor.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          make test-overlay
+
       - name: Build binaries
         run: make build build-nyx
 
