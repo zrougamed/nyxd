@@ -193,6 +193,14 @@ func run(args []string, out io.Writer) int {
 		}
 		fmt.Fprintln(out, "serving")
 		_ = http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, "ok") }))
+	case "lookup":
+		// lookup NAME: print its addresses (resolv.conf, like any libc-less Go binary).
+		addrs, err := net.LookupHost(args[1])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "lookup:", err)
+			return 1
+		}
+		fmt.Fprintln(out, strings.Join(addrs, " "))
 	case "chatty":
 		// chatty N: N numbered lines, to stdout and stderr alternately.
 		n, _ := strconv.Atoi(args[1])

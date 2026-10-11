@@ -113,41 +113,6 @@ func (r *Runtime) pidFilePath(containerID string) string {
 	return filepath.Join(r.pidDir, containerID+".pid")
 }
 
-// Create creates a container from a bundle without starting its process.
-// Equivalent to: crun create --bundle <dir> <id>
-func (r *Runtime) Create(ctx context.Context, containerID, bundleDir string) error {
-	pidFile := r.pidFilePath(containerID)
-	args := r.args(
-		"--root", r.rootDir,
-		"create",
-		"--bundle", bundleDir,
-		"--pid-file", pidFile,
-		containerID,
-	)
-	return r.run(ctx, args, nil)
-}
-
-// Start runs the user-defined command in a created container.
-// Equivalent to: crun start <id>
-func (r *Runtime) Start(ctx context.Context, containerID string) error {
-	return r.run(ctx, r.args("--root", r.rootDir, "start", containerID), nil)
-}
-
-// Run creates and starts a container in one step (detached).
-// Returns when the container's init process has started.
-func (r *Runtime) Run(ctx context.Context, containerID, bundleDir string) error {
-	pidFile := r.pidFilePath(containerID)
-	args := r.args(
-		"--root", r.rootDir,
-		"run",
-		"--detach",
-		"--bundle", bundleDir,
-		"--pid-file", pidFile,
-		containerID,
-	)
-	return r.run(ctx, args, nil)
-}
-
 // RunForeground runs the container in the foreground: crun blocks until the init
 // process exits. Container stdout/stderr are wired to the given writers (typically
 // pipes feeding a log collector). No --detach flag. Uses --pid-file so OCI state

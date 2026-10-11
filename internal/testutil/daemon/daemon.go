@@ -6,12 +6,11 @@
 // Call it from inside nsrun.Run; it needs crun on PATH.
 //
 // Images come from Image: one layer holding internal/testutil/testapp (a
-// multi-call binary standing in for sh, echo, cat, sleep, ...), so tests need
-// no registry and no network.
+// multi-call binary standing in for sh, echo, cat, sleep, ...; see appbin),
+// so tests need no registry and no network.
 package daemon
 
 import (
-	"archive/tar"
 	"bufio"
 	"bytes"
 	"compress/gzip"
@@ -39,9 +38,11 @@ import (
 	"github.com/zrougamed/nyxd/internal/logs"
 	"github.com/zrougamed/nyxd/internal/netdns"
 	"github.com/zrougamed/nyxd/internal/network"
+	"github.com/zrougamed/nyxd/internal/network/native"
 	"github.com/zrougamed/nyxd/internal/overlay"
 	nyxrt "github.com/zrougamed/nyxd/internal/runtime"
 	"github.com/zrougamed/nyxd/internal/supervisor"
+	"github.com/zrougamed/nyxd/internal/testutil/appbin"
 	"github.com/zrougamed/nyxd/pkg/oci"
 	"golang.org/x/sys/unix"
 )
@@ -61,13 +62,26 @@ type Daemon struct {
 	Ctx     context.Context
 }
 
-// Apps are the commands the test image provides in /bin (see testapp).
-var Apps = []string{"sh", "echo", "cat", "sleep", "id", "true", "false", "env", "pwd", "touch", "mkdir",
-	"hostname", "ignoreterm", "trapterm", "serve", "chatty"}
+// Options select the network driver: "host" (default) or "native" with
+// embedded DNS ("auto"). Native needs nsrun.Run(t, "/run").
+type Options struct {
+	NetDriver string
+	DNS       string
+}
 
-// Start starts a daemon under t.TempDir(); it is stopped at cleanup.
-func Start(t *testing.T) *Daemon {
+// Start starts a daemon with host networking under t.TempDir(); it is
+// stopped at cleanup.
+func Start(t *testing.T) *Daemon { return StartWith(t, Options{}) }
+
+// StartWith starts a daemon with opts.
+func StartWith(t *testing.T, opts Options) *Daemon {
 	t.Helper()
+	if opts.NetDriver == "" {
+		opts.NetDriver = "host"
+	}
+	if opts.DNS == "" {
+		opts.DNS = "auto"
+	}
 	if _, err := exec.LookPath("crun"); err != nil {
 		t.Skip("crun not installed")
 	}
@@ -92,14 +106,26 @@ func Start(t *testing.T) *Daemon {
 	d.Runtime.SetCgroupManager("disabled")
 	d.Logs, err = logs.NewCollector(base+"/logs", log)
 	must(err)
-	d.Sup = supervisor.New(d.Runtime, d.Overlay, network.HostBackend{}, base, log, d.Logs, d.Store,
-		netdns.Noop{}, "host", "auto", "")
+	var netBackend network.Backend = network.HostBackend{}
+	var dns netdns.Backend = netdns.Noop{}
+	gw := ""
+	if opts.NetDriver == "native" {
+		t.Setenv("NYXD_IPAM_DIR", filepath.Join(base, "ipam"))
+		nm := native.NewManager(log)
+		must(nm.EnsureNetwork())
+		netBackend = nm
+		g := netdns.DefaultGateway()
+		gw = g.String()
+		dns = netdns.NewBackend(opts.DNS, "native", log, g)
+	}
+	d.Sup = supervisor.New(d.Runtime, d.Overlay, netBackend, base, log, d.Logs, d.Store,
+		dns, opts.NetDriver, opts.DNS, gw)
 	d.Sup.SetRootless(true, false)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	d.Ctx = ctx
 	d.Ctl = control.New(log, d.Runtime, d.Store, d.Sup, ctx, nil, "test", "abc1234", "2026-10-11",
-		base, d.Socket, "", "host", "auto")
+		base, d.Socket, "", opts.NetDriver, opts.DNS)
 	d.Builder, err = build.New(build.Config{Store: d.Store, Overlay: d.Overlay, Runtime: d.Runtime,
 		BaseDir: base, Rootless: true, SingleID: true, Log: log})
 	must(err)
@@ -180,7 +206,7 @@ func (d *Daemon) Image(t *testing.T, ref string, mutate func(*oci.ImageConfig)) 
 // StoreImage writes the test image under ref into store; extra files are
 // added to the layer (path -> content).
 func StoreImage(store *image.Store, ref string, cfg *oci.ImageConfig, extra map[string]string) error {
-	layerTar, err := Layer(extra)
+	layerTar, err := appbin.Layer(extra)
 	if err != nil {
 		return err
 	}
@@ -213,81 +239,6 @@ func StoreImage(store *image.Store, ref string, cfg *oci.ImageConfig, extra map[
 	}
 	return store.SaveImage(ref, m, cfg)
 }
-
-// Layer returns the test image's root filesystem as an uncompressed tar.
-func Layer(extra map[string]string) ([]byte, error) {
-	app, err := TestApp()
-	if err != nil {
-		return nil, err
-	}
-	bin, err := os.ReadFile(app)
-	if err != nil {
-		return nil, err
-	}
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	mt := time.Unix(1700000000, 0)
-	dir := func(name string, mode int64) {
-		_ = tw.WriteHeader(&tar.Header{Typeflag: tar.TypeDir, Name: name + "/", Mode: mode, ModTime: mt})
-	}
-	file := func(name string, mode int64, data []byte) {
-		_ = tw.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: name, Mode: mode, Size: int64(len(data)), ModTime: mt})
-		_, _ = tw.Write(data)
-	}
-	for _, d := range []string{"bin", "etc", "root", "proc", "sys", "dev", "run", "home", "home/app"} {
-		dir(d, 0o755)
-	}
-	dir("tmp", 0o1777)
-	file("bin/testapp", 0o755, bin)
-	for _, a := range Apps {
-		_ = tw.WriteHeader(&tar.Header{Typeflag: tar.TypeSymlink, Name: "bin/" + a, Linkname: "testapp", Mode: 0o777, ModTime: mt})
-	}
-	file("etc/passwd", 0o644, []byte("root:x:0:0:root:/root:/bin/sh\napp:x:1000:1000:app:/home/app:/bin/sh\n"))
-	file("etc/group", 0o644, []byte("root:x:0:\napp:x:1000:\n"))
-	names := make([]string, 0, len(extra))
-	for n := range extra {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	for _, n := range names {
-		file(strings.TrimPrefix(n, "/"), 0o644, []byte(extra[n]))
-	}
-	if err := tw.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-var (
-	appOnce sync.Once
-	appPath string
-	appErr  error
-)
-
-// TestApp builds internal/testutil/testapp (static) once per process.
-func TestApp() (string, error) {
-	appOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "nyxd-testapp-")
-		if err != nil {
-			appErr = err
-			return
-		}
-		appPath = filepath.Join(dir, "testapp")
-		cmd := exec.Command("go", "build", "-o", appPath, "github.com/zrougamed/nyxd/internal/testutil/testapp")
-		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOFLAGS=")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			appErr = &buildError{out: string(out), err: err}
-		}
-	})
-	return appPath, appErr
-}
-
-type buildError struct {
-	out string
-	err error
-}
-
-func (e *buildError) Error() string { return "build testapp: " + e.err.Error() + ": " + e.out }
 
 // unmountUnder detaches every mount below dir (deepest first) so the test's
 // temporary directory can be removed.
