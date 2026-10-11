@@ -1,6 +1,6 @@
 #!/bin/sh
-# Build the nyx WSL2 distro tarball: a static nyxd and a static crun, no
-# shell, no package manager.
+# Build the nyx WSL2 distro tarball: a static nyxd, a static crun and the
+# Mozilla CA bundle; no shell, no package manager.
 #
 #   scripts/build-wsl-rootfs.sh amd64|arm64 OUTDIR [VERSION]
 #
@@ -13,6 +13,11 @@ umask 022
 ARCH=${1:?arch (amd64|arm64)}
 OUT=${2:?output directory}
 VERSION=${3:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}
+
+# Mozilla CA certificates as extracted by curl (https://curl.se/docs/caextract.html);
+# nyxd needs them for registry pulls/pushes and ADD <url>. Pinned by date and sha256.
+CACERT_DATE=2026-09-25
+CACERT_SHA256=a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505
 
 CRUN_VERSION=1.30.1
 case "$ARCH" in
@@ -28,7 +33,7 @@ R="$WORK/rootfs"
 mkdir -p "$OUT"
 
 # Directory layout (WSL mounts /proc, /sys, /dev, /mnt/* and writes resolv.conf/hosts).
-for d in usr/local/bin etc root tmp run var/lib/nyxd proc sys dev mnt; do
+for d in usr/local/bin usr/sbin etc/ssl/certs root tmp run var/lib/nyxd proc sys dev mnt; do
 	mkdir -p "$R/$d"
 done
 chmod 1777 "$R/tmp"
@@ -48,8 +53,20 @@ fi
 echo "$CRUN_SHA256  $WORK/crun" | sha256sum -c - >/dev/null || { echo "crun sha256 mismatch" >&2; exit 1; }
 install -m 0755 "$WORK/crun" "$R/usr/local/bin/crun"
 
+# CA bundle, pinned. Go reads /etc/ssl/certs/ca-certificates.crt.
+if [ -n "${CRUN_CACHE:-}" ] && [ -f "$CRUN_CACHE/cacert-$CACERT_DATE.pem" ]; then
+	cp "$CRUN_CACHE/cacert-$CACERT_DATE.pem" "$WORK/cacert.pem"
+else
+	curl -sSfL -o "$WORK/cacert.pem" "https://curl.se/ca/cacert-$CACERT_DATE.pem"
+fi
+echo "$CACERT_SHA256  $WORK/cacert.pem" | sha256sum -c - >/dev/null || { echo "CA bundle sha256 mismatch" >&2; exit 1; }
+install -m 0644 "$WORK/cacert.pem" "$R/etc/ssl/certs/ca-certificates.crt"
+
 # Accounts: root only. No shell exists, by design (use `wsl -d nyx --exec ...`).
-printf 'root:x:0:0:root:/root:/usr/local/bin/nyxd\n' >"$R/etc/passwd"
+# The login shell is nyxd under the name nologin: it prints a hint and exits,
+# so a plain `wsl -d nyx` cannot start the daemon without -userns-remap.
+ln -s ../local/bin/nyxd "$R/usr/sbin/nologin"
+printf 'root:x:0:0:root:/root:/usr/sbin/nologin\n' >"$R/etc/passwd"
 printf 'root:x:0:\n' >"$R/etc/group"
 install -m 0644 "$ROOT_DIR/packaging/wsl/wsl.conf" "$R/etc/wsl.conf"
 cat >"$R/etc/os-release" <<OSR

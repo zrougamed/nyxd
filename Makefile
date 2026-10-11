@@ -11,7 +11,7 @@ LDFLAGS  := -w -s \
 	-X main.gitCommit=$(COMMIT) \
 	-X main.buildDate=$(DATE)
 
-.PHONY: all build build-nyx lint vet test test-overlay test-rootless test-build test-transfer clean install install-usr scan scan-trivy scan-grype
+.PHONY: all build build-nyx build-windows wsl-rootfs lint vet test test-overlay test-rootless test-build test-transfer test-wsl clean install install-usr scan scan-trivy scan-grype
 
 BINDIR ?= /usr/local/bin
 
@@ -35,6 +35,19 @@ build-arm64:
 		go build -trimpath -ldflags "$(LDFLAGS)" \
 		-o bin/$(BINARY)-arm64 $(PACKAGE)
 
+# nyx.exe for Windows (amd64 + arm64); talks to nyxd in the nyx WSL2 distro.
+build-windows:
+	for arch in amd64 arm64; do \
+		CGO_ENABLED=0 GOOS=windows GOARCH=$$arch \
+			go build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(NYX)-windows-$$arch.exe $(NYX_PKG) || exit 1; \
+	done
+
+# WSL2 distro tarball (static nyxd + pinned crun, no shell): bin/nyx-wsl-<arch>.tar.gz.
+# WSL_ARCH=arm64 for Windows on ARM.
+WSL_ARCH ?= amd64
+wsl-rootfs:
+	scripts/build-wsl-rootfs.sh $(WSL_ARCH) bin $(VERSION)
+
 vet:
 	go vet ./...
 
@@ -55,6 +68,11 @@ test-build: build build-nyx
 # Image transfer end-to-end: registry:2 via nyx, push / pull / save / load.
 test-transfer: build build-nyx
 	scripts/transfer-smoke.sh
+
+# nyx machine + the WSL distro, end to end on Linux: nyx drives a fake wsl.exe
+# that boots the distro tarball in its own namespaces (see scripts/fake-wsl.sh).
+test-wsl: build-nyx wsl-rootfs
+	scripts/wsl-smoke.sh
 
 # Real overlayfs mount test, run unprivileged inside a user + mount namespace.
 test-overlay:

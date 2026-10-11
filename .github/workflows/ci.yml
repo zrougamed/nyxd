@@ -48,6 +48,29 @@ jobs:
       - name: Build binaries
         run: make build build-nyx
 
+      - name: Build Windows client and WSL distro tarballs
+        run: |
+          make build-windows
+          make wsl-rootfs WSL_ARCH=amd64
+          make wsl-rootfs WSL_ARCH=arm64
+          mkdir -p wsl-rootfs
+          tar -xzf bin/nyx-wsl-amd64.tar.gz -C wsl-rootfs
+
+      # Hosted runners have no WSL2: nyx drives a fake wsl.exe that boots the
+      # real distro tarball in its own namespaces, without a shell.
+      - name: nyx machine + WSL distro end-to-end (fake wsl.exe)
+        run: make build-nyx && scripts/wsl-smoke.sh
+
+      # The distro ships to Windows users as-is: fail on known vulnerabilities in
+      # what it contains (nyxd's Go modules; crun is pinned in build-wsl-rootfs.sh).
+      - name: Grype scan (WSL distro)
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          path: wsl-rootfs
+          fail-build: true
+          severity-cutoff: medium
+          output-format: table
+
       - name: govulncheck
         uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
         with:

@@ -56,6 +56,31 @@ func TestParseVolumeMountBindEscape(t *testing.T) {
 	}
 }
 
+func TestParseVolumeMountWindowsDrive(t *testing.T) {
+	stack := &Stack{Services: map[string]Service{}}
+	for line, want := range map[string]struct {
+		src string
+		ro  bool
+	}{
+		`C:\Users\me\data:/data`: {"/mnt/c/Users/me/data", false},
+		`d:/cache:/cache:ro`:     {"/mnt/d/cache", true},
+		`E:\src:/src:rw`:         {"/mnt/e/src", false},
+	} {
+		m, err := parseVolumeMount(line, stack, t.TempDir(), "p", t.TempDir())
+		if err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		if m.Source != want.src || containsOpt(m.Options, "ro") != want.ro {
+			t.Errorf("%s: source %q options %v; want %q ro=%v", line, m.Source, m.Options, want.src, want.ro)
+		}
+	}
+	for _, bad := range []string{`C:\data`, `C:\data:relative`, `C:\a:/b:/c:ro`} {
+		if _, err := parseVolumeMount(bad, stack, t.TempDir(), "p", t.TempDir()); err == nil {
+			t.Errorf("%s: expected error", bad)
+		}
+	}
+}
+
 func containsOpt(opts []string, want string) bool {
 	for _, o := range opts {
 		if o == want {

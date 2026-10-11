@@ -58,6 +58,28 @@ cleanly.
 | **subordinate IDs** | `newuidmap`, `newgidmap` and ranges in `/etc/subuid` and `/etc/subgid` | Image file ownership is kept (e.g. `/etc/shadow` group `shadow`). Recommended. |
 | **single ID** | any of the above missing (nyxd prints a warning) | Only your uid is mapped. Every file in an image is owned by `0`, and container processes keep your host supplementary groups (shown as `nobody`) because an unprivileged process cannot call `setgroups`. |
 
+## `-userns-remap`: root without root containers
+
+When `nyxd` must start as root (a system service, or the [Windows WSL distro](windows.md)), `-userns-remap` gives
+it the same isolation as rootless mode:
+
+```bash
+sudo nyxd -userns-remap=default          # = 100000:65536
+sudo nyxd -userns-remap=200000:65536     # START:COUNT
+```
+
+Root writes the ID maps itself (no `newuidmap`/`newgidmap`, no `/etc/subuid` entry): `0…COUNT-1` in the namespace
+→ `START…START+COUNT-1` on the host. The daemon and its containers then run in that namespace, so container root
+is uid `START` on the host, with no host capabilities. Image file ownership is kept.
+
+Compared with rootless mode:
+
+- Paths keep their rootful defaults (`/var/lib/nyxd`, `/run/nyxd/nyxd.sock`); nyxd hands both directories to the
+  mapped range.
+- `-net-driver` defaults to `host`; `native` is rejected, as in rootless mode.
+- No cgroup manager, so no resource limits, and no cgroup v2 requirement.
+- Pick a range that no other user or service uses (`/etc/subuid`).
+
 ## Paths
 
 Defaults change in rootless mode; any flag you pass explicitly wins.
