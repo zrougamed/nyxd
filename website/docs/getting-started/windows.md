@@ -24,11 +24,12 @@ No other distro is needed: nyx brings its own.
 
 ## Install
 
-1. Download `nyx-windows-amd64.exe` (or `-arm64.exe` for Windows on ARM) and its `.sha256` from the
+1. Download `nyx-windows-amd64.exe` (or `-arm64.exe` for Windows on ARM) and `checksums.txt` from the
    [releases](https://github.com/zrougamed/nyxd/releases), check it, rename it to `nyx.exe` and put it on your `PATH`:
 
    ```powershell
-   (Get-FileHash nyx-windows-amd64.exe -Algorithm SHA256).Hash   # compare with the .sha256 file
+   (Get-FileHash nyx-windows-amd64.exe -Algorithm SHA256).Hash.ToLower()   # compare with its line in checksums.txt
+   gpg --verify nyx-windows-amd64.exe.sig nyx-windows-amd64.exe             # optional, with Gpg4win
    ```
 
 2. Create and start the machine:

@@ -3,6 +3,7 @@
 | Doc | Purpose |
 |-----|---------|
 | [INSTALL.md](INSTALL.md) | Linux install, systemd, cross-build |
+| [packaging.md](packaging.md) | Release packages (deb, rpm, apk, Arch, macOS, Windows), GPG signing, verifying downloads |
 | [build.md](build.md) | `nyx build`: Dockerfile builds without Docker/BuildKit, cache, supported syntax |
 | [images.md](images.md) | `nyx tag` / `push` / `save` / `load`: registries, archives, credentials |
 | [USAGE.md](USAGE.md) | `nyx` CLI (including **`nyx compose`**), `curl` examples |

@@ -1,0 +1,24 @@
+# Rootless nyxd as a systemd user service, installed by the nyxd packages as
+# /usr/lib/systemd/user/nyxd.service:
+#
+#   systemctl --user enable --now nyxd
+#   loginctl enable-linger "$USER"   # keep it running after logout
+#
+# Data: ~/.local/share/nyxd. See docs/rootless.md.
+
+[Unit]
+Description=nyxd (rootless) - lightweight OCI container orchestrator
+Documentation=https://github.com/zrougamed/nyxd/blob/main/docs/rootless.md
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/nyxd -log-level info
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=60s
+KillMode=process
+# newuidmap/newgidmap are setuid helpers: NoNewPrivileges must stay off.
+NoNewPrivileges=no
+
+[Install]
+WantedBy=default.target

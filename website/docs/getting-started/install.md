@@ -17,6 +17,29 @@ Typical setups: run **nyxd** on the host and **nyx** locally, or call the Unix-s
 
 Networking defaults to **`-net-driver=native`** (no `/opt/cni/bin`). See [networking](/docs/operations/networking).
 
+## Install from a release package
+
+Each [release](https://github.com/zrougamed/nyxd/releases) has signed packages for amd64 and arm64.
+They install `nyxd` and `nyx` to `/usr/bin`, pull in `crun`, create the `nyx` group and add a
+systemd unit (OpenRC on Alpine). Check the signature first ([verifying downloads](https://github.com/zrougamed/nyxd/blob/main/docs/packaging.md#verifying-downloads-users)).
+
+```bash
+sudo apt install ./nyxd_<version>_amd64.deb                 # Debian, Ubuntu
+sudo dnf install ./nyxd-<version>-1.x86_64.rpm              # Fedora, RHEL, Rocky, Alma
+sudo pacman -U nyxd-<version>-1-x86_64.pkg.tar.zst          # Arch Linux
+sudo apk add --allow-untrusted ./nyxd_<version>_x86_64.apk  # Alpine (after checking its .sig)
+```
+
+Then start it and let your user talk to it without sudo:
+
+```bash
+sudo systemctl enable --now nyxd     # Alpine: sudo rc-update add nyxd default && sudo rc-service nyxd start
+sudo usermod -aG nyx "$USER"         # Alpine: sudo addgroup "$USER" nyx; log in again afterwards
+nyx ping
+```
+
+macOS and Windows releases contain the `nyx` client only; on Windows see [Windows](/docs/getting-started/windows).
+
 ## Install to `/usr/bin`
 
 From a repo build:

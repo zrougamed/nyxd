@@ -1,84 +1,131 @@
 name: Release
 
+# Tag push (v*): CI, then GoReleaser builds, packages, GPG-signs and publishes
+# the release (see .goreleaser.yaml and docs/packaging.md).
+# Manual run: an unsigned snapshot of every package, uploaded as a workflow
+# artifact, to try packaging changes without tagging.
+
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   ci:
+    if: github.event_name == 'push'
     uses: ./.github/workflows/ci.yml
     secrets: inherit
 
   publish:
+    if: github.event_name == 'push'
     needs: ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # GoReleaser needs the tags for the changelog
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Build release artifacts
+      # GPG_PRIVATE_KEY: armored secret key; GPG_PASSPHRASE: its passphrase.
+      # The key file feeds nfpm's native deb/rpm signatures; gpg itself makes
+      # the detached .sig files.
+      - name: Import GPG signing key
         env:
-          VERSION: ${{ github.ref_name }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          APK_RSA_PRIVATE_KEY: ${{ secrets.APK_RSA_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          COMMIT_SHORT="${GITHUB_SHA:0:7}"
-          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          LDFLAGS="-w -s -X main.version=${VERSION} -X main.gitCommit=${COMMIT_SHORT} -X main.buildDate=${DATE}"
-          mkdir -p dist
-          for goarch in amd64 arm64; do
-            out="dist/nyxd-linux-${goarch}"
-            CGO_ENABLED=0 GOOS=linux GOARCH="${goarch}" \
-              go build -trimpath -ldflags "${LDFLAGS}" \
-              -o "${out}" ./cmd/nyxd
-            sha256sum "${out}" > "${out}.sha256"
-          done
-          for goarch in amd64 arm64; do
-            out="dist/nyx-linux-${goarch}"
-            CGO_ENABLED=0 GOOS=linux GOARCH="${goarch}" \
-              go build -trimpath -ldflags "${LDFLAGS}" \
-              -o "${out}" ./cmd/nyx
-            sha256sum "${out}" > "${out}.sha256"
-          done
-          for goarch in amd64 arm64; do
-            out="dist/nyx-windows-${goarch}.exe"
-            CGO_ENABLED=0 GOOS=windows GOARCH="${goarch}" \
-              go build -trimpath -ldflags "${LDFLAGS}" \
-              -o "${out}" ./cmd/nyx
-            sha256sum "${out}" > "${out}.sha256"
-          done
-          # WSL2 distro tarballs; `nyx machine init` downloads
-          # nyx-wsl-<arch>.tar.gz from the release matching its version and
-          # checks it against the .sha256 next to it.
-          for goarch in amd64 arm64; do
-            scripts/build-wsl-rootfs.sh "${goarch}" dist "${VERSION}"
-          done
+          if [ -z "${GPG_PRIVATE_KEY}" ]; then
+            echo "::error::secret GPG_PRIVATE_KEY is not set (see docs/packaging.md)"
+            exit 1
+          fi
+          printf '%s\n' "${GPG_PRIVATE_KEY}" | gpg --batch --import
+          fpr="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')"
+          echo "GPG_FINGERPRINT=${fpr}" >> "$GITHUB_ENV"
+          umask 077
+          printf '%s\n' "${GPG_PRIVATE_KEY}" > "${RUNNER_TEMP}/gpg-key.asc"
+          echo "NFPM_KEY_FILE=${RUNNER_TEMP}/gpg-key.asc" >> "$GITHUB_ENV"
+          # Optional: native apk signatures need an RSA key, not a GPG one.
+          if [ -n "${APK_RSA_PRIVATE_KEY}" ]; then
+            printf '%s\n' "${APK_RSA_PRIVATE_KEY}" > "${RUNNER_TEMP}/apk-key.rsa"
+            echo "NFPM_APK_KEY_FILE=${RUNNER_TEMP}/apk-key.rsa" >> "$GITHUB_ENV"
+          fi
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+      # WSL2 distro tarballs: `nyx machine init` downloads
+      # nyx-wsl-<arch>.tar.gz from the release matching its version and checks
+      # it against the .sha256 next to it. Signed here; GoReleaser uploads
+      # dist-extra/ as is, with the public key next to it.
+      - name: Build and sign WSL tarballs
+        env:
+          VERSION: ${{ github.ref_name }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist-extra
+          for goarch in amd64 arm64; do
+            scripts/build-wsl-rootfs.sh "${goarch}" dist-extra "${VERSION}"
+          done
+          for f in dist-extra/*.tar.gz; do
+            printf '%s' "${GPG_PASSPHRASE}" | gpg --batch --yes --pinentry-mode=loopback \
+              --passphrase-fd=0 --local-user="${GPG_FINGERPRINT}" \
+              --output="${f}.sig" --detach-sign "${f}"
+          done
+          gpg --armor --export "${GPG_FINGERPRINT}" > dist-extra/nyxd-release-key.asc
+
+      - name: GoReleaser
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
-          generate_release_notes: true
-          files: |
-            dist/nyxd-linux-amd64
-            dist/nyxd-linux-amd64.sha256
-            dist/nyxd-linux-arm64
-            dist/nyxd-linux-arm64.sha256
-            dist/nyx-linux-amd64
-            dist/nyx-linux-amd64.sha256
-            dist/nyx-linux-arm64
-            dist/nyx-linux-arm64.sha256
-            dist/nyx-windows-amd64.exe
-            dist/nyx-windows-amd64.exe.sha256
-            dist/nyx-windows-arm64.exe
-            dist/nyx-windows-arm64.exe.sha256
-            dist/nyx-wsl-amd64.tar.gz
-            dist/nyx-wsl-amd64.tar.gz.sha256
-            dist/nyx-wsl-arm64.tar.gz
-            dist/nyx-wsl-arm64.tar.gz.sha256
+          distribution: goreleaser
+          version: v2.18.2
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          NFPM_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Remove key files
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/gpg-key.asc" "${RUNNER_TEMP}/apk-key.rsa"
+
+  snapshot:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: GoReleaser snapshot (unsigned)
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.2
+          args: release --snapshot --clean --skip=publish,sign
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nyxd-snapshot
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm
+            dist/*.apk
+            dist/*.pkg.tar.zst
+            dist/checksums.txt
+          retention-days: 7

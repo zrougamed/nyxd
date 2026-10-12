@@ -11,7 +11,7 @@ LDFLAGS  := -w -s \
 	-X main.gitCommit=$(COMMIT) \
 	-X main.buildDate=$(DATE)
 
-.PHONY: all build build-nyx build-windows wsl-rootfs lint vet test test-overlay test-rootless test-build test-transfer test-wsl coverage clean install install-usr scan scan-trivy scan-grype
+.PHONY: all build build-nyx build-windows wsl-rootfs snapshot lint vet test test-overlay test-rootless test-build test-transfer test-wsl coverage clean install install-usr scan scan-trivy scan-grype
 
 BINDIR ?= /usr/local/bin
 
@@ -47,6 +47,11 @@ build-windows:
 WSL_ARCH ?= amd64
 wsl-rootfs:
 	scripts/build-wsl-rootfs.sh $(WSL_ARCH) bin $(VERSION)
+
+# Every release archive and Linux package (deb, rpm, apk, Arch) into dist/,
+# unsigned, without publishing. Needs goreleaser v2; see docs/packaging.md.
+snapshot:
+	goreleaser release --snapshot --clean --skip=publish,sign
 
 vet:
 	go vet ./...
