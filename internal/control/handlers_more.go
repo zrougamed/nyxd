@@ -16,19 +16,11 @@ import (
 )
 
 func (s *Server) handleContainerKill(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	if s.sup == nil {
 		http.Error(w, "supervisor not available", http.StatusServiceUnavailable)
 		return
 	}
 	id := strings.TrimSpace(r.PathValue("id"))
-	if id == "" {
-		http.Error(w, "missing container id", http.StatusBadRequest)
-		return
-	}
 	canon, err := s.resolveContainerID(id)
 	if err != nil {
 		writeResolveError(w, err)
@@ -58,15 +50,7 @@ func (s *Server) handleContainerKill(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	id := strings.TrimSpace(r.PathValue("id"))
-	if id == "" {
-		http.Error(w, "missing container id", http.StatusBadRequest)
-		return
-	}
 	canon, err := s.resolveContainerIDForLogs(id)
 	if err != nil {
 		writeResolveError(w, err)
@@ -207,10 +191,6 @@ func writeLogLine(w io.Writer, line []byte, plain bool) {
 }
 
 func (s *Server) handleImagesList(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	if s.store == nil {
 		http.Error(w, "image store not available", http.StatusServiceUnavailable)
 		return
@@ -229,10 +209,6 @@ type imageRemoveRequest struct {
 }
 
 func (s *Server) handleImagesRemove(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	if s.store == nil {
 		http.Error(w, "image store not available", http.StatusServiceUnavailable)
 		return
@@ -260,10 +236,6 @@ type imagePruneRequest struct {
 }
 
 func (s *Server) handleImagesPrune(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	if s.store == nil {
 		http.Error(w, "image store not available", http.StatusServiceUnavailable)
 		return

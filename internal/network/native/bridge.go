@@ -471,18 +471,13 @@ func newIPAM(dir, cidr, gwStr string) *ipam {
 	}
 	gwU := ipToU32(gw)
 	base := ipToU32(ip4)
-	maskIP := net.IP(subnet.Mask).To4()
-	if maskIP == nil {
-		panic("ipam cidr: IPv4 mask only")
-	}
-	mask := binary.BigEndian.Uint32(maskIP)
+	// An IPv4 prefix (checked above) has a 4-byte mask.
+	mask := binary.BigEndian.Uint32(subnet.Mask)
 	broadcast := base | ^mask
+	// The gateway strictly between network and broadcast address also
+	// guarantees a subnet of at least /30.
 	if gwU <= base || gwU >= broadcast {
 		panic(fmt.Sprintf("ipam: gateway %s not inside subnet %s", gwStr, cidr))
-	}
-	// Need at least one assignable host besides gateway.
-	if broadcast <= base+1 {
-		panic(fmt.Sprintf("ipam cidr: no room in %s", cidr))
 	}
 	return &ipam{
 		dir:    dir,
@@ -553,14 +548,20 @@ func (a *ipam) usedSet() map[uint32]bool {
 
 var portMapNftMu sync.Mutex
 
+// nftBin and nftTimeout are variables for tests (fake nft, hung nft).
+var (
+	nftBin     = "/usr/sbin/nft"
+	nftTimeout = 30 * time.Second
+)
+
 // tryEnsureNATOutputChain adds the output NAT hook if missing (older nyxd
 // installs only created prerouting/postrouting).
 func tryEnsureNATOutputChain() error {
 	if err := ensureNftTable(); err != nil {
 		return err
 	}
-	return withTimeout(30*time.Second, func() error {
-		cmd := exec.Command("/usr/sbin/nft", "add", "chain", "ip", "nyxd-nat", "output",
+	return withTimeout(nftTimeout, func() error {
+		cmd := exec.Command(nftBin, "add", "chain", "ip", "nyxd-nat", "output",
 			"{", "type", "nat", "hook", "output", "priority", "-100", ";", "policy", "accept", ";", "}")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -645,7 +646,7 @@ func runNft(rule string) error {
 	if err := ensureNftTable(); err != nil {
 		return err
 	}
-	return withTimeout(30*time.Second, func() error {
+	return withTimeout(nftTimeout, func() error {
 		cmd := exec.Command("/bin/sh", "-c", rule)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -655,16 +656,18 @@ func runNft(rule string) error {
 	})
 }
 
-var nftTableOnce sync.Once
+var (
+	nftTableOnce sync.Once
+	nftTableErr  error
+)
 
 func ensureNftTable() error {
-	var initErr error
 	nftTableOnce.Do(func() {
 		// Postrouting SNAT for container→internet is added by [ensureContainerEgressNAT]
 		// (ip saddr <subnet> oifname != bridge masquerade). A rule matching only
 		// oifname "nyxbr0" never sees forwarded WAN-bound traffic, so ping/wget to
 		// public addresses would fail without the egress rule.
-		rules := `
+		nftTableErr = nftLoad("nft init", `
 table ip nyxd-nat {
   chain prerouting {
     type nat hook prerouting priority dstnat; policy accept;
@@ -676,28 +679,19 @@ table ip nyxd-nat {
     type nat hook postrouting priority srcnat; policy accept;
   }
 }
-`
-		f, err := os.CreateTemp("", "nyxd-nft-*.rules")
-		if err != nil {
-			initErr = err
-			return
-		}
-		defer os.Remove(f.Name())
-		if _, err := f.WriteString(rules); err != nil {
-			initErr = err
-			return
-		}
-		if err := f.Close(); err != nil {
-			initErr = err
-			return
-		}
-		cmd := exec.Command("/usr/sbin/nft", "-f", f.Name())
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			initErr = fmt.Errorf("nft init: %w: %s", err, strings.TrimSpace(string(out)))
-		}
+`)
 	})
-	return initErr
+	return nftTableErr
+}
+
+// nftLoad applies a ruleset with nft -f, read from stdin.
+func nftLoad(what, rules string) error {
+	cmd := exec.Command(nftBin, "-f", "-")
+	cmd.Stdin = strings.NewReader(rules)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%s: %w: %s", what, err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // egressNATComment tags the SNAT rule for traffic leaving the host toward non-bridge
@@ -748,7 +742,7 @@ func ensureContainerEgressNAT(log *slog.Logger) error {
 // runNftUnlocked runs nft like [runNft] but does not call [ensureNftTable] (caller
 // must hold [portMapNftMu] when appropriate to avoid races with [ensureNftTable]).
 func runNftUnlocked(rule string) error {
-	return withTimeout(30*time.Second, func() error {
+	return withTimeout(nftTimeout, func() error {
 		cmd := exec.Command("/bin/sh", "-c", rule)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -763,32 +757,13 @@ var nftFilterInitErr error
 
 func ensureNftFilterTable() error {
 	nftFilterOnce.Do(func() {
-		rules := `
+		nftFilterInitErr = nftLoad("nft filter init", `
 table ip nyxd-filter {
   chain forward {
     type filter hook forward priority 0; policy accept;
   }
 }
-`
-		f, err := os.CreateTemp("", "nyxd-nft-filter-*.rules")
-		if err != nil {
-			nftFilterInitErr = err
-			return
-		}
-		defer os.Remove(f.Name())
-		if _, err := f.WriteString(rules); err != nil {
-			nftFilterInitErr = err
-			return
-		}
-		if err := f.Close(); err != nil {
-			nftFilterInitErr = err
-			return
-		}
-		cmd := exec.Command("/usr/sbin/nft", "-f", f.Name())
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			nftFilterInitErr = fmt.Errorf("nft filter init: %w: %s", err, strings.TrimSpace(string(out)))
-		}
+`)
 	})
 	return nftFilterInitErr
 }
@@ -983,26 +958,35 @@ func netlinkDo(fd int, req *nlMsg) error {
 		if err != nil {
 			return fmt.Errorf("nl recv: %w", err)
 		}
-		msgs, err := parseNetlinkMessages(rbuf[:n])
-		if err != nil {
-			return fmt.Errorf("nl parse: %w", err)
-		}
-		for _, msg := range msgs {
-			if msg.Header.Type == unix.NLMSG_ERROR {
-				if len(msg.Data) < 4 {
-					return fmt.Errorf("nl error: short ack")
-				}
-				errno := int32(binary.NativeEndian.Uint32(msg.Data[:4]))
-				if errno == 0 {
-					return nil // ACK
-				}
-				return fmt.Errorf("nl error: %w", syscall.Errno(-errno))
-			}
-			if msg.Header.Type == unix.NLMSG_DONE {
-				return nil
-			}
+		if done, err := netlinkReply(rbuf[:n]); done {
+			return err
 		}
 	}
+}
+
+// netlinkReply interprets one received datagram: done is true once it holds
+// the ACK, an error or NLMSG_DONE.
+func netlinkReply(b []byte) (done bool, err error) {
+	msgs, err := parseNetlinkMessages(b)
+	if err != nil {
+		return true, fmt.Errorf("nl parse: %w", err)
+	}
+	for _, msg := range msgs {
+		if msg.Header.Type == unix.NLMSG_ERROR {
+			if len(msg.Data) < 4 {
+				return true, fmt.Errorf("nl error: short ack")
+			}
+			errno := int32(binary.NativeEndian.Uint32(msg.Data[:4]))
+			if errno == 0 {
+				return true, nil // ACK
+			}
+			return true, fmt.Errorf("nl error: %w", syscall.Errno(-errno))
+		}
+		if msg.Header.Type == unix.NLMSG_DONE {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // linkSetUp brings a named interface up (IFF_UP).
@@ -1032,7 +1016,8 @@ func deleteLink(name string) error {
 
 	idx, err := linkIndex(name)
 	if err != nil {
-		return err
+		// Gone already, e.g. with the container's network namespace.
+		return fmt.Errorf("%w: %w", err, unix.ENODEV)
 	}
 	req := newNetlinkMsg(unix.RTM_DELLINK, unix.NLM_F_REQUEST|unix.NLM_F_ACK)
 	ifinfo := unix.IfInfomsg{Family: unix.AF_UNSPEC, Index: int32(idx)}
@@ -1162,7 +1147,7 @@ func vethNames(containerID string) (host, peer string) {
 }
 
 func isNotExist(err error) bool {
-	return err == unix.ENODEV || err == unix.ENOENT || os.IsNotExist(err)
+	return errors.Is(err, unix.ENODEV) || errors.Is(err, unix.ENOENT) || errors.Is(err, os.ErrNotExist)
 }
 
 // ensure timeout on slow netns ops.

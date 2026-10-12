@@ -218,7 +218,7 @@ func (s *Supervisor) Start(ctx context.Context, spec ContainerSpec) error {
 		err := health.WaitReady(rctx, s.log, *spec.Healthcheck, spec.ID, s.rt.Binary(), s.rt.RootDir())
 		rcancel()
 		if err != nil {
-			s.abortAfterFailedReadiness(ctx, entry)
+			s.abortAfterFailedReadiness(entry)
 			s.mu.Lock()
 			delete(s.containers, spec.ID)
 			s.mu.Unlock()
@@ -345,7 +345,9 @@ func (s *Supervisor) Stop(ctx context.Context, id string) error {
 }
 
 // Kill sends a signal (default KILL) and waits for crun to report stopped.
-// Sets stopped=true so restart policies do not respawn the container.
+// Sets stopped=true so restart policies do not respawn the container. A
+// container that is still running 10s after a signal other than KILL handled
+// it, and is left running.
 func (s *Supervisor) Kill(_ context.Context, id string, signal string) error {
 	if signal == "" {
 		signal = "KILL"
@@ -375,9 +377,20 @@ func (s *Supervisor) Kill(_ context.Context, id string, signal string) error {
 		s.log.Warn("crun kill: OCI state missing on disk; cancelling foreground run", "id", id, "err", err)
 	}
 
-	if exited := entry.exitedChan(); exited != nil && waitClosed(exited, 10*time.Second) {
-		s.log.Info("container stopped after kill", "id", id, "signal", signal)
-		return nil
+	if exited := entry.exitedChan(); exited != nil {
+		if waitClosed(exited, 10*time.Second) {
+			s.log.Info("container stopped after kill", "id", id, "signal", signal)
+			return nil
+		}
+		if signal != "KILL" && signal != "9" {
+			// The workload handled the signal (e.g. HUP to reload) and keeps
+			// running: delivered, and still subject to its restart policy.
+			entry.mu.Lock()
+			entry.stopped = false
+			entry.mu.Unlock()
+			s.log.Info("signal delivered, container still running", "id", id, "signal", signal)
+			return nil
+		}
 	}
 
 	// Unblock the supervisor's foreground `crun run` (CommandContext(logCtx)) so
@@ -619,11 +632,14 @@ func readinessWaitContext(parent context.Context, cfg *health.Config) (context.C
 	return context.WithTimeout(parent, budget)
 }
 
-func (s *Supervisor) abortAfterFailedReadiness(ctx context.Context, e *containerEntry) {
+func (s *Supervisor) abortAfterFailedReadiness(e *containerEntry) {
 	id := e.spec.ID
 	log := s.log.With("id", id)
 	log.Warn("tearing down container after readiness failure")
 	s.resetLogIO(e)
+	// Not the caller's context: readiness may have failed because it expired,
+	// and the teardown must still happen.
+	ctx := context.Background()
 	killCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if err := s.rt.Kill(killCtx, id, "KILL"); err != nil && !runtime.CrunContainerAbsent(err) {
@@ -1026,7 +1042,9 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 				continue outer
 			}
 			if !fastExit {
-				// Running again: go back to waiting for it to exit.
+				// Running again: health checks resume (they stop on every
+				// exit), then wait for it to exit.
+				s.startHealthMonitor(ctx, e)
 				break outer
 			}
 			// Init exited with 0 before "running" again; cleanup already done in startOnce.

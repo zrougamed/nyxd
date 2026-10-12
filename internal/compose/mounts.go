@@ -37,9 +37,10 @@ func parseVolumeMount(line string, stack *Stack, composeDir, project, dataDir st
 	}
 
 	// A Windows drive source (C:\data:/data) has a colon of its own; nyxd then
-	// runs in WSL2, which mounts that drive at /mnt/c.
+	// runs in WSL2, which mounts that drive at /mnt/c. Only when a
+	// source:destination pair follows the drive: "v:/data" is volume "v".
 	drive := ""
-	if wslpath.HasDrive(line) {
+	if wslpath.HasDrive(line) && strings.Contains(line[2:], ":") {
 		drive, line = line[:2], line[2:]
 	}
 

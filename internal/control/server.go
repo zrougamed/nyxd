@@ -77,6 +77,9 @@ func New(log *slog.Logger, rt *runtime.Runtime, store *image.Store, sup *supervi
 	if l == nil && sup != nil {
 		l = sup
 	}
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
 	return &Server{
 		log: log, rt: rt, store: store, lister: l, sup: sup, dataDir: dataDir, baseCtx: baseCtx,
 		version: version, gitCommit: commit, buildDate: date,
@@ -274,10 +277,6 @@ func readExecJSONLine(br *bufio.Reader, max int) ([]byte, error) {
 
 func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
-	if id == "" {
-		http.Error(w, "missing container id", http.StatusBadRequest)
-		return
-	}
 	canon, err := s.resolveContainerID(id)
 	if err != nil {
 		writeResolveError(w, err)
@@ -338,11 +337,7 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	// (write errors, etc.) while the handler is still running, which surfaces as
 	// "context canceled" from exec.CommandContext. Stdin is still r.Body, so closing the
 	// client connection stops the byte stream. Use the daemon lifetime ctx for shutdown.
-	execCtx := s.baseCtx
-	if execCtx == nil {
-		execCtx = context.Background()
-	}
-	if err := s.rt.Exec(execCtx, id, body.Argv, stdin, fw, fw, body.TTY, execTTYWinSize(body)); err != nil {
+	if err := s.rt.Exec(s.baseCtx, id, body.Argv, stdin, fw, fw, body.TTY, execTTYWinSize(body)); err != nil {
 		s.log.Warn("control exec", "id", id, "err", err)
 		// Headers are already 200 — still surface the failure on the exec byte stream so
 		// the client is not left with a silent empty body (common when crun fails or the
@@ -358,19 +353,11 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleContainerStop(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	if s.sup == nil {
 		http.Error(w, "supervisor not available", http.StatusServiceUnavailable)
 		return
 	}
 	id := strings.TrimSpace(r.PathValue("id"))
-	if id == "" {
-		http.Error(w, "missing container id", http.StatusBadRequest)
-		return
-	}
 	canon, err := s.resolveContainerID(id)
 	if err != nil {
 		writeResolveError(w, err)
@@ -391,19 +378,11 @@ func (s *Server) handleContainerStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleContainerRemove(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	if s.sup == nil {
 		http.Error(w, "supervisor not available", http.StatusServiceUnavailable)
 		return
 	}
 	id := strings.TrimSpace(r.PathValue("id"))
-	if id == "" {
-		http.Error(w, "missing container id", http.StatusBadRequest)
-		return
-	}
 	canon, err := s.resolveContainerID(id)
 	if err != nil {
 		writeResolveError(w, err)
@@ -572,9 +551,6 @@ func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	baseCtx := s.baseCtx
-	if baseCtx == nil {
-		baseCtx = context.Background()
-	}
 	var body composeProjectRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
 		http.Error(w, image.TrimUserMessage(err), http.StatusBadRequest)
@@ -613,9 +589,6 @@ func (s *Server) handleComposeStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	baseCtx := s.baseCtx
-	if baseCtx == nil {
-		baseCtx = context.Background()
-	}
 	var body composeProjectRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
 		http.Error(w, image.TrimUserMessage(err), http.StatusBadRequest)
@@ -645,9 +618,6 @@ func (s *Server) handleComposeDown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	baseCtx := s.baseCtx
-	if baseCtx == nil {
-		baseCtx = context.Background()
-	}
 	var body composeProjectRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
 		http.Error(w, image.TrimUserMessage(err), http.StatusBadRequest)
@@ -740,9 +710,6 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	baseCtx := s.baseCtx
-	if baseCtx == nil {
-		baseCtx = context.Background()
-	}
 
 	var body runRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
@@ -763,10 +730,7 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 	var streamEnc *json.Encoder
 	var streamFlush http.Flusher
 	streamStarted := false
-	writeStream := func(ev image.PullEvent) {
-		if !stream {
-			return
-		}
+	writeStream := func(ev image.PullEvent) { // only called when stream is set
 		if !streamStarted {
 			w.Header().Set("Content-Type", "application/x-ndjson")
 			w.WriteHeader(http.StatusOK)
@@ -781,12 +745,7 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 			streamFlush.Flush()
 		}
 	}
-	writeStreamErr := func(msg string) {
-		if !stream {
-			return
-		}
-		writeStream(image.PullEvent{Phase: "error", Message: msg})
-	}
+	writeStreamErr := func(msg string) { writeStream(image.PullEvent{Phase: "error", Message: msg}) }
 
 	var portMaps []network.PortMapping
 	for _, pub := range body.Publish {

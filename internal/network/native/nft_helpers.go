@@ -25,7 +25,7 @@ func internalEgressCommentPrefix(containerID string) string {
 var handleSuffix = regexp.MustCompile(`#\s*handle\s+(\d+)\s*$`)
 
 func nftListChainLines(table, chain string) ([]string, error) {
-	out, err := exec.Command("/usr/sbin/nft", "-a", "list", "chain", "ip", table, chain).CombinedOutput()
+	out, err := exec.Command(nftBin, "-a", "list", "chain", "ip", table, chain).CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("nft list chain %s: %w: %s", chain, err, strings.TrimSpace(string(out)))
 	}
