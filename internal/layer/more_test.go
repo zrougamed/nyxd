@@ -27,7 +27,7 @@ func TestApplySpecialEntries(t *testing.T) {
 		{Name: "hl", Typeflag: tar.TypeLink, Linkname: "f", ModTime: mt},
 		{Name: "hl", Typeflag: tar.TypeLink, Linkname: "f", ModTime: mt}, // replaced
 		{Name: "x", Typeflag: tar.TypeReg, Mode: 0o644, ModTime: mt},
-		{Name: "x", Typeflag: tar.TypeDir, Mode: 0o755, ModTime: mt},    // file -> dir
+		{Name: "x", Typeflag: tar.TypeDir, Mode: 0o755, ModTime: mt}, // file -> dir
 		{Name: "y", Typeflag: tar.TypeReg, Mode: 0o644, ModTime: mt},
 		{Name: "y/z", Typeflag: tar.TypeReg, Mode: 0o644, ModTime: mt},  // parent is a file
 		{Name: "dev", Typeflag: tar.TypeChar, Mode: 0o644, ModTime: mt}, // skipped
