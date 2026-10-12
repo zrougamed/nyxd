@@ -91,6 +91,7 @@ func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 	if !follow {
 		return
 	}
+	noWriteDeadline(w) // follow streams until the client disconnects
 
 	offset := int64(len(data))
 	// Fast path: workload already finished before follow began and the log file has not

@@ -40,6 +40,10 @@ type Lister interface {
 	List() []string
 }
 
+// writeTimeout bounds how long a response may take; long-running handlers
+// lift it with noWriteDeadline. A variable so tests can shorten it.
+var writeTimeout = 15 * time.Minute
+
 // Server serves HTTP on a Unix socket (e.g. /run/nyxd/nyxd.sock).
 type Server struct {
 	log         *slog.Logger
@@ -158,7 +162,7 @@ func (s *Server) Start() error {
 		Handler:           mux,
 		ReadHeaderTimeout: 30 * time.Second,
 		ReadTimeout:       0,
-		WriteTimeout:      15 * time.Minute,
+		WriteTimeout:      writeTimeout,
 	}
 	go func() {
 		s.log.Info("control API listening", "socket", s.socket)
@@ -315,6 +319,7 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 
 	s.execMu.Lock()
 	defer s.execMu.Unlock()
+	noWriteDeadline(w) // interactive sessions run as long as the client keeps them open
 
 	// HTTP/1.x: by default the server drains the request body before/during response
 	// writes. Exec streams stdin from the remainder of r.Body while writing crun
@@ -410,6 +415,7 @@ type pullRequest struct {
 }
 
 func (s *Server) handleImagePull(w http.ResponseWriter, r *http.Request) {
+	noWriteDeadline(w) // large pulls on slow links outlast WriteTimeout
 	if s.store == nil {
 		http.Error(w, "image store not configured", http.StatusServiceUnavailable)
 		return
@@ -542,6 +548,7 @@ func (s *Server) loadComposeProject(body composeProjectRequest) (*compose.Stack,
 }
 
 func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
+	noWriteDeadline(w) // may pull images first
 	if s.sup == nil {
 		http.Error(w, "supervisor not available", http.StatusServiceUnavailable)
 		return
@@ -701,6 +708,7 @@ type runRequest struct {
 }
 
 func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
+	noWriteDeadline(w) // may pull the image first
 	if s.sup == nil {
 		http.Error(w, "supervisor not available", http.StatusServiceUnavailable)
 		return

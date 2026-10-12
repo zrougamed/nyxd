@@ -129,8 +129,9 @@ func (s *Server) handleImageLoad(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "refs": refs})
 }
 
-// noWriteDeadline lifts the server WriteTimeout for long-running transfers
-// and builds (the daemon socket is local; clients cancel by disconnecting).
+// noWriteDeadline lifts the server WriteTimeout for long-running requests:
+// transfers, pulls, builds, exec sessions and log follows (the daemon socket
+// is local; clients cancel by disconnecting).
 func noWriteDeadline(w http.ResponseWriter) {
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 }

@@ -6,8 +6,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -269,5 +271,64 @@ func TestHelpers(t *testing.T) {
 	}
 	if humanSize(3<<30) == "" || shortDigest("short") != "short" {
 		t.Error("humanSize/shortDigest")
+	}
+}
+
+// Ctrl+C while the daemon is still starting the container: the first one
+// kills the container once its id is known, a second one aborts at once.
+func TestRunInterruptedBeforeStart(t *testing.T) {
+	sigc := make(chan os.Signal, 1) // SIGINT must never take the default action here
+	signal.Notify(sigc, os.Interrupt)
+	defer signal.Stop(sigc)
+	p, _ := os.FindProcess(os.Getpid())
+
+	for _, abort := range []bool{false, true} {
+		arrived, release := make(chan struct{}), make(chan struct{})
+		var killed atomic.Bool
+		sock := stub(t, routes(map[string]http.HandlerFunc{
+			"/run": func(w http.ResponseWriter, r *http.Request) {
+				close(arrived)
+				select {
+				case <-release:
+				case <-r.Context().Done():
+					return
+				}
+				w.Header().Set("Content-Type", "application/x-ndjson")
+				_, _ = fmt.Fprint(w, "{\"phase\":\"run\",\"container_id\":\"c1\"}\n")
+			},
+			"/kill": func(w http.ResponseWriter, r *http.Request) {
+				killed.Store(true)
+				_, _ = fmt.Fprint(w, `{"ok":true}`)
+			},
+		}))
+		done := make(chan error, 1)
+		var errOut string
+		go func() {
+			var err error
+			_, errOut, err = capture2(t, func() error { return doRun(sock, []string{"img"}) })
+			done <- err
+		}()
+		<-arrived
+		_ = p.Signal(os.Interrupt)
+		time.Sleep(200 * time.Millisecond)
+		if abort {
+			_ = p.Signal(os.Interrupt)
+		} else {
+			close(release)
+		}
+		select {
+		case err := <-done:
+			if abort && (err == nil || killed.Load()) {
+				t.Errorf("abort: err=%v killed=%v", err, killed.Load())
+			}
+			if !abort && (err != nil || !killed.Load() || !strings.Contains(errOut, "interrupted")) {
+				t.Errorf("kill once started: err=%v killed=%v stderr=%q", err, killed.Load(), errOut)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatalf("abort=%v: run did not end", abort)
+		}
+		if abort {
+			close(release)
+		}
 	}
 }

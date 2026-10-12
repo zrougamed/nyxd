@@ -1,7 +1,5 @@
 github.com/creack/pty v1.1.24 h1:bJrF4RRfyJnbTJqzRLHzcGaZK1NeM5kTC9jGgovnR1s=
 github.com/creack/pty v1.1.24/go.mod h1:08sCNb52WyoAwi2QDyzUCTgcvVFhUzewun7wtTfvcwE=
-github.com/hedzr/progressbar v1.2.8 h1:k7Hgm+lBjPqWnKe9N/FnN8xJo9xJGT+ECfm2SyVtfX8=
-github.com/hedzr/progressbar v1.2.8/go.mod h1:vgFeDJkh6N5iO6TmkmkoTLazbpjcj/uroVVw3P6R2zc=
 github.com/miekg/dns v1.1.73 h1:uhT8nJxmTrPJYClxVxTCX+CVn6qnzSiybRk72Z6DgrE=
 github.com/miekg/dns v1.1.73/go.mod h1:RW2Obtfd5NZHvOFe3zYG0W8koWOQtAzyHaLo8vASBuQ=
 golang.org/x/net v0.61.0 h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=

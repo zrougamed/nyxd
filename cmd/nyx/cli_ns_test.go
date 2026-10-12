@@ -360,7 +360,8 @@ func TestCLIAgainstDaemon(t *testing.T) {
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt)
 	defer signal.Stop(sigc)
-	time.Sleep(300 * time.Millisecond)
+	// nyx run catches SIGINT from the start of a foreground run, so one
+	// signal is enough however far it has got.
 	p, _ := os.FindProcess(os.Getpid())
 	_ = p.Signal(os.Interrupt)
 	select {
@@ -368,6 +369,10 @@ func TestCLIAgainstDaemon(t *testing.T) {
 	case <-time.After(20 * time.Second):
 		t.Fatal("attached run did not end after SIGINT")
 	}
+	daemon.WaitFor(t, 10*time.Second, "sig to be killed", func() bool {
+		_, out := d.Do(t, "GET", "/v1/containers", nil)
+		return !strings.Contains(out, `"sig"`)
+	})
 }
 
 // Every command against a daemon that is not there fails cleanly.

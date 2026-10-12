@@ -18,6 +18,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -58,7 +59,7 @@ type Daemon struct {
 	Sup     *supervisor.Supervisor
 	Ctl     *control.Server
 	Builder *build.Builder
-	Log     *bytes.Buffer // daemon log (JSON lines)
+	Log     fmt.Stringer // daemon log (JSON lines), safe to read while the daemon writes
 	Ctx     context.Context
 }
 
@@ -88,7 +89,7 @@ func StartWith(t *testing.T, opts Options) *Daemon {
 	base := t.TempDir()
 	logBuf := &syncBuffer{}
 	log := slog.New(slog.NewJSONHandler(logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	d := &Daemon{Base: base, Socket: filepath.Join(base, "nyxd.sock"), Log: &logBuf.Buffer}
+	d := &Daemon{Base: base, Socket: filepath.Join(base, "nyxd.sock"), Log: logBuf}
 
 	var err error
 	must := func(e error) {

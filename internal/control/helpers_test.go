@@ -285,3 +285,47 @@ func TestServerStartErrors(t *testing.T) {
 }
 
 func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }
+
+// Long-running handlers lift the server WriteTimeout: a pull that outlasts it
+// still gets its answer to the client.
+func TestPullOutlastsWriteTimeout(t *testing.T) {
+	old := writeTimeout
+	writeTimeout = 200 * time.Millisecond
+	defer func() { writeTimeout = old }()
+
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(400 * time.Millisecond)
+		http.Error(w, "nope", http.StatusInternalServerError)
+	}))
+	defer slow.Close()
+
+	dir := t.TempDir()
+	sock := filepath.Join(dir, "nyxd.sock")
+	store, err := image.NewStore(filepath.Join(dir, "images"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := New(log, nil, store, nil, nil, nil, "", "", "", dir, sock, "", "", "")
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Shutdown(context.Background())
+
+	c := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", sock)
+	}}}
+	for _, stream := range []bool{false, true} {
+		ref := strings.TrimPrefix(slow.URL, "http://") + "/x:1"
+		body, _ := json.Marshal(map[string]any{"ref": ref, "stream": stream})
+		resp, err := c.Post("http://unix/v1/images/pull", "application/json", bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("stream=%v: %v", stream, err)
+		}
+		b, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil || len(b) == 0 {
+			t.Errorf("stream=%v: answer cut off: %v %q", stream, err, b)
+		}
+	}
+}

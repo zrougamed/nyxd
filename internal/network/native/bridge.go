@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -833,12 +834,12 @@ type nlMsg struct {
 var nlSeq uint32
 
 func newNetlinkMsg(typ, flags uint16) *nlMsg {
-	nlSeq++
-	m := &nlMsg{seq: nlSeq}
+	seq := atomic.AddUint32(&nlSeq, 1) // links are set up from concurrent goroutines
+	m := &nlMsg{seq: seq}
 	hdr := unix.NlMsghdr{
 		Type:  typ,
 		Flags: flags,
-		Seq:   nlSeq,
+		Seq:   seq,
 	}
 	m.buf = (*[unix.SizeofNlMsghdr]byte)(unsafe.Pointer(&hdr))[:]
 	return m

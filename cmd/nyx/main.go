@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -301,8 +302,36 @@ func doRun(socket string, args []string) error {
 	}
 	raw, _ := json.Marshal(body)
 
+	// Foreground: catch Ctrl+C from the start. One that arrives while the
+	// image is pulled or the container created kills the container as soon
+	// as its id is known; a second one aborts without waiting.
+	reqCtx, cancelReq := context.WithCancel(context.Background())
+	defer cancelReq()
+	sigCh := make(chan os.Signal, 1)
+	interrupted := make(chan struct{})
+	started := make(chan struct{})
+	stopWatch := sync.OnceFunc(func() { close(started) })
+	defer stopWatch()
+	if !o.detach {
+		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(sigCh)
+		go func() {
+			select {
+			case <-sigCh:
+				close(interrupted)
+				fmt.Fprintln(os.Stderr, "nyx: interrupted; the container is killed once it starts (interrupt again to abort)")
+				select {
+				case <-sigCh:
+					cancelReq()
+				case <-started:
+				}
+			case <-started:
+			}
+		}()
+	}
+
 	c := httpClient(socket)
-	req, err := http.NewRequest(http.MethodPost, "http://unix/v1/containers/run", bytes.NewReader(raw))
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, "http://unix/v1/containers/run", bytes.NewReader(raw))
 	if err != nil {
 		return err
 	}
@@ -341,6 +370,8 @@ func doRun(socket string, args []string) error {
 		}
 	}
 
+	stopWatch()
+
 	if o.detach {
 		if o.jsonOut {
 			os.Stdout.Write(rawJSON)
@@ -358,6 +389,12 @@ func doRun(socket string, args []string) error {
 		fmt.Fprintf(os.Stderr, "%s\n", out.ID)
 	}
 
+	select {
+	case <-interrupted: // Ctrl+C while the container was being started
+		return killRunContainer(socket, out.ID)
+	default:
+	}
+
 	logCtx, logCancel := context.WithCancel(context.Background())
 	defer logCancel()
 	logDone := make(chan error, 1)
@@ -369,32 +406,33 @@ func doRun(socket string, args []string) error {
 		logDone <- err
 	}()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(sigCh)
-
 	select {
+	case <-interrupted:
 	case <-sigCh:
-		logCancel()
-		killCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		defer cancel()
-		if err := doKillWithContext(killCtx, socket, out.ID); err != nil {
-			if !httpStatusNotFound(err) {
-				fmt.Fprintf(os.Stderr, "nyx: kill: %v\n", err)
-				return err
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "SIGKILL sent to %s\n", out.ID)
-		}
-		return nil
 	case err := <-logDone:
-		logCancel()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "nyx: log stream: %v\n", err)
 			return err
 		}
 		return nil
 	}
+	logCancel()
+	return killRunContainer(socket, out.ID)
+}
+
+// killRunContainer SIGKILLs the container of an interrupted foreground run.
+func killRunContainer(socket, id string) error {
+	killCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	if err := doKillWithContext(killCtx, socket, id); err != nil {
+		if !httpStatusNotFound(err) {
+			fmt.Fprintf(os.Stderr, "nyx: kill: %v\n", err)
+			return err
+		}
+		return nil
+	}
+	fmt.Fprintf(os.Stderr, "SIGKILL sent to %s\n", id)
+	return nil
 }
 
 func doStop(socket, id string) error {

@@ -10,9 +10,10 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/hedzr/progressbar"
 	"github.com/zrougamed/nyxd/internal/image"
+	"golang.org/x/term"
 )
 
 func parsePullArgs(args []string) (ref string, jsonOut bool, username, password string, err error) {
@@ -108,35 +109,32 @@ func doPull(socket, ref string, jsonOut bool, username, password string) error {
 	return renderPullStream(resp.Body, ref)
 }
 
+// pullBar is one blob's progress line.
 type pullBar struct {
-	ch   chan int64
-	once sync.Once
+	title     string
+	size, cur int64
+	done      bool
 }
 
-func (b *pullBar) send(delta int64) {
-	if delta > 0 {
-		b.ch <- delta
-	}
-}
-
-func (b *pullBar) close() {
-	b.once.Do(func() { close(b.ch) })
-}
-
+// pullUI draws one progress line per blob. On a terminal the lines are
+// redrawn in place; otherwise each blob gets a single line when it finishes.
+// All drawing happens on the caller's goroutine under mu.
 type pullUI struct {
-	mpb       progressbar.MultiPB
-	bars      map[string]*pullBar
-	lastAbs   map[string]int64
 	mu        sync.Mutex
+	out       io.Writer
+	tty       bool
+	order     []*pullBar
+	bars      map[string]*pullBar
+	drawn     int // bar lines currently on screen (tty)
+	lastDraw  time.Time
 	headerRef string
 }
 
 func newPullUI() *pullUI {
-	mpb := progressbar.New(progressbar.WithOutputDevice(os.Stderr))
 	return &pullUI{
-		mpb:     mpb,
-		bars:    make(map[string]*pullBar),
-		lastAbs: make(map[string]int64),
+		out:  os.Stderr,
+		tty:  term.IsTerminal(int(os.Stderr.Fd())),
+		bars: make(map[string]*pullBar),
 	}
 }
 
@@ -146,78 +144,100 @@ func (u *pullUI) ensureBar(digest string, size int64, subtitle string) {
 	if _, ok := u.bars[digest]; ok {
 		return
 	}
-	pb := &pullBar{ch: make(chan int64, 256)}
-	u.bars[digest] = pb
-
 	title := shortDigest(digest)
 	if subtitle != "" {
 		title = title + "  " + subtitle
 	}
-	max := size
-	if max <= 0 {
-		max = 1 << 30
-	}
-
-	u.mpb.Add(max, title,
-		progressbar.WithBarStepper(0),
-		progressbar.WithBarWorker(func(bar progressbar.PB, exit <-chan struct{}) bool {
-			for {
-				select {
-				case d, ok := <-pb.ch:
-					if !ok {
-						_, ub, p := bar.Bounds()
-						if ub > 0 && p < ub {
-							bar.Step(ub - p)
-						}
-						return false
-					}
-					if d > 0 {
-						bar.Step(d)
-					}
-				case <-exit:
-					return false
-				}
-			}
-		}),
-	)
+	b := &pullBar{title: title, size: size}
+	u.bars[digest] = b
+	u.order = append(u.order, b)
+	u.redraw(true)
 }
 
+// progress records current, the absolute byte count for digest.
 func (u *pullUI) progress(digest string, current int64) {
 	u.mu.Lock()
-	pb, ok := u.bars[digest]
-	last := u.lastAbs[digest]
-	u.mu.Unlock()
-	if !ok || pb == nil {
-		return
-	}
-	delta := current - last
-	if delta < 0 {
-		delta = 0
-	}
-	u.mu.Lock()
-	u.lastAbs[digest] = current
-	u.mu.Unlock()
-	if delta > 0 {
-		pb.send(delta)
+	defer u.mu.Unlock()
+	if b, ok := u.bars[digest]; ok && current > b.cur {
+		b.cur = current
+		u.redraw(false)
 	}
 }
 
 func (u *pullUI) closeDigest(digest string) {
 	u.mu.Lock()
-	pb, ok := u.bars[digest]
-	u.mu.Unlock()
-	if ok && pb != nil {
-		pb.close()
+	defer u.mu.Unlock()
+	b, ok := u.bars[digest]
+	if !ok || b.done {
+		return
+	}
+	b.done = true
+	if b.size > 0 {
+		b.cur = b.size
+	}
+	if !u.tty {
+		fmt.Fprintln(u.out, b.line())
+		return
+	}
+	u.redraw(true)
+}
+
+// note prints a line above the progress lines.
+func (u *pullUI) note(format string, args ...any) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.tty && u.drawn > 0 {
+		fmt.Fprintf(u.out, "\x1b[%dA\r\x1b[J", u.drawn)
+		u.drawn = 0
+	}
+	fmt.Fprintf(u.out, format, args...)
+	if u.tty {
+		u.redraw(true)
 	}
 }
 
 func (u *pullUI) Close() {
 	u.mu.Lock()
-	for _, pb := range u.bars {
-		pb.close()
+	defer u.mu.Unlock()
+	if u.tty {
+		u.redraw(true)
 	}
-	u.mu.Unlock()
-	u.mpb.Close()
+}
+
+// redraw repaints the bar lines in place, at most ten times a second
+// unless forced. Callers hold mu.
+func (u *pullUI) redraw(force bool) {
+	if !u.tty || (!force && time.Since(u.lastDraw) < 100*time.Millisecond) {
+		return
+	}
+	u.lastDraw = time.Now()
+	var sb strings.Builder
+	if u.drawn > 0 {
+		fmt.Fprintf(&sb, "\x1b[%dA", u.drawn)
+	}
+	for _, b := range u.order {
+		sb.WriteString("\r\x1b[2K")
+		sb.WriteString(b.line())
+		sb.WriteByte('\n')
+	}
+	u.drawn = len(u.order)
+	_, _ = io.WriteString(u.out, sb.String())
+}
+
+func (b *pullBar) line() string {
+	const width = 30
+	if b.size <= 0 {
+		if b.done {
+			return fmt.Sprintf("  %s  done  %s", b.title, humanSize(b.cur))
+		}
+		return fmt.Sprintf("  %s  %s", b.title, humanSize(b.cur))
+	}
+	n := int(min(b.cur, b.size) * width / b.size)
+	bar := strings.Repeat("=", n) + strings.Repeat(" ", width-n)
+	if !b.done && n < width {
+		bar = strings.Repeat("=", n) + ">" + strings.Repeat(" ", width-n-1)
+	}
+	return fmt.Sprintf("  %s  [%s]  %s / %s", b.title, bar, humanSize(min(b.cur, b.size)), humanSize(b.size))
 }
 
 func renderPullStream(r io.Reader, ref string) error {
@@ -241,18 +261,18 @@ func renderPullStream(r io.Reader, ref string) error {
 		case "begin":
 			ui.headerRef = ev.Ref
 			if ev.Ref != "" {
-				fmt.Fprintf(os.Stderr, "\n→ Pulling %s\n\n", ev.Ref)
+				ui.note("\n→ Pulling %s\n\n", ev.Ref)
 			}
 		case "manifest":
 			// optional context
 		case "auth":
 		case "meta":
-			fmt.Fprintf(os.Stderr, "%s\n", ev.Message)
+			ui.note("%s\n", ev.Message)
 		case "config":
 			ui.ensureBar(ev.Digest, ev.Size, "config")
 		case "layer":
 			if ev.Cached {
-				fmt.Fprintf(os.Stderr, "  • %s  (already present)\n", shortDigest(ev.Digest))
+				ui.note("  • %s  (already present)\n", shortDigest(ev.Digest))
 				continue
 			}
 			ui.ensureBar(ev.Digest, ev.Size, "layer")
@@ -315,17 +335,17 @@ func consumeRunPullStream(r io.Reader, ref string) (string, string, error) {
 		case "begin":
 			ui.headerRef = ev.Ref
 			if ev.Ref != "" {
-				fmt.Fprintf(os.Stderr, "\n→ Pulling %s\n\n", ev.Ref)
+				ui.note("\n→ Pulling %s\n\n", ev.Ref)
 			}
 		case "manifest":
 		case "auth":
 		case "meta":
-			fmt.Fprintf(os.Stderr, "%s\n", ev.Message)
+			ui.note("%s\n", ev.Message)
 		case "config":
 			ui.ensureBar(ev.Digest, ev.Size, "config")
 		case "layer":
 			if ev.Cached {
-				fmt.Fprintf(os.Stderr, "  • %s  (already present)\n", shortDigest(ev.Digest))
+				ui.note("  • %s  (already present)\n", shortDigest(ev.Digest))
 				continue
 			}
 			ui.ensureBar(ev.Digest, ev.Size, "layer")
