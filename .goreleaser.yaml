@@ -1,0 +1,194 @@
+# GoReleaser config for tagged releases (.github/workflows/release.yml) and
+# local snapshots (`make snapshot`). See docs/packaging.md.
+version: 2
+project_name: nyxd
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  # The daemon is Linux-only (namespaces, overlayfs, crun).
+  - id: nyxd
+    main: ./cmd/nyxd
+    binary: nyxd
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -w -s -X main.version={{ .Tag }} -X main.gitCommit={{ .ShortCommit }} -X main.buildDate={{ .Date }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  # The client: Linux, macOS (talks to nyxd over a Unix socket, e.g. in a VM)
+  # and Windows (drives nyxd in the nyx WSL2 distro).
+  - id: nyx
+    main: ./cmd/nyx
+    binary: nyx
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -w -s -X main.version={{ .Tag }} -X main.gitCommit={{ .ShortCommit }} -X main.buildDate={{ .Date }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  # nyxd_<version>_<os>_<arch>.tar.gz (.zip on Windows): nyxd and nyx on
+  # Linux, nyx alone elsewhere.
+  - id: archive
+    ids: [nyxd, nyx]
+    allow_different_binary_count: true
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+  # Bare binaries under the names earlier releases used (nyx-windows-amd64.exe,
+  # nyxd-linux-arm64, ...); docs and install scripts link to them.
+  - id: raw-nyxd
+    ids: [nyxd]
+    formats: [binary]
+    name_template: "{{ .Binary }}-{{ .Os }}-{{ .Arch }}"
+  - id: raw-nyx
+    ids: [nyx]
+    formats: [binary]
+    name_template: "{{ .Binary }}-{{ .Os }}-{{ .Arch }}"
+
+nfpms:
+  - id: packages
+    ids: [nyxd, nyx]
+    package_name: nyxd
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: nyxd
+    homepage: https://github.com/zrougamed/nyxd
+    maintainer: Mohamed Zrouga <med@zrouga.email>
+    description: |-
+      Minimal OCI container orchestrator: crun plus a small control plane.
+      Runs containers and compose projects, builds images from Dockerfiles,
+      as root or rootless. No Docker, Podman or containerd needed.
+    license: PolyForm-Noncommercial-1.0.0
+    section: admin
+    formats: [deb, rpm, apk, archlinux]
+    bindir: /usr/bin
+    dependencies:
+      - crun
+    overrides:
+      deb:
+        recommends: [uidmap]
+      rpm:
+        recommends: [shadow-utils]
+      apk:
+        dependencies: [crun, shadow-uidmap]
+      archlinux:
+        dependencies: [crun]
+    contents:
+      - src: packaging/linux/nyxd.service
+        dst: /usr/lib/systemd/system/nyxd.service
+        packager: deb
+        file_info:
+          mode: 0644
+      - src: packaging/linux/nyxd.service
+        dst: /usr/lib/systemd/system/nyxd.service
+        packager: rpm
+        file_info:
+          mode: 0644
+      - src: packaging/linux/nyxd.service
+        dst: /usr/lib/systemd/system/nyxd.service
+        packager: archlinux
+        file_info:
+          mode: 0644
+      - src: packaging/linux/nyxd-user.service
+        dst: /usr/lib/systemd/user/nyxd.service
+        packager: deb
+        file_info:
+          mode: 0644
+      - src: packaging/linux/nyxd-user.service
+        dst: /usr/lib/systemd/user/nyxd.service
+        packager: rpm
+        file_info:
+          mode: 0644
+      - src: packaging/linux/nyxd-user.service
+        dst: /usr/lib/systemd/user/nyxd.service
+        packager: archlinux
+        file_info:
+          mode: 0644
+      - src: packaging/linux/nyxd.openrc
+        dst: /etc/init.d/nyxd
+        packager: apk
+        file_info:
+          mode: 0755
+      - src: LICENSE
+        dst: /usr/share/licenses/nyxd/LICENSE
+        file_info:
+          mode: 0644
+      - dst: /var/lib/nyxd
+        type: dir
+        file_info:
+          mode: 0711
+    scripts:
+      postinstall: packaging/linux/postinstall.sh
+      preremove: packaging/linux/preremove.sh
+    # Native package signatures with the release GPG key (NFPM_KEY_FILE, an
+    # armored private key, and NFPM_PASSPHRASE). apk signatures are RSA, not
+    # GPG: set NFPM_APK_KEY_FILE to an RSA key to sign them, else they are
+    # covered by the detached .sig below. Unset in snapshots: unsigned.
+    deb:
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+        type: origin
+    rpm:
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+    apk:
+      signature:
+        key_file: '{{ envOrDefault "NFPM_APK_KEY_FILE" "" }}'
+        key_name: nyxd
+
+checksum:
+  # One checksums.txt (sha256sum format) for everything, signed below.
+  name_template: checksums.txt
+  algorithm: sha256
+
+signs:
+  # A detached binary GPG signature (<file>.sig) for checksums.txt and for
+  # every archive, package and bare binary. pacman checks package .sig files
+  # of exactly this form.
+  - &gpg
+    id: archives
+    artifacts: archive
+    signature: "${artifact}.sig"
+    cmd: gpg
+    args:
+      - --batch
+      - --yes
+      - --pinentry-mode=loopback
+      - --passphrase-fd=0
+      - --local-user={{ .Env.GPG_FINGERPRINT }}
+      - --output=${signature}
+      - --detach-sign
+      - ${artifact}
+    stdin: "{{ .Env.GPG_PASSPHRASE }}"
+  - <<: *gpg
+    id: packages
+    artifacts: package
+  - <<: *gpg
+    id: binaries
+    artifacts: binary
+  - <<: *gpg
+    id: checksums
+    artifacts: checksum
+
+release:
+  github:
+    owner: zrougamed
+    name: nyxd
+  # WSL2 distro tarballs (scripts/build-wsl-rootfs.sh, signed by the workflow)
+  # and the public key that verifies everything.
+  extra_files:
+    - glob: ./dist-extra/*
+
+changelog:
+  use: github-native

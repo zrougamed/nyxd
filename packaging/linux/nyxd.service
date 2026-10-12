@@ -1,0 +1,24 @@
+# Installed by the nyxd deb/rpm/Arch packages as
+# /usr/lib/systemd/system/nyxd.service. Override flags with
+# `systemctl edit nyxd`; members of the "nyx" group can use nyx without sudo.
+
+[Unit]
+Description=nyxd - lightweight OCI container orchestrator
+Documentation=https://github.com/zrougamed/nyxd
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/nyxd -socket-group nyx -log-level info
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=60s
+# crun forks container processes that must outlive a daemon restart.
+KillMode=process
+Delegate=yes
+LimitNOFILE=65536
+LimitNPROC=infinity
+
+[Install]
+WantedBy=multi-user.target
