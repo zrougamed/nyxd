@@ -19,6 +19,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -52,7 +53,7 @@ func Run(t *testing.T, tmpfs ...string) bool {
 		return true
 	}
 
-	cmd := exec.Command(os.Args[0], childArgs(t.Name())...)
+	cmd := exec.Command(os.Args[0], childArgs(t)...)
 	cmd.Env = append(os.Environ(), envTest+"="+t.Name())
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags:  syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWNET | syscall.CLONE_NEWUTS | syscall.CLONE_NEWIPC,
@@ -90,18 +91,24 @@ func loopbackUp() error {
 	return unix.IoctlIfreq(fd, unix.SIOCSIFFLAGS, ifr)
 }
 
-// childArgs runs only test name, keeping coverage output (-test.gocoverdir
-// files are per process; a shared -test.coverprofile would be overwritten).
-func childArgs(name string) []string {
-	parts := strings.Split(name, "/")
+// childArgs runs only t, keeping coverage output (-test.gocoverdir files are
+// per process; a shared -test.coverprofile would be overwritten). The child
+// times out a little before t, so a hang shows the child's goroutines rather
+// than the parent waiting on it.
+func childArgs(t *testing.T) []string {
+	parts := strings.Split(t.Name(), "/")
 	for i, p := range parts {
 		parts[i] = "^" + regexp.QuoteMeta(p) + "$"
 	}
 	args := []string{"-test.run=" + strings.Join(parts, "/"), "-test.v", "-test.count=1"}
 	for _, a := range os.Args[1:] {
-		if strings.HasPrefix(a, "-test.gocoverdir=") || strings.HasPrefix(a, "-test.timeout=") {
+		if strings.HasPrefix(a, "-test.gocoverdir=") {
 			args = append(args, a)
 		}
+	}
+	if d, ok := t.Deadline(); ok {
+		left := time.Until(d)
+		args = append(args, "-test.timeout="+(left-min(left/10, 30*time.Second)).String())
 	}
 	return args
 }
