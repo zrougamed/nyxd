@@ -455,7 +455,7 @@ func TestHumanizeAllBranches(t *testing.T) {
 	if got := HumanizeComposeBuildError(fmt.Errorf("bad yaml")); got != "bad yaml" {
 		t.Errorf("compose other error: %q", got)
 	}
-	if got := TrimUserMessage(fmt.Errorf("%s", strings.Repeat("x", 1000))); len(got) > 430 {
+	if got := TrimUserMessage(fmt.Errorf("%s", strings.Repeat("x", 2000))); len(got) > 1010 {
 		t.Errorf("not capped: %d", len(got))
 	}
 }

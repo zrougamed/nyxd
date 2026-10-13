@@ -61,13 +61,18 @@ func HumanizeComposeBuildError(err error) string {
 	return TrimUserMessage(err)
 }
 
-// TrimUserMessage collapses whitespace and caps length for errors shown to API clients
-// when no specialized humanization applies (e.g. container start failures).
+// TrimUserMessage trims and caps errors shown to API clients when no
+// specialized humanization applies (e.g. container start failures). Line
+// breaks are kept: messages that carry a hint put it on its own line.
 func TrimUserMessage(err error) string {
 	if err == nil {
 		return ""
 	}
-	return trimErrLine(err.Error(), 420)
+	s := strings.TrimSpace(err.Error())
+	if r := []rune(s); len(r) > 1000 {
+		s = string(r[:1000]) + "…"
+	}
+	return s
 }
 
 func trimErrLine(s string, max int) string {

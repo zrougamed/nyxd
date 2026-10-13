@@ -147,6 +147,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /v1/compose/down", s.handleComposeDown)
 	mux.HandleFunc("POST /v1/images/pull", s.handleImagePull)
 	mux.HandleFunc("GET /v1/images", s.handleImagesList)
+	mux.HandleFunc("GET /v1/images/inspect", s.handleImageInspect)
 	mux.HandleFunc("POST /v1/images/remove", s.handleImagesRemove)
 	mux.HandleFunc("POST /v1/images/prune", s.handleImagesPrune)
 	mux.HandleFunc("POST /v1/build", s.handleBuild)
@@ -494,6 +495,9 @@ type composeProjectRequest struct {
 	ContextDir    string `json:"context_dir,omitempty"`
 	Project       string `json:"project,omitempty"`
 	RemoveVolumes bool   `json:"remove_volumes,omitempty"`
+	// RegistryAuth is credentials by registry host for the pulls of compose up
+	// (nyx fills it from its login files); per-service registry_username wins.
+	RegistryAuth image.AuthMap `json:"registry_auth,omitempty"`
 }
 
 // loadComposeProject parses the compose document from body (file path or inline yaml)
@@ -520,7 +524,7 @@ func (s *Server) loadComposeProject(body composeProjectRequest) (*compose.Stack,
 		}
 		composeDir = filepath.Dir(abs)
 		if strings.TrimSpace(body.Project) == "" {
-			body.Project = compose.DefaultProjectFromComposeFile(abs)
+			body.Project = compose.ProjectName(st, abs)
 		}
 	} else {
 		composeDir = strings.TrimSpace(body.ContextDir)
@@ -537,6 +541,9 @@ func (s *Server) loadComposeProject(body composeProjectRequest) (*compose.Stack,
 			return nil, "", "", err
 		}
 		if strings.TrimSpace(body.Project) == "" {
+			body.Project = st.Name
+		}
+		if strings.TrimSpace(body.Project) == "" {
 			body.Project = filepath.Base(composeDir)
 		}
 	}
@@ -544,6 +551,8 @@ func (s *Server) loadComposeProject(body composeProjectRequest) (*compose.Stack,
 	if project == "" {
 		project = "compose"
 	}
+	st.SetBuildImages(project)
+	st.Name = project
 	return st, composeDir, project, nil
 }
 
@@ -572,22 +581,38 @@ func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
 		ComposeDir: composeDir,
 		Project:    project,
 		DataDir:    s.dataDir,
+		Auth:       body.RegistryAuth,
 	}, s.store, s.netDriver, s.dnsMode)
 	if err != nil {
 		http.Error(w, image.HumanizeComposeBuildError(err), http.StatusBadRequest)
 		return
 	}
+	var warnings []string
+	if strings.EqualFold(s.netDriver, "host") {
+		warnings = compose.HostNetworkWarnings(st)
+		for _, wmsg := range warnings {
+			s.log.Warn("compose up: host network", "project", project, "warning", wmsg)
+		}
+	}
 	if err := s.sup.StartComposeUp(baseCtx, specs); err != nil {
 		s.log.Warn("compose up", "err", err)
-		http.Error(w, image.TrimUserMessage(err), http.StatusBadRequest)
+		msg := image.TrimUserMessage(err)
+		for _, wmsg := range warnings {
+			msg += "\nwarning: " + wmsg
+		}
+		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
 	ids := make([]string, len(specs))
 	for i := range specs {
 		ids[i] = specs[i].ID
 	}
+	resp := map[string]any{"ok": true, "ids": ids}
+	if len(warnings) > 0 {
+		resp["warnings"] = warnings
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "ids": ids})
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) handleComposeStop(w http.ResponseWriter, r *http.Request) {

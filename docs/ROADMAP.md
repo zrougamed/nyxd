@@ -60,12 +60,13 @@ Legend: `[x]` shipped in tree (still may need polish), `[ ]` not done, `[~]` par
 
 ## Image puller
 
-- [~] **Private / credentialed registries** — pull and push answer the registry auth challenge (Bearer/Basic), so non-Docker-Hub registries work anonymously too; loopback registries use http; `PullWithProgress` accepts `RegistryAuth` (Basic + Bearer token flow); **`POST /v1/images/pull`** / **`POST /v1/containers/run`** / compose per-service `registry_username` / `registry_password`; **`nyx pull -u/--password`**. No `DOCKER_CONFIG` / OAuth refresh yet.
+- [~] **Private / credentialed registries** — pull and push answer the registry auth challenge (Bearer/Basic), so non-Docker-Hub registries work anonymously too; loopback registries use http; `PullWithProgress` accepts `RegistryAuth` (Basic + Bearer token flow); **`POST /v1/images/pull`** / **`POST /v1/containers/run`** / compose per-service `registry_username` / `registry_password`; **`nyx pull -u/--password`**. Logins: **`nyx login` / `logout`** (own `auth.json`), podman `auth.json` and docker `config.json` (incl. `credHelpers` / `credsStore`) are read by `nyx` and sent per request (`registry_auth` for compose up, `X-Registry-Config` for build); `nyxd` stores none. No OAuth identity tokens yet.
 - [ ] **Image signature / policy enforcement** — no cosign / Notary-style verify-before-run; pulled blobs are digest-checked for transport integrity only.
 - [ ] **Registry mirror for pulls** — no `HTTP_PROXY`-style mirror host or `--registry-mirror` for air-gapped or restricted-network pulls.
 - [x] **Resume partial downloads** — incomplete layer/config fetch keeps `<blob>.partial` and resumes with `Range` when the registry returns `206`; falls back to full re-download if the server ignores ranges.
 - [x] **Platform override** — index picks `wantOS`/`wantArch` from `Store.SetPlatform` or `runtime.GOOS`/`GOARCH`; `nyxd -pull-platform` sets the store.
 - [x] **Garbage collection (blobs)** — `Store.PruneUnreferencedBlobs` removes `blobs/sha256/*` not referenced by any `images/**/manifest.json`; invoked from `RemoveImage` (therefore also during `PruneImagesNotIn` / image prune).
+- [x] **Slow / stalled layer downloads** — no whole-request HTTP timeout (it used to cut any layer taking over 30s); per-phase dial / TLS / header limits plus a 60s no-data watchdog, and an interrupted blob resumes from its `.partial` with `Range` (up to 5 attempts).
 - [~] **`fetchBlob` return path** — layer pulls use **`fetchBlobToDisk`** (stream + verify + rename, no full-blob `ReadFile` after write). Small config blobs still use `fetchBlob` which re-reads from disk (acceptable size).
 
 **Done / partial**
@@ -121,6 +122,9 @@ Legend: `[x]` shipped in tree (still may need polish), `[ ]` not done, `[~]` par
 - [x] **`depends_on` at runtime** — **`ParseFile`** (`.env` + `${VAR}` substitution), **`BuildContainerSpecs`**, **`POST /v1/compose/up`**, **`nyx compose up`**; **`POST /v1/compose/stop`** / **`down`** + **`nyx compose stop|down`** (default compose filename order: see **`internal/compose/discover.go`** and [USAGE.md](USAGE.md)).
 - [x] **Variable substitution** — `${VAR}`, `$VAR`, `${VAR:-default}`, `$$`; `.env` merged then overridden by process env (compose-spec order).
 - [x] **Volume / bind mount model** — compose `volumes:` lines → **`ContainerSpec.ExtraMounts`** → **`bundle.Options.ExtraMounts`**; named volumes require a top-level **`volumes:`** entry; host dirs under **`{baseDir}/volumes/<project>/<name>/`**. **`compose down -v`** removes those dirs when **`supervisor.IsBindSourceInUse`** reports no remaining mount reference.
+
+- [x] **`env_file:`** (string, list, long form with `required:`) and top-level **`name:`** as the default project.
+- [x] **`build:`** — short and long form (`context`, `dockerfile`, `args`, `target`); **`nyx compose up`** builds missing images (all with **`--build`**) before starting; default image `{project}-{service}:latest`; the daemon never pulls a `build:` image. Remote git/URL contexts not supported.
 
 **Gaps**
 
@@ -249,7 +253,7 @@ See [windows](windows.md).
 
 - [ ] **Default seccomp JSON artifact** — bundle supports hardening fields; no curated default profile shipped beside comments in older specs.
 - [ ] **AppArmor** — no profile generation or integration.
-- [~] **Rootless** — `nyxd` as a normal user re-execs into its own user namespace (`newuidmap`/`newgidmap` + subordinate IDs, single-ID fallback), overlay `userxattr`, `-net-driver=host`, `nyxd unshare`, systemd user unit, CI smoke test. Not yet: cgroup v2 delegation (limits are dropped), isolated rootless networks / published ports via `pasta`.
+- [~] **Rootless** — `nyxd` as a normal user re-execs into its own user namespace (`newuidmap`/`newgidmap` + subordinate IDs, single-ID fallback), overlay `userxattr`, `-net-driver=host`, `nyxd unshare`, systemd user unit, CI smoke test. Host-network extras: published ports forwarded in-process (TCP/UDP, restored on re-adopt), `/etc/hosts` with the stack's service names, early error for ports below `ip_unprivileged_port_start`, compose warnings for `internal:` networks and port clashes. Not yet: cgroup v2 delegation (limits are dropped), isolated rootless networks via `pasta`.
 
 **Done / partial**
 

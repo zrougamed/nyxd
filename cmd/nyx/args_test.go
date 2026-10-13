@@ -75,6 +75,12 @@ func TestRegistryCredentials(t *testing.T) {
 		t.Error("env credentials")
 	}
 	t.Setenv("NYX_REGISTRY_USERNAME", "")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", home)
+	t.Setenv("NYX_AUTH_FILE", "")
+	t.Setenv("REGISTRY_AUTH_FILE", "")
 	dir := t.TempDir()
 	t.Setenv("DOCKER_CONFIG", dir)
 	if u, _ := registryCredentials("x"); u != "" {
@@ -90,7 +96,8 @@ func TestRegistryCredentials(t *testing.T) {
 			t.Errorf("%s: %q", ref, u)
 		}
 	}
-	if u, _ := dockerConfigAuth([]byte("{"), "x"); u != "" {
+	_ = os.WriteFile(filepath.Join(dir, "config.json"), []byte("{"), 0o644)
+	if u, _ := registryCredentials("x"); u != "" {
 		t.Error("broken config")
 	}
 	t.Setenv("DOCKER_CONFIG", "")

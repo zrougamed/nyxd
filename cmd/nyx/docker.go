@@ -211,7 +211,7 @@ func doPS(socket string, args []string) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("ps: %s: %s", resp.Status, bytes.TrimSpace(body))
+		return fmt.Errorf("ps: %w", daemonError(resp.StatusCode, body))
 	}
 
 	var out struct {
@@ -299,7 +299,7 @@ func doRemoveOne(socket, id string) error {
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: %s", resp.Status, bytes.TrimSpace(b))
+		return daemonError(resp.StatusCode, b)
 	}
 	return nil
 }
@@ -352,7 +352,7 @@ func streamContainerLogs(ctx context.Context, socket, id string, dest io.Writer)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return fmt.Errorf("%s: %s", resp.Status, bytes.TrimSpace(b))
+		return daemonError(resp.StatusCode, b)
 	}
 	_, err = io.Copy(dest, resp.Body)
 	if err != nil && ctx.Err() != nil {
@@ -420,7 +420,7 @@ func doLogs(socket string, args []string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("logs: %s: %s", resp.Status, bytes.TrimSpace(b))
+		return fmt.Errorf("logs: %w", daemonError(resp.StatusCode, b))
 	}
 	_, err = io.Copy(os.Stdout, resp.Body)
 	return err
@@ -477,7 +477,7 @@ func doImageList(socket string) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("image ls: %s: %s", resp.Status, bytes.TrimSpace(body))
+		return fmt.Errorf("image ls: %w", daemonError(resp.StatusCode, body))
 	}
 	var out struct {
 		Images []string `json:"images"`
@@ -505,7 +505,7 @@ func doImageRmOne(socket, ref string) error {
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: %s", resp.Status, bytes.TrimSpace(b))
+		return daemonError(resp.StatusCode, b)
 	}
 	return nil
 }
@@ -539,7 +539,7 @@ func doImagePrune(socket string, args []string) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("image prune: %s: %s", resp.Status, bytes.TrimSpace(b))
+		return fmt.Errorf("image prune: %w", daemonError(resp.StatusCode, b))
 	}
 	var out struct {
 		OK      bool     `json:"ok"`

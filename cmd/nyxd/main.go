@@ -187,7 +187,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		driver = "native"
 		net = native.NewManager(logger)
 	case "host":
-		net = network.HostBackend{}
+		net = network.NewHostBackend()
 	default:
 		return fmt.Errorf("unknown -net-driver %q (use native, cni or host)", cfg.NetDriver)
 	}

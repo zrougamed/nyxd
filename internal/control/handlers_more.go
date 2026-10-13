@@ -205,6 +205,26 @@ func (s *Server) handleImagesList(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"images": refs})
 }
 
+// handleImageInspect answers 200 {"ref","id"} when ref is in the local store, else 404.
+func (s *Server) handleImageInspect(w http.ResponseWriter, r *http.Request) {
+	if s.store == nil {
+		http.Error(w, "image store not available", http.StatusServiceUnavailable)
+		return
+	}
+	ref := strings.TrimSpace(r.URL.Query().Get("ref"))
+	if ref == "" {
+		http.Error(w, "missing ref", http.StatusBadRequest)
+		return
+	}
+	m, _, _, err := s.store.ResolvePulledImage(ref)
+	if err != nil {
+		http.Error(w, "image not found: "+ref, http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"ref": ref, "id": m.Config.Digest})
+}
+
 type imageRemoveRequest struct {
 	Ref string `json:"ref"`
 }

@@ -230,11 +230,11 @@ func TestReadoptAfterDaemonRestart(t *testing.T) {
 	}
 	d := setup(t)
 	ctx := context.Background()
-	for _, id := range []string{"keep", "orphan"} {
+	for i, id := range []string{"keep", "orphan"} {
 		// Policy never: the first supervisor stands for a daemon that is gone;
 		// it must not restart what the second one stops.
 		sp := spec(t, d, id, supervisor.RestartNever, "", "sleep", "300")
-		sp.PortMappings = []network.PortMapping{{HostPort: 1, ContainerPort: 2}}
+		sp.PortMappings = []network.PortMapping{{HostPort: 18001 + 10*i, ContainerPort: 18002 + 10*i}}
 		if err := d.Sup.Start(ctx, sp); err != nil {
 			t.Fatal(err)
 		}
@@ -260,7 +260,7 @@ func TestReadoptAfterDaemonRestart(t *testing.T) {
 	}
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	sup2 := supervisor.New(d.Runtime, d.Overlay, network.HostBackend{}, d.Base, log, d.Logs, d.Store, nil, "host", "auto", "")
+	sup2 := supervisor.New(d.Runtime, d.Overlay, network.NewHostBackend(), d.Base, log, d.Logs, d.Store, nil, "host", "auto", "")
 	sup2.SetRootless(true, false)
 	got := strings.Join(sup2.List(), ",")
 	if !strings.Contains(got, "keep") || !strings.Contains(got, "orphan") {
@@ -335,7 +335,7 @@ func TestNativeNetworkAndDNS(t *testing.T) {
 
 func TestNewWithoutDNS(t *testing.T) {
 	// nil DNS backend defaults to no-op; nothing to reconcile in an empty dir.
-	s := supervisor.New(nil, nil, network.HostBackend{}, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, "host", "", "")
+	s := supervisor.New(nil, nil, network.NewHostBackend(), t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, "host", "", "")
 	if len(s.List()) != 0 || len(s.ImageRefsInUse()) != 0 {
 		t.Fatal("new supervisor not empty")
 	}
@@ -453,7 +453,7 @@ func TestShutdownAndForcedPaths(t *testing.T) {
 
 	// No log collector; resource limits dropped without cgroups; compose
 	// internal network options passed to the backend.
-	plain := supervisor.New(d.Runtime, d.Overlay, network.HostBackend{}, d.Base, log, nil, d.Store, nil, "host", "auto", "")
+	plain := supervisor.New(d.Runtime, d.Overlay, network.NewHostBackend(), d.Base, log, nil, d.Store, nil, "host", "auto", "")
 	plain.SetRootless(true, false)
 	sp := spec(t, d, "nolog", supervisor.RestartNever, "", "sh", "-c", "echo x; sleep 300")
 	sp.Resources = &bundle.Resources{}
@@ -486,7 +486,7 @@ func TestShutdownAndForcedPaths(t *testing.T) {
 	if err := d.Sup.Start(context.Background(), stub); err != nil {
 		t.Fatal(err)
 	}
-	sup2 := supervisor.New(d.Runtime, d.Overlay, network.HostBackend{}, d.Base, log, d.Logs, d.Store, nil, "host", "auto", "")
+	sup2 := supervisor.New(d.Runtime, d.Overlay, network.NewHostBackend(), d.Base, log, d.Logs, d.Store, nil, "host", "auto", "")
 	sup2.SetRootless(true, false)
 	if err := sup2.Stop(context.Background(), "stubborn2"); err != nil {
 		t.Fatalf("forced stop: %v", err)

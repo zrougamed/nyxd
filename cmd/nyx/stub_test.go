@@ -71,16 +71,16 @@ func TestClientAgainstBrokenDaemon(t *testing.T) {
 		want  string // in error (or stderr); "" = must succeed
 		inOut string // must appear in stdout+stderr
 	}{
-		{"ping 500", reply(500, "down"), []string{"ping"}, "ping: 500", ""},
-		{"version 500", reply(500, "down"), []string{"version"}, "version: 500", ""},
-		{"ps 500", reply(500, "x"), []string{"ps"}, "ps: 500", ""},
+		{"ping 500", reply(500, "down"), []string{"ping"}, "ping: down", ""},
+		{"version 500", reply(500, "down"), []string{"version"}, "version: down", ""},
+		{"ps 500", reply(500, "store gone"), []string{"ps"}, "ps: store gone", ""},
 		{"ps bad json", reply(200, "{"), []string{"ps"}, "decode", ""},
 		{"ps formats", reply(200, `{"containers":["c"],"items":[{"id":"`+strings.Repeat("a", 40)+`","short_id":"","image":"`+strings.Repeat("i", 40)+`","status":"running"}]}`),
 			[]string{"ps"}, "", "..."},
 		{"ps -q ids", reply(200, `{"items":[{"id":"full-id","short_id":"","image":"x","status":"running"}]}`), []string{"ps", "-q"}, "", "full-id"},
-		{"image ls 500", reply(500, "x"), []string{"image", "ls"}, "image ls: 500", ""},
+		{"image ls 500", reply(500, "store gone"), []string{"image", "ls"}, "image ls: store gone", ""},
 		{"image ls bad json", reply(200, "{"), []string{"image", "ls"}, "", ""},
-		{"image prune 500", reply(500, "x"), []string{"image", "prune"}, "image prune: 500", ""},
+		{"image prune 500", reply(500, "store gone"), []string{"image", "prune"}, "image prune: store gone", ""},
 		{"image prune bad json", reply(200, "{"), []string{"image", "prune"}, "", ""},
 		{"image prune nothing", reply(200, `{"ok":true,"removed":[]}`), []string{"image", "prune"}, "", "nothing to prune"},
 		{"compose up bad json", reply(200, "{"), []string{"compose", "up", "-f", cfile}, "bad response", ""},
@@ -99,8 +99,8 @@ func TestClientAgainstBrokenDaemon(t *testing.T) {
 		{"run log stream fails", routes(map[string]http.HandlerFunc{
 			"/run":  reply(200, "{\"phase\":\"run\",\"ok\":true,\"container_id\":\"c1\"}\n\n"),
 			"/logs": reply(500, "no logs"),
-		}), []string{"run", "x"}, "500", ""},
-		{"pull --json 500", reply(500, "x"), []string{"pull", "--json", "x"}, "500", ""},
+		}), []string{"run", "x"}, "no logs", ""},
+		{"pull --json 500", reply(500, "pull exploded"), []string{"pull", "--json", "x"}, "pull: pull exploded", ""},
 		{"pull stream decode", reply(200, "\n{bad\n\n"), []string{"pull", "x"}, "decode", ""},
 		{"pull stream error", reply(200, "{\"phase\":\"error\",\"message\":\"nope\"}\n\n"), []string{"pull", "x"}, "nope", ""},
 		{"pull stream closed", reply(200, "{\"phase\":\"manifest\"}\n\n"), []string{"pull", "x"}, "closed before completion", ""},
@@ -116,8 +116,10 @@ func TestClientAgainstBrokenDaemon(t *testing.T) {
 		{"build stream", reply(200, "\n{bad}\n{\"stream\":\"step\\n\"}\n{\"error\":\"RUN failed\"}\n"), []string{"build", ctxDir}, "build failed: RUN failed", ""},
 		{"build closed", reply(200, "{\"stream\":\"step\\n\"}\n\n"), []string{"build", ctxDir}, "connection closed", ""},
 		{"build 500", reply(500, "no builder"), []string{"build", ctxDir}, "no builder", ""},
-		{"logs 500", reply(500, "x"), []string{"logs", "c"}, "500", ""},
-		{"exec 500", reply(500, "x"), []string{"exec", "c", "true"}, "exec: 500", ""},
+		{"logs 500", reply(500, "log store broken"), []string{"logs", "c"}, "logs: log store broken", ""},
+		{"json error body", reply(500, `{"error":"daemon says no"}`), []string{"logs", "c"}, "logs: daemon says no", ""},
+		{"empty error body", reply(503, ""), []string{"logs", "c"}, "service unavailable", ""},
+		{"exec 500", reply(500, "no exec"), []string{"exec", "c", "true"}, "exec: no exec", ""},
 		{"exec trailer", reply(200, "partial\nnyxd: exec: crun exec: exit status 3\n"), []string{"exec", "c", "x"}, "exit status 3", "partial"},
 		{"exec bash missing", reply(200, "\nnyxd: exec: executable file `bash` not found in $PATH\n"), []string{"exec", "c", "bash"}, "", ""},
 		{"save 500", reply(500, "x"), []string{"save", "x:1"}, "x", ""},
@@ -126,8 +128,8 @@ func TestClientAgainstBrokenDaemon(t *testing.T) {
 		{"tag 404", reply(404, "nope"), []string{"tag", "a", "b"}, "nope", ""},
 		{"push stream error", reply(200, "{\"phase\":\"error\",\"message\":\"denied\"}\n\n"), []string{"push", "a:1"}, "denied", ""},
 		{"push closed", reply(200, "{\"phase\":\"layer\"}\n\n"), []string{"push", "a:1"}, "", ""},
-		{"stop 500", reply(500, "x"), []string{"stop", "c"}, "500", ""},
-		{"rm 500", reply(500, "x"), []string{"rm", "c"}, "500", ""},
+		{"stop 500", reply(500, "stop failed"), []string{"stop", "c"}, "stop failed", ""},
+		{"rm 500", reply(500, "rm failed"), []string{"rm", "c"}, "rm failed", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			sock := stub(t, c.h)
@@ -142,6 +144,9 @@ func TestClientAgainstBrokenDaemon(t *testing.T) {
 			}
 			if c.want != "" && (err == nil || !strings.Contains(err.Error()+errOut, c.want)) {
 				t.Fatalf("err %v, want %q\n%s", err, c.want, all)
+			}
+			if err != nil && (strings.Contains(err.Error(), "Internal Server Error") || strings.Contains(err.Error(), "Bad Request")) {
+				t.Errorf("HTTP status shown to the user: %v", err)
 			}
 			if c.inOut != "" && !strings.Contains(all, c.inOut) {
 				t.Fatalf("output lacks %q:\n%s", c.inOut, all)

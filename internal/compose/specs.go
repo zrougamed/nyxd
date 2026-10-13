@@ -20,6 +20,7 @@ type UpMeta struct {
 	ComposeDir string
 	Project    string
 	DataDir    string
+	Auth       image.AuthMap // credentials by registry host for pulls
 }
 
 // BuildContainerSpecs resolves images (pull when missing), maps each service in
@@ -43,10 +44,22 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 		}
 		seenImg[img] = struct{}{}
 		if _, _, _, err := store.ResolvePulledImage(img); err != nil {
-			if _, err := store.PullWithProgress(ctx, img, pullAuth(&svc), nil); err != nil {
+			if svc.Build != nil {
+				// Built by the client (nyx compose up), never pulled: a
+				// registry image with the same name would be the wrong one.
+				return nil, fmt.Errorf("service %q: image %q is not built yet (nyx compose up builds it, or run nyx build -t %s)", name, img, img)
+			}
+			if _, err := store.PullWithProgress(ctx, img, pullAuth(&svc, meta.Auth, img), nil); err != nil {
 				return nil, fmt.Errorf("service %q pull %q: %w", name, img, err)
 			}
 		}
+	}
+
+	// On the host network every service shares the loopback: each one can
+	// reach the others by service or container name (see HostAliases).
+	var aliases []string
+	for _, name := range order {
+		aliases = append(aliases, name, composeContainerID(meta.Project, name))
 	}
 
 	out := make([]supervisor.ContainerSpec, 0, len(order))
@@ -105,18 +118,24 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 			return nil, fmt.Errorf("service %q resources: %w", name, err)
 		}
 
+		env, err := ServiceEnv(&svc, meta.ComposeDir)
+		if err != nil {
+			return nil, fmt.Errorf("service %q: %w", name, err)
+		}
+
 		spec := supervisor.ContainerSpec{
 			ID:                 composeContainerID(meta.Project, name),
 			Image:              img,
 			ImageConfig:        cfg,
 			ManifestLayers:     m.Layers,
 			BlobPaths:          paths,
-			Env:                EnvMapToSlice(svc.Environment),
+			Env:                EnvMapToSlice(env),
 			Args:               composeArgs(&svc, cfg),
 			User:               u,
 			PortMappings:       portMaps,
 			ReadOnly:           svc.ReadOnly,
 			Hostname:           strings.TrimSpace(name),
+			HostAliases:        aliases,
 			RestartPolicy:      composeRestartPolicy(svc.Restart),
 			StopTimeout:        time.Duration(svc.StopTimeout.Duration),
 			Healthcheck:        hc,
@@ -135,10 +154,12 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 	return out, nil
 }
 
-func pullAuth(svc *Service) *image.RegistryAuth {
+// pullAuth is the service's own registry_username/password, else the
+// credentials sent for img's registry.
+func pullAuth(svc *Service, auth image.AuthMap, img string) *image.RegistryAuth {
 	u := strings.TrimSpace(svc.RegistryUsername)
 	if u == "" {
-		return nil
+		return auth.For(img)
 	}
 	return &image.RegistryAuth{Username: u, Password: svc.RegistryPassword}
 }

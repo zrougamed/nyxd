@@ -163,6 +163,7 @@ func (s *Supervisor) reconcilePersisted() {
 		s.mu.Unlock()
 
 		s.log.Info("re-adopted supervised container from disk", "id", id, "image", rec.Spec.Image, "ip", rec.IP)
+		s.restoreHostForwards(entry.spec)
 		s.startHealthMonitor(context.Background(), entry)
 		s.registerEmbeddedDNS(rec.Spec, rec.IP)
 		s.wg.Add(1)
@@ -276,6 +277,7 @@ func (s *Supervisor) reconcileCrunOrphans() {
 		s.mu.Unlock()
 
 		s.log.Info("re-adopted container from crun+bundle meta", "id", id, "image", meta.Image, "ip", ip)
+		s.restoreHostForwards(entry.spec)
 		if err := s.persistContainerEntry(entry); err != nil {
 			s.log.Warn("crun orphan reconcile: persist", "id", id, "err", err)
 		}

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/zrougamed/nyxd/pkg/oci"
@@ -26,9 +28,30 @@ import (
 const (
 	defaultRegistry    = "registry-1.docker.io"
 	maxLayerConcurrent = 3
-	pullTimeout        = 10 * time.Minute
+	pullTimeout        = 60 * time.Minute
 	layerBufSize       = 32 * 1024
+	blobAttempts       = 5
+
+	// Per-phase limits for registry HTTP. There is deliberately no
+	// http.Client.Timeout: it also bounds reading the body, so any layer that
+	// takes longer than it to download would be cut off. A stalled body is
+	// caught by blobIdleTimeout instead.
+	dialTimeout   = 30 * time.Second
+	tlsTimeout    = 15 * time.Second
+	headerTimeout = 30 * time.Second
 )
+
+// blobIdleTimeout fails a blob download that stops sending (a var for tests).
+var blobIdleTimeout = 60 * time.Second
+
+// newPullHTTPClient returns the registry client used for pulls.
+func newPullHTTPClient() *http.Client {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.DialContext = (&net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}).DialContext
+	tr.TLSHandshakeTimeout = tlsTimeout
+	tr.ResponseHeaderTimeout = headerTimeout
+	return &http.Client{Transport: tr}
+}
 
 // ParsedRef holds normalized components of an image reference.
 type ParsedRef struct {
@@ -52,8 +75,8 @@ func ParseRef(input string) (ParsedRef, error) {
 
 // RegistryAuth carries optional HTTP Basic credentials for registry pulls.
 type RegistryAuth struct {
-	Username string
-	Password string
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // Store manages OCI blobs and image metadata on disk.
@@ -64,6 +87,28 @@ type Store struct {
 	root     string
 	mu       sync.RWMutex
 	platform string // e.g. "linux/arm64"; empty => runtime.GOOS/GOARCH when pulling indexes
+
+	// blobLocks serialises downloads of one blob: two pulls sharing a layer
+	// (a retried compose up while the first still runs) must not write the
+	// same .partial file at once.
+	blobLocksMu sync.Mutex
+	blobLocks   map[string]*sync.Mutex
+}
+
+// lockBlob takes the download lock for digest and returns its unlock.
+func (s *Store) lockBlob(digest string) func() {
+	s.blobLocksMu.Lock()
+	if s.blobLocks == nil {
+		s.blobLocks = map[string]*sync.Mutex{}
+	}
+	l, ok := s.blobLocks[digest]
+	if !ok {
+		l = &sync.Mutex{}
+		s.blobLocks[digest] = l
+	}
+	s.blobLocksMu.Unlock()
+	l.Lock()
+	return l.Unlock
 }
 
 // NewStore creates (or opens) a blob store at root.
@@ -125,7 +170,7 @@ func (s *Store) PullWithProgress(ctx context.Context, ref string, auth *Registry
 
 	reg, repo, tag := parseRef(ref)
 	client := &registryClient{
-		s: newSession(&http.Client{Timeout: 30 * time.Second}, reg, repo, auth, "pull"),
+		s: newSession(newPullHTTPClient(), reg, repo, auth, "pull"),
 	}
 	client.wantOS, client.wantArch = s.pullPlatform()
 
@@ -238,8 +283,13 @@ func (s *Store) ResolvePulledImage(ref string) (*oci.Manifest, *oci.ImageConfig,
 	paths := make([]string, 0, len(m.Layers))
 	for _, d := range m.Layers {
 		p := s.BlobPath(d.Digest)
-		if _, err := os.Stat(p); err != nil {
+		st, err := os.Stat(p)
+		if err != nil {
 			return nil, nil, nil, fmt.Errorf("missing layer blob %s: %w", d.Digest, err)
+		}
+		if d.Size > 0 && st.Size() != d.Size {
+			// Pulling again replaces it (fetchBlobToDisk checks the size too).
+			return nil, nil, nil, fmt.Errorf("damaged layer blob %s: %d bytes, manifest says %d", d.Digest, st.Size(), d.Size)
 		}
 		paths = append(paths, p)
 	}
@@ -514,21 +564,32 @@ func (s *Store) fetchBlob(ctx context.Context, client *registryClient, desc oci.
 // Interrupted downloads leave "<dest>.partial"; a subsequent pull resumes with HTTP Range when supported.
 func (s *Store) fetchBlobToDisk(ctx context.Context, client *registryClient, desc oci.Descriptor, onProgress func(int64)) error {
 	dest := s.BlobPath(desc.Digest)
+	defer s.lockBlob(desc.Digest)()
 	if st, err := os.Stat(dest); err == nil {
-		if onProgress != nil {
-			onProgress(st.Size())
+		if desc.Size <= 0 || st.Size() == desc.Size {
+			if onProgress != nil {
+				onProgress(st.Size())
+			}
+			return nil
 		}
-		return nil
+		_ = os.Remove(dest) // damaged (wrong size): fetch it again
 	}
 
 	partial := dest + ".partial"
-	for attempt := 0; attempt < 3; attempt++ {
-		err := s.fetchBlobToDiskOnce(ctx, client, desc, dest, partial, onProgress, attempt > 0)
+	forceFull := false
+	for attempt := 0; attempt < blobAttempts; attempt++ {
+		err := s.fetchBlobToDiskOnce(ctx, client, desc, dest, partial, onProgress, forceFull)
 		if err == nil {
 			return nil
 		}
 		if errors.Is(err, errBlobRangeFallback) {
 			_ = os.Remove(partial)
+			forceFull = true
+			continue
+		}
+		// A dropped or stalled stream keeps what it wrote: resume from it.
+		if errors.Is(err, errBlobStream) && ctx.Err() == nil {
+			forceFull = false
 			continue
 		}
 		return err
@@ -536,7 +597,10 @@ func (s *Store) fetchBlobToDisk(ctx context.Context, client *registryClient, des
 	return fmt.Errorf("fetch blob %s: too many retries", desc.Digest)
 }
 
-var errBlobRangeFallback = errors.New("blob: restart without range")
+var (
+	errBlobRangeFallback = errors.New("blob: restart without range")
+	errBlobStream        = errors.New("blob stream interrupted")
+)
 
 func (s *Store) fetchBlobToDiskOnce(ctx context.Context, client *registryClient, desc oci.Descriptor, dest, partial string, onProgress func(int64), forceFull bool) error {
 	var start int64
@@ -603,7 +667,7 @@ func (s *Store) fetchBlobToDiskOnce(ctx context.Context, client *registryClient,
 	buf := make([]byte, layerBufSize)
 	if _, err := io.CopyBuffer(out, tee, buf); err != nil {
 		_ = out.Close()
-		return fmt.Errorf("stream blob: %w", err)
+		return fmt.Errorf("stream blob: %w: %w", errBlobStream, err)
 	}
 	if err := out.Sync(); err != nil {
 		_ = out.Close()
@@ -617,6 +681,12 @@ func (s *Store) fetchBlobToDiskOnce(ctx context.Context, client *registryClient,
 	if got != desc.Digest {
 		_ = os.Remove(partial)
 		return fmt.Errorf("digest mismatch: want %s got %s", desc.Digest, got)
+	}
+	// The hash covers the bytes read, not the file: make sure nothing else
+	// changed the file under us before it becomes the blob.
+	if st, err := os.Stat(partial); err != nil || (desc.Size > 0 && st.Size() != desc.Size) {
+		_ = os.Remove(partial)
+		return errBlobRangeFallback
 	}
 	if err := os.Rename(partial, dest); err != nil {
 		_ = os.Remove(partial)
@@ -746,8 +816,10 @@ func pickIndexDigest(manifests []oci.Descriptor, wantOS, wantArch string) (strin
 
 func (c *registryClient) blob(ctx context.Context, digest string, start int64) (io.ReadCloser, error) {
 	url := c.s.repoURL("blobs/" + digest)
+	ctx, cancel := context.WithCancel(ctx)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	if start > 0 {
@@ -756,23 +828,65 @@ func (c *registryClient) blob(ctx context.Context, digest string, start int64) (
 
 	resp, err := c.s.do(req)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	if start > 0 {
 		if resp.StatusCode == http.StatusOK {
 			resp.Body.Close()
+			cancel()
 			return nil, errBlobRangeFallback
 		}
 		if resp.StatusCode != http.StatusPartialContent {
 			resp.Body.Close()
+			cancel()
 			return nil, fmt.Errorf("blob %s: %s", digest, resp.Status)
 		}
 	} else if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
+		cancel()
 		return nil, fmt.Errorf("blob %s: %s", digest, resp.Status)
 	}
-	return resp.Body, nil
+	return newIdleReader(resp.Body, blobIdleTimeout, cancel), nil
 }
+
+// idleReader cancels the request when no bytes arrive for idle, so a
+// connection that stays open but stops sending fails instead of hanging.
+type idleReader struct {
+	rc      io.ReadCloser
+	idle    time.Duration
+	timer   *time.Timer
+	cancel  context.CancelFunc
+	stalled atomic.Bool
+}
+
+func newIdleReader(rc io.ReadCloser, idle time.Duration, cancel context.CancelFunc) *idleReader {
+	r := &idleReader{rc: rc, idle: idle, cancel: cancel}
+	r.timer = time.AfterFunc(idle, func() {
+		r.stalled.Store(true)
+		cancel()
+	})
+	return r
+}
+
+func (r *idleReader) Read(b []byte) (int, error) {
+	n, err := r.rc.Read(b)
+	if n > 0 {
+		r.timer.Reset(r.idle)
+	}
+	if err != nil && err != io.EOF && r.stalled.Load() {
+		err = fmt.Errorf("no data for %s", r.idle)
+	}
+	return n, err
+}
+
+func (r *idleReader) Close() error {
+	r.timer.Stop()
+	r.cancel()
+	return r.rc.Close()
+}
+
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -790,7 +904,7 @@ func parseRef(ref string) (registry, repo, tag string) {
 
 	parts := strings.SplitN(ref, "/", 2)
 	switch {
-	case len(parts) == 2 && strings.ContainsAny(parts[0], ".:"):
+	case len(parts) == 2 && (strings.ContainsAny(parts[0], ".:") || parts[0] == "localhost"):
 		registry = parts[0]
 		repo = parts[1]
 	case len(parts) == 1:

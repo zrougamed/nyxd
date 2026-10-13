@@ -31,8 +31,8 @@ func Parse(data []byte) (*Stack, error) {
 }
 
 func validateService(name string, svc *Service, all map[string]Service) error {
-	if strings.TrimSpace(svc.Image) == "" {
-		return fmt.Errorf("service %q: missing image", name)
+	if strings.TrimSpace(svc.Image) == "" && svc.Build == nil {
+		return fmt.Errorf("service %q: missing image (or build)", name)
 	}
 	if err := validateRestart(svc.Restart); err != nil {
 		return fmt.Errorf("service %q: %w", name, err)
