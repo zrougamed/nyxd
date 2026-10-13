@@ -39,16 +39,34 @@ pushed localhost:5000/team/demo:1@sha256:d22265207bf9...
 - `localhost`, `127.0.0.1` and `[::1]` registries are reached over plain HTTP, like Docker. Every other registry uses
   HTTPS.
 
-### Credentials
+### Credentials and `nyx login`
 
-Checked in this order:
+A login made with **docker**, **podman** or **nyx** works for every nyx command that talks to a registry
+(`pull`, `run`, `push`, `build` for `FROM` images, `compose up`). Checked in this order, first match wins:
 
-1. `--username USER --password PASS`
+1. `--username USER --password PASS` (pull, push)
 2. `NYX_REGISTRY_USERNAME` and `NYX_REGISTRY_PASSWORD`
-3. The `auths` entries of `~/.docker/config.json` (or `$DOCKER_CONFIG/config.json`), so an existing `docker login`
-   works. Credential helpers (`credsStore`, `credHelpers`) are **not** executed: nyx never runs extra binaries.
+3. **nyx:** `$NYX_AUTH_FILE`, else `~/.config/nyx/auth.json`, written by `nyx login`
+4. **podman:** `$REGISTRY_AUTH_FILE`, `$XDG_RUNTIME_DIR/containers/auth.json`, `~/.config/containers/auth.json`
+   (podman's per-namespace keys such as `quay.io/myorg` count for their registry)
+5. **docker:** `$DOCKER_CONFIG/config.json`, else `~/.docker/config.json`. `credHelpers` and `credsStore` run
+   `docker-credential-<name> get` exactly as docker does (Docker Desktop, `pass`, `secretservice`, `ecr-login`…);
+   the helper name must be a plain name found in `PATH`. Identity tokens (`<token>` usernames) are not supported.
 
-Credentials go from `nyx` to `nyxd` over the local control socket and are used only for that push.
+```bash
+nyx login ghcr.io                                   # prompts; checks the login against the registry, then saves it
+echo "$TOKEN" | nyx login -u me --password-stdin ghcr.io
+nyx login --authfile ./ci-auth.json registry.example.com:5000
+nyx logout ghcr.io                                  # only removes what nyx login saved
+```
+
+`nyx login` with no registry means Docker Hub. The auth file uses the same `{"auths": {...}}` format as docker and
+podman, is written with mode `0600`, and keeps any other entries in it.
+
+Only the `nyx` client reads these files. It sends the credentials a request needs to `nyxd` over the local control
+socket (for builds, in the `X-Registry-Config` header; for `compose up`, as `registry_auth`), and `nyxd` uses them for
+that request only and never stores them. A file or helper that cannot be read is reported as a warning, and the
+request goes on anonymously for that registry.
 
 `nyx pull` uses the same authentication. Before, it always asked Docker Hub's token service, so anonymous pulls from
 other registries failed with "registry denied access"; pulls from GHCR, Quay and a local `registry:2` now work.

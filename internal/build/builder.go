@@ -45,7 +45,8 @@ type Options struct {
 	BuildArgs  map[string]string // --build-arg values
 	Target     string            // stop after this stage (default: last)
 	NoCache    bool
-	Out        io.Writer // human-readable progress and RUN output
+	Out        io.Writer     // human-readable progress and RUN output
+	Auth       image.AuthMap // credentials by registry host for FROM pulls
 }
 
 // Result is a finished build.
@@ -382,7 +383,7 @@ func (bd *build) baseState(ctx context.Context, ref string) (*stageState, error)
 	m, cfg, err := store.LoadImageMeta(ref)
 	if err != nil {
 		fmt.Fprintf(bd.out, "pulling %s\n", ref)
-		if _, err := store.PullWithProgress(ctx, ref, nil, nil); err != nil {
+		if _, err := store.PullWithProgress(ctx, ref, bd.opts.Auth.For(ref), nil); err != nil {
 			return nil, fmt.Errorf("pull: %s", image.HumanizePullError(err))
 		}
 		if m, cfg, err = store.LoadImageMeta(ref); err != nil {

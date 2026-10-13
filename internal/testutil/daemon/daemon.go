@@ -107,7 +107,7 @@ func StartWith(t *testing.T, opts Options) *Daemon {
 	d.Runtime.SetCgroupManager("disabled")
 	d.Logs, err = logs.NewCollector(base+"/logs", log)
 	must(err)
-	var netBackend network.Backend = network.HostBackend{}
+	var netBackend network.Backend = network.NewHostBackend()
 	var dns netdns.Backend = netdns.Noop{}
 	gw := ""
 	if opts.NetDriver == "native" {

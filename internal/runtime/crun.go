@@ -137,11 +137,7 @@ func (r *Runtime) RunForeground(ctx context.Context, containerID, bundleDir stri
 	var errBuf bytes.Buffer
 	cmd.Stderr = io.MultiWriter(stderr, &errBuf)
 	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(errBuf.String())
-		if msg != "" {
-			return fmt.Errorf("crun run: %w: %s", err, msg)
-		}
-		return fmt.Errorf("crun run: %w", err)
+		return &StartExitError{Err: err, Output: errBuf.String()}
 	}
 	return nil
 }

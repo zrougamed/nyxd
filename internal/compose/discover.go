@@ -54,3 +54,14 @@ func DefaultProjectFromComposeFile(abs string) string {
 	}
 	return base
 }
+
+// ProjectName is the default project for a compose file at abs: its
+// top-level name:, else the name of the directory holding it.
+func ProjectName(st *Stack, abs string) string {
+	if st != nil {
+		if n := strings.TrimSpace(st.Name); n != "" {
+			return n
+		}
+	}
+	return DefaultProjectFromComposeFile(abs)
+}

@@ -105,10 +105,10 @@ func TestCLIAgainstDaemon(t *testing.T) {
 
 	// run: detached, JSON, attached.
 	if out := ok(t, "run", "-d", "--name", "a1", "-e", "K=V", "--env=L=W", "--hostname", "h1", "--restart", "no",
-		"-p", "8080:80", "--publish=9090:90", "test/app:1", "sleep", "300"); strings.TrimSpace(out) != "a1" {
+		"-p", "18080:18081", "--publish=19090:19091", "test/app:1", "sleep", "300"); strings.TrimSpace(out) != "a1" {
 		t.Errorf("run -d: %q", out)
 	}
-	if out := ok(t, "run", "-d", "--json", "--name=a2", "--hostname=h2", "--restart=no", "-e=X=1", "-p=1:2", "test/app:1", "--", "sleep", "300"); !strings.Contains(out, `"id":"a2"`) {
+	if out := ok(t, "run", "-d", "--json", "--name=a2", "--hostname=h2", "--restart=no", "-e=X=1", "-p=18001:18002", "test/app:1", "--", "sleep", "300"); !strings.Contains(out, `"id":"a2"`) {
 		t.Errorf("run -d --json: %q", out)
 	}
 	out, errOut, err := nyx(t, "run", "--name", "fg", "--print-id", "-h", "fgh", "test/app:1", "sh", "-c", "echo hi; hostname")
@@ -123,7 +123,7 @@ func TestCLIAgainstDaemon(t *testing.T) {
 	fails(t, "already running", "run", "-d", "--name", "a1", "test/app:1", "sleep", "1")
 
 	// ps.
-	if out := ok(t, "ps"); !strings.Contains(out, "test/app:1") || !strings.Contains(out, "8080->80") {
+	if out := ok(t, "ps"); !strings.Contains(out, "test/app:1") || !strings.Contains(out, "18080->18081") {
 		t.Errorf("ps: %q", out)
 	}
 	if out := ok(t, "ps", "--no-trunc"); !strings.Contains(out, "a1") {
@@ -177,7 +177,7 @@ func TestCLIAgainstDaemon(t *testing.T) {
 	fails(t, "usage: nyx exec", "exec")
 	fails(t, "unknown exec flag", "exec", "--bogus", "a1", "true")
 	fails(t, "missing command", "exec", "a1")
-	fails(t, "404", "exec", "nosuch", "true")
+	fails(t, "no matching container", "exec", "nosuch", "true")
 
 	// logs.
 	if out := ok(t, "logs", "fg"); !strings.Contains(out, "hi") {
@@ -189,17 +189,17 @@ func TestCLIAgainstDaemon(t *testing.T) {
 	ok(t, "logs", "--tail=1", "fg")
 	ok(t, "container", "logs", "fg")
 	fails(t, "usage", "logs")
-	fails(t, "404", "logs", "never-ran")
+	fails(t, "no matching container", "logs", "never-ran")
 	fails(t, "", "logs", "--tail", "x", "fg")
 
 	// stop / rm.
 	ok(t, "stop", "a1", "a2")
-	fails(t, "404", "stop", "nosuch")
+	fails(t, "no matching container", "stop", "nosuch")
 	ok(t, "run", "-d", "--name", "r1", "test/app:1", "sleep", "300")
 	ok(t, "run", "-d", "--name", "r2", "test/app:1", "sleep", "300")
 	ok(t, "rm", "r1")
 	ok(t, "container", "rm", "r2")
-	fails(t, "404", "rm", "nosuch")
+	fails(t, "no matching container", "rm", "nosuch")
 	fails(t, "usage", "rm")
 	fails(t, "", "container")
 	fails(t, "", "container", "bogus")

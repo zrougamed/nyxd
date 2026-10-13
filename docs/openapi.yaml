@@ -437,6 +437,38 @@ paths:
         "503":
           description: Image store not configured
 
+  /v1/images/inspect:
+    get:
+      tags: [images]
+      summary: Check that an image is in the local store
+      description: Used by `nyx compose up` to decide which `build:` services to build.
+      operationId: inspectImage
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The image is present
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ref:
+                    type: string
+                  id:
+                    type: string
+                    description: Config digest (`sha256:...`)
+        "400":
+          description: Missing ref
+        "404":
+          description: Not in the local store
+        "503":
+          description: Image store not configured
+
   /v1/images/remove:
     post:
       tags: [images]
@@ -628,6 +660,14 @@ paths:
         - name: nocache
           in: query
           description: "`1` or `true` disables the build cache."
+          schema:
+            type: string
+        - name: X-Registry-Config
+          in: header
+          description: |
+            Credentials for pulling `FROM` images: base64url-encoded JSON mapping registry host
+            (`docker.io`, `ghcr.io`, `localhost:5000`) to `{"username": ..., "password": ...}`.
+            Used for this build only. `nyx build` fills it from your docker, podman or nyx login.
           schema:
             type: string
         - name: buildarg
@@ -1076,6 +1116,20 @@ components:
         remove_volumes:
           type: boolean
           description: When true (compose down only), delete on-disk named volume directories declared in the file after containers are removed
+        registry_auth:
+          type: object
+          description: |
+            Compose up only: credentials for the images it pulls, by registry host (`docker.io`,
+            `ghcr.io`, ...). A service's own `registry_username` / `registry_password` wins. Used for
+            this request only, never stored. Images of services with `build:` are never pulled: build
+            them first (`nyx compose up` does), or compose up fails with "not built yet".
+          additionalProperties:
+            type: object
+            properties:
+              username:
+                type: string
+              password:
+                type: string
 
     ComposeUpResponse:
       type: object

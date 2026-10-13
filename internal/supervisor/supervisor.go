@@ -73,6 +73,10 @@ type ContainerSpec struct {
 	// EmbedDNS marks compose services on CNI with -dns auto that use internal-only networks,
 	// so the embedded resolver registers their hostnames. Ignored for native and for -dns embedded.
 	EmbedDNS bool `json:"embed_dns,omitempty"`
+	// HostAliases are names that resolve to the container on the host network
+	// (where every container shares the loopback): a compose stack's service
+	// names, so "db:5432" works as it does on a compose network.
+	HostAliases []string `json:"host_aliases,omitempty"`
 	// ComposeInternalNet is true when every compose network for the service has internal: true.
 	// The native driver blocks IPv4 egress outside the bridge CIDR (nft forward).
 	ComposeInternalNet bool `json:"compose_internal_net,omitempty"`
@@ -713,6 +717,10 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 	spec := e.spec
 	log := s.log.With("id", spec.ID)
 
+	if err := s.checkHostPorts(spec); err != nil {
+		return false, err
+	}
+
 	// 1. Overlay: mount rootfs.
 	rootFS, err := s.ovl.Prepare(spec.ID, spec.BlobPaths, spec.ImageConfig)
 	if err != nil {
@@ -734,12 +742,7 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 	// 2. Network namespace + host networking (native or CNI plugins).
 	// The host driver shares the host network: no namespace to create.
 	var nsPath string
-	if s.hostNetwork() {
-		if len(spec.PortMappings) > 0 {
-			log.Warn("host network: published ports are ignored; the container binds host ports directly",
-				"publish", portMappingsToPublishStrings(spec.PortMappings))
-		}
-	} else {
+	if !s.hostNetwork() {
 		nsPath, err = network.CreateNetNS(spec.ID)
 		if err != nil {
 			s.ovl.Remove(spec.ID) //nolint:errcheck
@@ -760,6 +763,9 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 	}
 	e.ip = ip
 	log.Info("network assigned", "ip", ip)
+	if fw := s.hostForwards(spec.ID); len(fw) > 0 {
+		log.Info("host network: forwarding published ports", "forward", fw)
+	}
 
 	// 3. Generate OCI bundle.
 	bundleDir := fmt.Sprintf("%s/bundles/%s", s.baseDir, spec.ID)
@@ -773,6 +779,15 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		s.teardownNetwork(ctx, spec.ID)
 		s.ovl.Remove(spec.ID) //nolint:errcheck
 		return false, fmt.Errorf("bundle resolv: %w", err)
+	}
+	extraMounts := spec.ExtraMounts
+	if hostsPath, err := s.writeBundleHosts(bundleDir, spec); err != nil {
+		log.Warn("bundle hosts", "err", err)
+	} else if hostsPath != "" {
+		extraMounts = append([]bundle.Mount{{
+			Type: "bind", Source: hostsPath, Destination: "/etc/hosts",
+			Options: []string{"rbind", "ro", "nosuid", "nodev"},
+		}}, extraMounts...)
 	}
 	resources := spec.Resources
 	if resources != nil && s.noCgroups {
@@ -791,7 +806,7 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		Resources:       resources,
 		ReadOnly:        spec.ReadOnly,
 		Hostname:        spec.Hostname,
-		ExtraMounts:     spec.ExtraMounts,
+		ExtraMounts:     extraMounts,
 		ResolvConfPath:  resolvPath,
 		SeccompProfile:  spec.SeccompProfile,
 		CapAdd:          spec.CapAdd,
@@ -891,7 +906,7 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 				logCancel()
 				s.teardownNetwork(ctx, spec.ID)
 				s.ovl.Remove(spec.ID) //nolint:errcheck
-				return false, fmt.Errorf("crun run: %w", err)
+				return false, fmt.Errorf("container exited while starting (%w)", err)
 			}
 			// Foreground crun returned while we never ticked "running": init exited with 0
 			// (short-lived workload or shell with no stdin). Same teardown as a normal exit.
@@ -1103,6 +1118,10 @@ func (s *Supervisor) shouldRestart(e *containerEntry, exitCode int) bool {
 
 func (s *Supervisor) teardownNetwork(ctx context.Context, id string) {
 	if s.hostNetwork() {
+		// No namespace; stops the published-port forwarders.
+		if err := s.net.Teardown(ctx, id, ""); err != nil {
+			s.log.Warn("network teardown", "id", id, "err", err)
+		}
 		return
 	}
 	nsPath := fmt.Sprintf("/run/nyxd/netns/%s", id)

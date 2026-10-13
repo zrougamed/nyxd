@@ -95,16 +95,29 @@ that socket exists, and falls back to `/run/nyxd/nyxd.sock`.
 
 ## Networking
 
-Rootless nyxd uses the **`host`** network driver: containers share the host network namespace.
+Rootless nyxd uses the **`host`** network driver: containers share the host network namespace, so every container
+sees the same `localhost` and the same ports.
 
-- No bridge, no NAT rules, no extra binaries, nothing that needs root.
-- `/etc/resolv.conf` is the host's, so DNS works as on the host (including `127.0.0.53`).
-- `-p/--publish` is ignored with a warning: a service listening on port 8080 in the container is on host port 8080.
-- Ports below 1024 need `sysctl net.ipv4.ip_unprivileged_port_start`.
-- The embedded DNS (`<name>.nyxd.local`) is not available; containers reach each other on `127.0.0.1`.
+- **Published ports work.** `-p 8443:1443` / Compose `ports: ["8443:1443"]`: the workload listens on 1443 and nyxd
+  forwards host port 8443 to it (TCP and UDP), like Docker's rootless userland proxy. When both numbers match
+  (`8080:8080`) nothing is forwarded: the workload's own socket is the published port. Forwards stop with the
+  container and come back when nyxd restarts and re-adopts it. A host port another process holds fails the start with
+  "host port … is already in use".
+- **Service names resolve.** Each container gets an `/etc/hosts`: the host's own entries, plus its stack's service and
+  container names on `127.0.0.1` (`db`, `cache`, `webapp-db`, …). `postgres://db:5432` and `reverse_proxy app:8080`
+  work as they do on a Compose network.
+- **Ports below 1024** (`net.ipv4.ip_unprivileged_port_start`, 1024 by default) cannot be bound by a non-root user on
+  the host network, by the workload or by nyxd's forwarder. A container that declares one fails before it starts,
+  with the fix: `sudo sysctl net.ipv4.ip_unprivileged_port_start=80` (persist it in `/etc/sysctl.d/`), or use a port
+  from 1024 up. A program that picks its own port regardless (Caddy's automatic HTTPS binds 80 and 443) needs its
+  config changed too, for example Caddy's `{ http_port 1080  https_port 1443 }`.
+- **One shared network.** Two services that listen on the same port collide, and `internal: true` networks cannot be
+  isolated: `nyx compose up` prints a warning for both. Run nyxd as root for separate networks.
+- `/etc/resolv.conf` is the host's, so DNS works as on the host (including `127.0.0.53`). The embedded DNS
+  (`<name>.nyxd.local`) is not used.
 
-`-net-driver=native` needs real root and is rejected in rootless mode. Isolated rootless networks with published
-ports (through `pasta`) are planned.
+`-net-driver=native` needs real root and is rejected in rootless mode. Isolated rootless networks (through `pasta`)
+are planned.
 
 ## Limits compared to rootful
 

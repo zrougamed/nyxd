@@ -118,10 +118,10 @@ func TestParseDockerPublishForms(t *testing.T) {
 			t.Errorf("%q accepted", bad)
 		}
 	}
-	if (HostBackend{}).EnsureNetwork() != nil || (HostBackend{}).Teardown(context.Background(), "", "") != nil {
+	if (NewHostBackend()).EnsureNetwork() != nil || (NewHostBackend()).Teardown(context.Background(), "", "") != nil {
 		t.Error("host backend")
 	}
-	if ip, err := (HostBackend{}).Setup(context.Background(), "", "", nil, nil); ip != "" || err != nil {
+	if ip, err := (NewHostBackend()).Setup(context.Background(), "", "", nil, nil); ip != "" || err != nil {
 		t.Error("host setup")
 	}
 }

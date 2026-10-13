@@ -1,15 +1,35 @@
 package control
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 
 	"github.com/zrougamed/nyxd/internal/build"
+	"github.com/zrougamed/nyxd/internal/image"
 	"github.com/zrougamed/nyxd/internal/layer"
 )
+
+// registryConfigHeader carries registry credentials for a build's FROM pulls:
+// base64url JSON {"<registry host>": {"username": ..., "password": ...}},
+// like Docker's X-Registry-Config.
+const registryConfigHeader = "X-Registry-Config"
+
+func decodeRegistryConfig(h string) (image.AuthMap, error) {
+	raw, err := base64.URLEncoding.DecodeString(h)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", registryConfigHeader, err)
+	}
+	var m image.AuthMap
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("%s: %w", registryConfigHeader, err)
+	}
+	return m, nil
+}
 
 // SetBuilder enables POST /v1/build.
 func (s *Server) SetBuilder(b *build.Builder) { s.builder = b }
@@ -63,6 +83,14 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 		Target:     q.Get("target"),
 		NoCache:    q.Get("nocache") == "1" || q.Get("nocache") == "true",
 		BuildArgs:  map[string]string{},
+	}
+	if h := r.Header.Get(registryConfigHeader); h != "" {
+		auth, err := decodeRegistryConfig(h)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		opts.Auth = auth
 	}
 	for _, kv := range q["buildarg"] {
 		k, v, ok := strings.Cut(kv, "=")

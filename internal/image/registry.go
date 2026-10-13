@@ -127,18 +127,32 @@ func (s *session) answer(ctx context.Context, challenge string) (string, error) 
 		if svc := params["service"]; svc != "" {
 			q.Set("service", svc)
 		}
-		q.Set("scope", fmt.Sprintf("repository:%s:%s", s.repo, s.actions))
+		if s.repo != "" { // no scope: a login check
+			q.Set("scope", fmt.Sprintf("repository:%s:%s", s.repo, s.actions))
+		}
 		u.RawQuery = q.Encode()
-		treq, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+		tokenReq := func(withCreds bool) (*http.Response, error) {
+			treq, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+			if err != nil {
+				return nil, err
+			}
+			if withCreds {
+				treq.SetBasicAuth(s.user, s.pass)
+			}
+			return s.hc.Do(treq)
+		}
+		resp, err := tokenReq(s.user != "")
 		if err != nil {
 			return "", err
 		}
-		if s.user != "" {
-			treq.SetBasicAuth(s.user, s.pass)
-		}
-		resp, err := s.hc.Do(treq)
-		if err != nil {
-			return "", err
+		// A login the token service rejects (expired or revoked, or Docker
+		// Hub refusing it now and then) must not break public pulls: ask
+		// again anonymously; a private repository is still denied.
+		if resp.StatusCode == http.StatusUnauthorized && s.user != "" && !strings.Contains(s.actions, "push") && s.repo != "" {
+			resp.Body.Close()
+			if resp, err = tokenReq(false); err != nil {
+				return "", err
+			}
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {

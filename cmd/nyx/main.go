@@ -121,6 +121,10 @@ func run(args []string) error {
 		return doTag(socket, args[1:])
 	case "push":
 		return doPush(socket, args[1:])
+	case "login":
+		return doLogin(args[1:])
+	case "logout":
+		return doLogout(args[1:])
 	case "save":
 		return doSave(socket, args[1:])
 	case "load":
@@ -147,8 +151,13 @@ commands:
       Windows: manage the WSL2 distro that runs nyxd (no admin rights needed after WSL is enabled)
   version
       print daemon version / build info
+  login [-u USER] [-p PASS | --password-stdin] [--authfile PATH] [REGISTRY]
+      check credentials against a registry (default docker.io) and save them for nyx
+  logout [--authfile PATH] [REGISTRY]
+      remove credentials saved by nyx login
   pull [--json] [--username USER] [--password PASS] <ref>
-      pull an image into the local store; default shows progress, --json streams raw events
+      pull an image into the local store; default shows progress, --json streams raw events.
+      pull, run, push, build and compose up use your registry logins (see "registry logins")
   run [flags] <image> [command [args...]]   (a "--" before the command is optional)
       start a container. default: stay attached and stream logs until the workload exits.
       -d / --detach: start in the background and print the container id.
@@ -174,8 +183,7 @@ commands:
   tag <source> <target>
       give a local image another reference (e.g. registry.example.com/team/app:1.0)
   push [--username USER] [--password PASS] <ref>
-      upload a local image to its registry; credentials default to NYX_REGISTRY_USERNAME /
-      NYX_REGISTRY_PASSWORD, then ~/.docker/config.json "auths". localhost registries use http
+      upload a local image to its registry; localhost registries use http
   save [-o FILE] <ref> [<ref>...]
       write images to a tar archive (OCI layout + docker manifest.json; loads in docker/podman)
   load [-i FILE]
@@ -192,15 +200,23 @@ commands:
       run a command in a running container; -i streams stdin from this terminal.
       -t allocates a PTY (shell prompt, line editing); combine as -it for an interactive shell.
 
-  compose up|stop|down [-f|--file PATH] [--project NAME] [-v|--volumes]
+  compose up|stop|down [-f|--file PATH] [--project NAME] [-v|--volumes] [--build]
       compose up: start stack (default file: first of nyx-compose.yaml, docker-compose.yml,
       compose.yaml, podman-compose.yml, plus .yaml/.yml variants, in cwd).
+      services with build: are built first when their image is missing (--build: always).
       compose stop: SIGTERM services in reverse dependency order.
       compose down: remove stack containers; -v deletes declared named volume dirs when unreferenced.
 
+registry logins (first match wins; docker login and podman login work as they are):
+  1. --username/--password flags, then NYX_REGISTRY_USERNAME / NYX_REGISTRY_PASSWORD
+  2. nyx:    $NYX_AUTH_FILE, else ~/.config/nyx/auth.json (nyx login)
+  3. podman: $REGISTRY_AUTH_FILE, $XDG_RUNTIME_DIR/containers/auth.json, ~/.config/containers/auth.json
+  4. docker: $DOCKER_CONFIG/config.json, else ~/.docker/config.json (credHelpers / credsStore
+             run docker-credential-<name>, as docker does)
+
 environment:
   NYX_REGISTRY_USERNAME, NYX_REGISTRY_PASSWORD
-                credentials for nyx push
+                credentials for every registry (pull, run, push)
   NYXD_SOCKET   default control socket path (else $XDG_RUNTIME_DIR/nyxd/nyxd.sock
                 for a rootless daemon when present, else /run/nyxd/nyxd.sock)
 `, defaultSocket())
@@ -226,7 +242,7 @@ func doPing(socket string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("ping: %s: %s", resp.Status, bytes.TrimSpace(b))
+		return fmt.Errorf("ping: %w", daemonError(resp.StatusCode, b))
 	}
 	_, err = io.Copy(os.Stdout, resp.Body)
 	if err != nil {
@@ -246,16 +262,16 @@ func doVersion(socket string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("version: %s: %s", resp.Status, bytes.TrimSpace(b))
+		return fmt.Errorf("version: %w", daemonError(resp.StatusCode, b))
 	}
 	_, err = io.Copy(os.Stdout, resp.Body)
 	return err
 }
 
-// formatRunFailure turns HTTP error responses into a single readable line (no redundant "502 Bad Gateway" prefix).
+// formatRunFailure turns HTTP error responses into readable text (no redundant
+// "502 Bad Gateway" prefix). Line breaks are kept: hints come on their own line.
 func formatRunFailure(code int, body string) string {
 	body = strings.TrimSpace(body)
-	body = strings.ReplaceAll(body, "\n", " ")
 	if body == "" {
 		body = "(empty response body)"
 	}
@@ -277,6 +293,10 @@ func doRun(socket string, args []string) error {
 		return err
 	}
 	body := map[string]any{"image": o.image}
+	// Used only if the daemon has to pull the image.
+	if u, p := registryCredentials(o.image); u != "" {
+		body["registry_username"], body["registry_password"] = u, p
+	}
 	if o.name != "" {
 		body["id"] = o.name
 	}
@@ -455,7 +475,7 @@ func doKillWithContext(ctx context.Context, socket, id string) error {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: %s", resp.Status, bytes.TrimSpace(body))
+		return daemonError(resp.StatusCode, body)
 	}
 	return nil
 }
@@ -483,7 +503,7 @@ func doStopWithContext(ctx context.Context, socket, id string) error {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: %s", resp.Status, bytes.TrimSpace(body))
+		return daemonError(resp.StatusCode, body)
 	}
 	return nil
 }
@@ -655,7 +675,7 @@ func doExec(socket string, args []string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("exec: %s: %s", resp.Status, bytes.TrimSpace(b))
+		return fmt.Errorf("exec: %w", daemonError(resp.StatusCode, b))
 	}
 	tailRing := &execTailRing{}
 	// Line-based filters break interactive TTYs: raw mode echoes single bytes

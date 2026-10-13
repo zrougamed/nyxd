@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,9 +12,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/zrougamed/nyxd/internal/image"
+	"github.com/zrougamed/nyxd/internal/registryauth"
 	"golang.org/x/term"
 )
 
@@ -29,8 +29,39 @@ func streamClient(socket string) *http.Client {
 }
 
 func apiError(resp *http.Response) error {
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	return fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(b)))
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	return daemonError(resp.StatusCode, b)
+}
+
+// daemonError is an error response from nyxd as the user should read it: the
+// daemon's message alone (from a JSON {"error"|"message"} body or plain
+// text), never the HTTP status line, which only says the request failed.
+func daemonError(status int, body []byte) error {
+	msg := strings.TrimSpace(string(body))
+	if strings.HasPrefix(msg, "{") {
+		var m struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}
+		if json.Unmarshal([]byte(msg), &m) == nil {
+			if m.Error != "" {
+				msg = m.Error
+			} else if m.Message != "" {
+				msg = m.Message
+			}
+		}
+	}
+	if msg == "" {
+		switch status {
+		case http.StatusNotFound:
+			msg = "not found (is nyxd older than this nyx? try updating it)"
+		case http.StatusServiceUnavailable:
+			msg = "nyxd cannot do this right now (service unavailable)"
+		default:
+			msg = "nyxd: " + strings.ToLower(http.StatusText(status))
+		}
+	}
+	return errors.New(msg)
 }
 
 func doTag(socket string, args []string) error {
@@ -137,65 +168,31 @@ func humanSize(n int64) string {
 }
 
 // registryCredentials returns credentials for ref's registry from
-// NYX_REGISTRY_USERNAME/NYX_REGISTRY_PASSWORD, else from the "auths" entries
-// of ~/.docker/config.json (or $DOCKER_CONFIG/config.json), so an existing
-// `docker login` works. Credential helpers are not executed.
+// NYX_REGISTRY_USERNAME/NYX_REGISTRY_PASSWORD, else from a nyx, podman or
+// docker login (see [registryauth.Lookup]).
 func registryCredentials(ref string) (string, string) {
 	if u := os.Getenv("NYX_REGISTRY_USERNAME"); u != "" {
 		return u, os.Getenv("NYX_REGISTRY_PASSWORD")
 	}
-	dir := os.Getenv("DOCKER_CONFIG")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", ""
-		}
-		dir = filepath.Join(home, ".docker")
-	}
-	data, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	a, _, _, err := registryauth.Lookup(image.RegistryHost(ref))
+	warnAuth(err)
+	return a.Username, a.Password
+}
+
+// registryAuthFor returns the logins for the registries of refs, to send
+// with requests that pull from several registries.
+func registryAuthFor(refs ...string) image.AuthMap {
+	m, err := registryauth.For(refs...)
+	warnAuth(err)
+	return m
+}
+
+// warnAuth reports an unreadable auth file or failing credential helper; the
+// request goes on (anonymously for that registry).
+func warnAuth(err error) {
 	if err != nil {
-		return "", ""
+		fmt.Fprintf(os.Stderr, "nyx: warning: registry credentials: %v\n", err)
 	}
-	return dockerConfigAuth(data, registryHost(ref))
-}
-
-func dockerConfigAuth(configJSON []byte, host string) (string, string) {
-	var cfg struct {
-		Auths map[string]struct {
-			Auth string `json:"auth"`
-		} `json:"auths"`
-	}
-	if json.Unmarshal(configJSON, &cfg) != nil {
-		return "", ""
-	}
-	keys := []string{host, "https://" + host, "http://" + host}
-	if host == "docker.io" {
-		keys = append(keys, "https://index.docker.io/v1/", "index.docker.io", "registry-1.docker.io")
-	}
-	for _, k := range keys {
-		e, ok := cfg.Auths[k]
-		if !ok || e.Auth == "" {
-			continue
-		}
-		raw, err := base64.StdEncoding.DecodeString(e.Auth)
-		if err != nil {
-			continue
-		}
-		if u, p, ok := strings.Cut(string(raw), ":"); ok {
-			return u, p
-		}
-	}
-	return "", ""
-}
-
-// registryHost is the registry part of an image reference ("docker.io" when
-// the first path component is not a host).
-func registryHost(ref string) string {
-	first, _, found := strings.Cut(ref, "/")
-	if found && (strings.ContainsAny(first, ".:") || first == "localhost") {
-		return first
-	}
-	return "docker.io"
 }
 
 func doSave(socket string, args []string) error {

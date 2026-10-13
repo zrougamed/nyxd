@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/zrougamed/nyxd/internal/health"
+	"github.com/zrougamed/nyxd/internal/image"
 	"github.com/zrougamed/nyxd/internal/supervisor"
 	"github.com/zrougamed/nyxd/pkg/oci"
 	"gopkg.in/yaml.v3"
@@ -234,7 +235,9 @@ func TestMountsAndNames(t *testing.T) {
 	if composeArgs(&Service{Entrypoint: []string{"/ep"}}, nil) == nil {
 		t.Error("entrypoint without image config")
 	}
-	if pullAuth(&Service{}) != nil || pullAuth(&Service{RegistryUsername: "u"}) == nil {
+	m := image.AuthMap{"ghcr.io": {Username: "g", Password: "p"}}
+	if pullAuth(&Service{}, nil, "x") != nil || pullAuth(&Service{RegistryUsername: "u"}, m, "ghcr.io/a").Username != "u" ||
+		pullAuth(&Service{}, m, "ghcr.io/a/b:1").Username != "g" || pullAuth(&Service{}, m, "alpine") != nil {
 		t.Error("pullAuth")
 	}
 }

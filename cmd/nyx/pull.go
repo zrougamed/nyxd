@@ -58,6 +58,9 @@ func doPull(socket, ref string, jsonOut bool, username, password string) error {
 		"ref":    ref,
 		"stream": !jsonOut,
 	}
+	if strings.TrimSpace(username) == "" {
+		username, password = registryCredentials(ref)
+	}
 	if strings.TrimSpace(username) != "" {
 		bodyMap["username"] = username
 		bodyMap["password"] = password
@@ -79,7 +82,7 @@ func doPull(socket, ref string, jsonOut bool, username, password string) error {
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("pull: %s: %s", resp.Status, bytes.TrimSpace(b))
+		return fmt.Errorf("pull: %w", daemonError(resp.StatusCode, b))
 	}
 
 	if jsonOut {

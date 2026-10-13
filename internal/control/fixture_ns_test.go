@@ -106,7 +106,7 @@ func TestControlContainerLifecycle(t *testing.T) {
 
 	// Long-running containers, one with ports (ignored on the host network) and a healthcheck.
 	run(t, d, map[string]any{"id": "web-1", "args": []string{"sleep", "300"}, "restart": "no",
-		"publish": []string{"8080:80"}, "ports": []map[string]any{{"hostPort": 9090, "containerPort": 90}},
+		"publish": []string{"18080:18081"}, "ports": []map[string]any{{"hostPort": 19090, "containerPort": 19091}},
 		"healthcheck": map[string]any{"type": "exec", "command": []string{"true"}, "interval": "100ms", "retries": 3}})
 	run(t, d, map[string]any{"id": "web-2", "args": []string{"trapterm"}, "restart": "never", "env": []string{"A=1"}, "hostname": "box"})
 	waitLog(t, d, "web-2", "ready")

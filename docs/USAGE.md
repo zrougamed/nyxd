@@ -74,7 +74,8 @@ No Docker or BuildKit involved; works rootless. Supported syntax, cache rules an
 
 ```bash
 nyx tag myapp:1.0 registry.example.com/team/myapp:1.0
-nyx push registry.example.com/team/myapp:1.0             # credentials: flags, NYX_REGISTRY_*, ~/.docker/config.json
+nyx login registry.example.com                           # or reuse an existing docker / podman login
+nyx push registry.example.com/team/myapp:1.0
 nyx save -o myapp.tar myapp:1.0                          # OCI layout + docker manifest.json
 nyx load -i myapp.tar                                    # also loads docker save / podman save archives
 ```
@@ -85,11 +86,27 @@ Details: [images.md](images.md).
 
 **Compose file:** if you omit `-f` / `--file`, **`nyx`** picks the first existing file in the **current directory**, in this order: `nyx-compose.yaml` / `.yml`, then `docker-compose.yaml` / `.yml`, then `compose.yaml` / `.yml`, then `podman-compose.yaml` / `.yml`. The file must be readable on the **daemon host** (paths are sent to `nyxd`).
 
-**Project name:** container IDs are `{project}-{service}` (sanitized). If you omit **`--project`**, the default is the **directory** that contains the compose file (same idea as Docker Compose), not the filename — so two different folders that both use `docker-compose.yml` do not collide. Use the same **`--project`** for `up`, `stop`, and `down` when you override it.
+**Project name:** container IDs are `{project}-{service}` (sanitized). If you omit **`--project`**, the default is the top-level **`name:`** of the compose file, else the **directory** that contains it (same idea as Docker Compose), not the filename — so two different folders that both use `docker-compose.yml` do not collide. Use the same **`--project`** for `up`, `stop`, and `down` when you override it.
 
 **Depends on:** both `depends_on: [svc]` and the Compose **map** form `depends_on: { svc: { condition: service_healthy } }` are accepted; only service **names** are used for start order (`condition` is ignored — readiness comes from **healthcheck** + sequential start).
 
 **Stop grace:** per-service `stop_grace_period` maps to SIGTERM wait before `nyx stop` / compose stop forces teardown. If omitted, the daemon uses a **10s** default (similar to `docker stop`), not a multi‑minute wait.
+
+**Rootless:** published ports, service names and the limits of the shared host network: see [rootless.md](rootless.md#networking).
+
+**Build:** services with `build:` (a context path, or `context`, `dockerfile`, `args`, `target`) are built by
+`nyx compose up` before the stack starts, the same way as `nyx build` (`.dockerignore` honoured, output in your
+terminal). Only images that are missing are built; `nyx compose up --build` rebuilds them all. Without `image:`, the
+image is named `{project}-{service}:latest`. `nyxd` never pulls the image of a service that has `build:`; called
+directly through the API, `compose up` fails with "not built yet" until it exists. Remote (git/URL) contexts are not
+supported.
+
+**Environment files:** `env_file:` (a path, a list, or `- path: x.env` / `required: false` entries, relative to the
+compose file) is loaded before `environment:`, which wins. `.env` next to the compose file is only for `${VAR}`
+substitution in the YAML, as in Docker Compose: write `$$VAR` for a variable the container itself should expand.
+
+**Registry logins:** images that `compose up` pulls use your docker, podman or nyx login (see
+[images.md](images.md#credentials-and-nyx-login)); a service's `registry_username` / `registry_password` still wins.
 
 **Named volumes:** declare names under the top-level `volumes:` key. Data lives under **`{nyxd --base-dir}/volumes/<project>/<volume>/`**. Removing them is optional: **`nyx compose down -v`** deletes those host dirs only after containers are removed and nothing still references the path.
 
@@ -98,6 +115,7 @@ cd /path/to/stack   # contains e.g. docker-compose.yml or nyx-compose.yaml
 
 sudo nyx compose up
 sudo nyx compose up -f ./prod-compose.yaml --project myapp
+sudo nyx compose up --build        # rebuild services with build: first
 
 sudo nyx compose stop              # SIGTERM / stop path, reverse dependency order
 sudo nyx compose down            # stop + remove containers

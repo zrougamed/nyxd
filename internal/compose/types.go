@@ -6,16 +6,22 @@ import "time"
 
 // Stack is the top-level parsed compose file.
 type Stack struct {
-	Version  string               `yaml:"version"`
-	Services map[string]Service   `yaml:"services"`
-	Networks map[string]Network   `yaml:"networks"`
-	Volumes  map[string]Volume    `yaml:"volumes"`
+	// Name is the project name (top-level name:); --project overrides it.
+	Name     string             `yaml:"name"`
+	Version  string             `yaml:"version"`
+	Services map[string]Service `yaml:"services"`
+	Networks map[string]Network `yaml:"networks"`
+	Volumes  map[string]Volume  `yaml:"volumes"`
 }
 
 // Service describes a single container.
 type Service struct {
 	// Image ref: registry/repo:tag or registry/repo@sha256:...
 	Image string `yaml:"image"`
+
+	// Build makes the image from a Dockerfile (nyx compose up builds it when
+	// missing; the daemon never pulls an image a service builds).
+	Build *Build `yaml:"build"`
 
 	// Optional registry credentials for pulls of this service's image (after .env substitution).
 	RegistryUsername string `yaml:"registry_username,omitempty"`
@@ -29,6 +35,9 @@ type Service struct {
 
 	// Environment variables.
 	Environment map[string]string `yaml:"environment"`
+
+	// EnvFile lists files of KEY=VALUE lines loaded before environment:.
+	EnvFile EnvFiles `yaml:"env_file"`
 
 	// Volumes: host:container[:ro]
 	Volumes []string `yaml:"volumes"`
@@ -82,9 +91,9 @@ type Service struct {
 type RestartPolicy string
 
 const (
-	RestartNo          RestartPolicy = "no"
-	RestartAlways      RestartPolicy = "always"
-	RestartOnFailure   RestartPolicy = "on-failure"
+	RestartNo            RestartPolicy = "no"
+	RestartAlways        RestartPolicy = "always"
+	RestartOnFailure     RestartPolicy = "on-failure"
 	RestartUnlessStopped RestartPolicy = "unless-stopped"
 )
 
@@ -119,8 +128,8 @@ type ResourceSpec struct {
 	// PidsLimit caps the number of tasks in the cgroup (maps to pids.max).
 	PidsLimit *int `yaml:"pids_limit,omitempty"`
 	// OomKillDisable maps to memory.oom_control (OCI disableOOMKiller).
-	OomKillDisable *bool `yaml:"oom_kill_disable,omitempty"`
-	OomScoreAdj    *int  `yaml:"oom_score_adj,omitempty"`
+	OomKillDisable *bool  `yaml:"oom_kill_disable,omitempty"`
+	OomScoreAdj    *int   `yaml:"oom_score_adj,omitempty"`
 	CpusetCpus     string `yaml:"cpuset_cpus,omitempty"`
 	CpusetMems     string `yaml:"cpuset_mems,omitempty"`
 	BlkioWeight    *int   `yaml:"blkio_weight,omitempty"`

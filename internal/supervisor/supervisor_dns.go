@@ -87,3 +87,43 @@ func (s *Supervisor) writeBundleResolv(bundleDir string, spec ContainerSpec) (st
 	}
 	return path, nil
 }
+
+// writeBundleHosts writes the /etc/hosts of a container on the host network:
+// the host's own file (same network, same names) followed by the
+// container's hostname and HostAliases on 127.0.0.1. Other drivers keep the
+// image's /etc/hosts and resolve names through their own addresses.
+func (s *Supervisor) writeBundleHosts(bundleDir string, spec ContainerSpec) (string, error) {
+	if !s.hostNetwork() {
+		return "", nil
+	}
+	var names []string
+	seen := map[string]bool{}
+	for _, n := range append([]string{spec.Hostname}, spec.HostAliases...) {
+		n = strings.ToLower(strings.TrimSpace(n))
+		if n != "" && !seen[n] && !strings.ContainsAny(n, " \t\n#") {
+			seen[n] = true
+			names = append(names, n)
+		}
+	}
+	var b strings.Builder
+	if host, err := os.ReadFile(hostsFile); err == nil {
+		b.Write(host)
+		if len(host) > 0 && host[len(host)-1] != '\n' {
+			b.WriteByte('\n')
+		}
+	} else {
+		b.WriteString("127.0.0.1\tlocalhost\n::1\tlocalhost ip6-localhost ip6-loopback\n")
+	}
+	if len(names) > 0 {
+		b.WriteString("# nyxd: services sharing the host network\n")
+		fmt.Fprintf(&b, "127.0.0.1\t%s\n", strings.Join(names, " "))
+	}
+	path := filepath.Join(bundleDir, "hosts")
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// hostsFile is the host's /etc/hosts (a var for tests).
+var hostsFile = "/etc/hosts"

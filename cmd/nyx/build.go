@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -113,6 +114,12 @@ func doBuild(socket string, args []string) error {
 			return err
 		}
 	}
+	return runBuild(socket, o, ctxDir, dfPath)
+}
+
+// runBuild sends ctxDir (with the Dockerfile at dfPath, absolute) to the
+// daemon and streams the build output.
+func runBuild(socket string, o buildOpts, ctxDir, dfPath string) error {
 	if _, err := os.Stat(dfPath); err != nil {
 		return fmt.Errorf("Dockerfile: %w", err)
 	}
@@ -152,6 +159,13 @@ func doBuild(socket string, args []string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-tar")
+	if auth := registryAuthFor(dockerfileBaseImages(dfPath)...); len(auth) > 0 {
+		raw, err := json.Marshal(auth)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("X-Registry-Config", base64.URLEncoding.EncodeToString(raw))
+	}
 	resp, err := c.Do(req)
 	if err != nil {
 		return err
@@ -159,7 +173,7 @@ func doBuild(socket string, args []string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("build: %s: %s", resp.Status, strings.TrimSpace(string(b)))
+		return fmt.Errorf("build: %w", daemonError(resp.StatusCode, b))
 	}
 
 	sc := bufio.NewScanner(resp.Body)
@@ -296,4 +310,36 @@ func addToTar(tw *tar.Writer, p, name string) error {
 	defer f.Close()
 	_, err = io.CopyN(tw, f, hdr.Size)
 	return err
+}
+
+// dockerfileBaseImages lists the registry images the Dockerfile's FROM lines
+// name, so their logins can go with the build. Earlier stages, scratch and
+// refs built from ARGs are left out (the daemon pulls those anonymously).
+func dockerfileBaseImages(dfPath string) []string {
+	data, err := os.ReadFile(dfPath)
+	if err != nil {
+		return nil
+	}
+	stages := map[string]bool{"scratch": true}
+	var refs []string
+	for _, line := range strings.Split(string(data), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 || !strings.EqualFold(f[0], "FROM") {
+			continue
+		}
+		f = f[1:]
+		for len(f) > 0 && strings.HasPrefix(f[0], "--") {
+			f = f[1:]
+		}
+		if len(f) == 0 {
+			continue
+		}
+		if ref := f[0]; !stages[strings.ToLower(ref)] && !strings.Contains(ref, "$") {
+			refs = append(refs, ref)
+		}
+		if len(f) >= 3 && strings.EqualFold(f[1], "AS") {
+			stages[strings.ToLower(f[2])] = true
+		}
+	}
+	return refs
 }
