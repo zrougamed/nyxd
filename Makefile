@@ -143,12 +143,16 @@ preflight:
 	@bash docs/preflight.sh
 
 # Install with native network (no CNI binaries needed)
-install-native: build
-	install -m 755 bin/$(BINARY) /usr/local/bin/$(BINARY)
-	install -m 644 nyxd.service /etc/systemd/system/
-	install -m 644 docs/kernel-requirements.md /etc/nyxd/
-	cp -n nyx-compose.example.yaml /etc/nyxd/nyx-compose.yaml 2>/dev/null || true
-	systemctl daemon-reload
+install-native: build build-nyx
+	install -d /usr/local/bin /usr/local/lib/nyxd /usr/local/share/nyxd/init/runit
+	install -m 755 bin/$(BINARY) bin/$(NYX) /usr/local/bin/
+	install -m 755 packaging/linux/nyxd-service /usr/local/lib/nyxd/
+	install -m 644 packaging/linux/nyxd.service packaging/linux/nyxd-user.service \
+		packaging/linux/nyxd.default /usr/local/share/nyxd/init/
+	install -m 755 packaging/linux/nyxd.openrc packaging/linux/nyxd.sysv /usr/local/share/nyxd/init/
+	install -m 755 packaging/linux/runit/run /usr/local/share/nyxd/init/runit/
+	getent group nyx >/dev/null || groupadd --system nyx || addgroup -S nyx
+	/usr/local/lib/nyxd/nyxd-service setup
 	@echo ""
-	@echo "nyxd installed. Run 'make setup-kernel' then 'systemctl enable --now nyxd'."
-	@echo "No CNI binaries needed — native network plugin is built-in."
+	@echo "nyxd installed and running as a service (systemd, OpenRC, runit or SysV)."
+	@echo "Native networking is built in; run 'make setup-kernel' if bridges fail."

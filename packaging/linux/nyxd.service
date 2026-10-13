@@ -1,6 +1,7 @@
 # Installed by the nyxd deb/rpm/Arch packages as
-# /usr/lib/systemd/system/nyxd.service. Override flags with
-# `systemctl edit nyxd`; members of the "nyx" group can use nyx without sudo.
+# /usr/lib/systemd/system/nyxd.service (install.sh: /etc/systemd/system, with
+# its own path to nyxd). Flags: NYXD_OPTS in /etc/default/nyxd, or
+# `systemctl edit nyxd`. Members of the "nyx" group can use nyx without sudo.
 
 [Unit]
 Description=nyxd - lightweight OCI container orchestrator
@@ -10,7 +11,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/nyxd -socket-group nyx -log-level info
+EnvironmentFile=-/etc/default/nyxd
+ExecStart=/usr/bin/nyxd -socket-group nyx $NYXD_OPTS
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=60s

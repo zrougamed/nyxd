@@ -1,0 +1,6 @@
+# Options for the nyxd system service (systemd, OpenRC, runit and SysV all
+# read this file). Restart the service after a change.
+#   nyxd -h   lists every flag.
+NYXD_OPTS="-log-level info"
+# 1: package installs and upgrades set the service up but do not (re)start it.
+NYXD_NO_START=0

@@ -1,0 +1,9 @@
+#!/bin/sh
+# runit service for nyxd (Void Linux, Artix runit, ...). Flags: NYXD_OPTS in
+# /etc/default/nyxd.
+exec 2>&1
+NYXD_OPTS="-log-level info"
+# shellcheck source=/dev/null
+[ -r /etc/default/nyxd ] && . /etc/default/nyxd
+# shellcheck disable=SC2086 # NYXD_OPTS is a list of flags
+exec /usr/bin/nyxd -socket-group nyx $NYXD_OPTS

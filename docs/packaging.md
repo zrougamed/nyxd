@@ -8,14 +8,15 @@ Every `v*` tag builds, packages, signs and publishes a GitHub release with
 
 | Platform | Files | Contents |
 |----------|-------|----------|
-| Ubuntu / Debian | `nyxd_<ver>_amd64.deb`, `_arm64.deb` | `nyxd`, `nyx`, systemd system + user units |
+| Ubuntu / Debian | `nyxd_<ver>_amd64.deb`, `_arm64.deb` | `nyxd`, `nyx`, the service (set up on install, see below) |
 | Fedora / RHEL / openSUSE | `nyxd-<ver>-1.x86_64.rpm`, `.aarch64.rpm` | same |
 | Arch Linux | `nyxd-<ver>-1-x86_64.pkg.tar.zst`, `-aarch64` | same |
-| Alpine | `nyxd_<ver>_x86_64.apk`, `_aarch64.apk` | `nyxd`, `nyx`, OpenRC script |
-| Linux (any) | `nyxd_<ver>_linux_<arch>.tar.gz`, `nyxd-linux-<arch>`, `nyx-linux-<arch>` | archive, bare binaries |
+| Alpine | `nyxd_<ver>_x86_64.apk`, `_aarch64.apk` | same |
+| Linux (any) | `nyxd_<ver>_linux_<arch>.tar.gz`, `nyxd-linux-<arch>`, `nyx-linux-<arch>` | archive (binaries + service files), bare binaries |
 | macOS (Apple silicon, Intel) | `nyxd_<ver>_darwin_arm64.tar.gz`, `_amd64`, `nyx-darwin-<arch>` | the `nyx` client |
 | Windows (x64, ARM64) | `nyxd_<ver>_windows_amd64.zip`, `_arm64`, `nyx-windows-<arch>.exe` | `nyx.exe` |
 | Windows WSL2 | `nyx-wsl-<arch>.tar.gz` (+ `.sha256`) | the distro `nyx machine init` imports |
+| Installers | `install.sh` (Linux, macOS), `install.ps1` (Windows) | one-command install, upgrade and removal ([INSTALL.md](INSTALL.md#quick-install)) |
 
 `nyxd` is Linux-only; on macOS and Windows, `nyx` drives a `nyxd` running in
 a Linux VM or in the nyx WSL2 distro. All Linux packages depend on `crun`.
@@ -80,6 +81,50 @@ gpg --keyserver hkps://keys.openpgp.org --send-keys "$FPR"   # then confirm by e
 
 Put the fingerprint in the README and on the website so users can check the
 key they download. Every release also ships `nyxd-release-key.asc`.
+
+## Services and installers
+
+Every install method ends in the same service setup, done by one script,
+`packaging/linux/nyxd-service` (installed as `/usr/lib/nyxd/nyxd-service`):
+it detects the init system (systemd, OpenRC, runit, SysV; none in a container
+or chroot) and installs, enables and starts the matching file from
+`/usr/share/nyxd/init/`:
+
+| Init | File | Enabled with |
+|------|------|--------------|
+| systemd | `nyxd.service` (`/usr/lib/systemd/system`; `/etc/systemd/system` for binary installs) | `systemctl enable` |
+| OpenRC | `nyxd.openrc` → `/etc/init.d/nyxd` | `rc-update add nyxd default` |
+| runit | `runit/run` → `/etc/sv/nyxd` (or `/etc/runit/sv`) | link in `/etc/runit/runsvdir/default` (or `/var/service`) |
+| SysV | `nyxd.sysv` → `/etc/init.d/nyxd` | `update-rc.d` / `chkconfig` |
+
+All of them read `NYXD_OPTS` (and `NYXD_NO_START`) from `/etc/default/nyxd`.
+The package scripts call it:
+
+- **post-install / post-upgrade** (`packaging/linux/postinstall.sh`): create the `nyx` group, `nyxd-service setup`
+  (install, enable, start; an upgrade restarts with the new binary). apk and pacman run separate upgrade hooks,
+  wired to the same script.
+- **pre-remove** (`preremove.sh`): `nyxd-service teardown` on removal only (deb `upgrade`, rpm `$1 = 1` skip it).
+- **post-remove** (`postremove.sh`): on `dpkg --purge`, also `/etc/default/nyxd`. `/var/lib/nyxd` is never removed
+  by a package.
+
+`scripts/install.sh` (published with each release) installs the native package where one fits, else the archive under
+`/usr/local` plus the same service files, and runs `nyxd-service setup` itself. `packaging/windows/install.ps1`
+does the Windows side: `nyx.exe` on the user `PATH`, `nyx machine init`, and a logon task running
+`nyx machine start`; run again, it replaces `nyxd` inside the existing distro so its data survives.
+
+### Testing installers
+
+`scripts/install-smoke.sh` builds a snapshot, stages it as a fake `v9.9.9` release and runs, in podman containers:
+the `.deb` under a real systemd, the `.apk` under a booted OpenRC (install, upgrade, remove), binary installs under
+SysV (Debian) and runit (Void), the `.rpm` and Arch package, `--rootless`, and a tampered download. Run it after
+changing anything in `packaging/` or the installers:
+
+```bash
+scripts/install-smoke.sh            # everything (~5 min)
+scripts/install-smoke.sh openrc     # one scenario
+```
+
+`install.ps1` is checked by parsing it (`pwsh`); the logon task and WSL steps need a Windows machine.
 
 ## Cutting a release
 
@@ -151,4 +196,7 @@ gpg --verify nyx-windows-amd64.exe.sig nyx-windows-amd64.exe
   a SmartScreen prompt on first run.
 - **Package repositories** (apt/dnf/pacman/apk repos, Homebrew tap,
   Scoop/winget manifests). Releases ship files only; a repository would let
-  `apt upgrade` and friends pick up new versions.
+  `apt upgrade` and friends pick up new versions. Until then, running
+  `install.sh` / `install.ps1` again upgrades.
+- **A nyxd service on macOS.** `nyxd` is Linux-only and there is no macOS
+  `nyx machine` (VM) provider yet, so the macOS install is the `nyx` client.

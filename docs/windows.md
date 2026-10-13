@@ -24,6 +24,31 @@ No other distro is needed: nyx brings its own.
 
 ## Install
 
+One command in PowerShell (no administrator rights needed once WSL is enabled):
+
+```powershell
+irm https://github.com/zrougamed/nyxd/releases/latest/download/install.ps1 | iex
+```
+
+It downloads `nyx.exe` for your CPU (x64 or ARM64), checks it against `checksums.txt`, puts it in
+`%LOCALAPPDATA%\Programs\nyx` and on your `PATH`, imports the nyx WSL2 distro (`nyx machine init`), starts
+`nyxd`, and registers a logon task, **"nyx machine"**, that runs `nyx machine start` at every sign-in (hidden;
+the Startup folder is used instead where policy forbids user tasks). If WSL is not enabled yet it says so:
+run `wsl --install --no-distribution` as administrator, restart, and run the installer again.
+
+Running it again **upgrades**: a new `nyx.exe`, and the `nyxd` inside the existing distro is replaced in place, so
+images and containers are kept. With options, download the script first:
+
+```powershell
+.\install.ps1 -Version v0.10.0     # a given release
+.\install.ps1 -NoAutostart         # no logon task
+.\install.ps1 -NoMachine           # nyx.exe only (for a nyxd elsewhere)
+.\install.ps1 -Uninstall           # remove nyx.exe, the task and the PATH entry; keep the distro
+.\install.ps1 -Uninstall -Purge    # also unregister the distro, deleting images and containers
+```
+
+### Manual install
+
 1. Download `nyx-windows-amd64.exe` (or `-arm64.exe` for Windows on ARM) and `checksums.txt` from the
    [releases](https://github.com/zrougamed/nyxd/releases), check it, rename it to `nyx.exe` and put it on your `PATH`:
 

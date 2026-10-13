@@ -17,11 +17,55 @@ Typical setups: run **nyxd** on the host and **nyx** locally, or call the Unix-s
 
 Networking defaults to **`-net-driver=native`** (no `/opt/cni/bin`). See [networking.md](networking.md).
 
+## Quick install
+
+One command per platform. It downloads the release, checks it against the signed `checksums.txt`, and sets
+`nyxd` up as a service that starts at boot.
+
+```bash
+# Linux and macOS
+curl -fsSL https://github.com/zrougamed/nyxd/releases/latest/download/install.sh | sh
+```
+
+```powershell
+# Windows (PowerShell, no admin rights needed once WSL is enabled)
+irm https://github.com/zrougamed/nyxd/releases/latest/download/install.ps1 | iex
+```
+
+What it does:
+
+| Platform | Installs | Service |
+|----------|----------|---------|
+| Debian, Ubuntu, Fedora, RHEL, openSUSE, Arch, Alpine | the native package (`.deb`, `.rpm`, `.pkg.tar.zst`, `.apk`), so upgrades and removal go through your package manager; `crun` comes as a dependency | enabled and started for the init system in use |
+| Any other Linux (Void, Gentoo, Slackware, ...) | `nyxd`, `nyx` in `/usr/local/bin`; installs `crun` when it can | same |
+| Linux, `--rootless` | `nyxd`, `nyx` in `~/.local/bin`, no root | systemd **user** service |
+| macOS | the `nyx` client in `/usr/local/bin` | none: `nyxd` needs Linux (a VM or a server) |
+| Windows | `nyx.exe` in `%LOCALAPPDATA%\Programs\nyx` (added to `PATH`), the nyx WSL2 distro | logon task "nyx machine" runs `nyx machine start` |
+
+The service is set up for **systemd**, **OpenRC**, **runit** or **SysV init**, whichever the machine runs (no
+running init, as in a container: it says how to start `nyxd` by hand). Options:
+
+```bash
+curl -fsSL .../install.sh | sh -s -- --version v0.10.0     # a given release
+curl -fsSL .../install.sh | sh -s -- --method binary       # skip the native package
+curl -fsSL .../install.sh | sh -s -- --rootless            # per user, no root daemon
+curl -fsSL .../install.sh | sh -s -- --no-start            # set up and enable, do not start
+curl -fsSL .../install.sh | sh -s -- --uninstall [--purge] # --purge also deletes images and containers
+```
+
+Afterwards, let your user talk to the daemon without sudo (log in again afterwards):
+
+```bash
+sudo usermod -aG nyx "$USER"      # Alpine: sudo addgroup "$USER" nyx
+nyx ping
+```
+
 ## Install from a release package
 
 Each [release](https://github.com/zrougamed/nyxd/releases) has signed packages for amd64 and arm64.
-They install `nyxd` and `nyx` to `/usr/bin`, pull in `crun`, create the `nyx` group and add a
-systemd unit (OpenRC on Alpine). Check the signature first ([packaging.md](packaging.md#verifying-downloads-users)).
+They install `nyxd` and `nyx` to `/usr/bin`, pull in `crun`, create the `nyx` group, and **install, enable and
+start the service** for your init system (an upgrade restarts it, removal stops and disables it). Check the
+signature first ([packaging.md](packaging.md#verifying-downloads-users)).
 
 ```bash
 sudo apt install ./nyxd_<version>_amd64.deb                 # Debian, Ubuntu
@@ -30,15 +74,27 @@ sudo pacman -U nyxd-<version>-1-x86_64.pkg.tar.zst          # Arch Linux
 sudo apk add --allow-untrusted ./nyxd_<version>_x86_64.apk  # Alpine (after checking its .sig)
 ```
 
-Then start it and let your user talk to it without sudo:
+To install without starting it (images built for later, configuration first), put `NYXD_NO_START=1` in
+`/etc/default/nyxd` before installing.
+
+## Managing the service
+
+Settings live in **`/etc/default/nyxd`** for every init system; restart after a change:
 
 ```bash
-sudo systemctl enable --now nyxd     # Alpine: sudo rc-update add nyxd default && sudo rc-service nyxd start
-sudo usermod -aG nyx "$USER"         # Alpine: sudo addgroup "$USER" nyx; log in again afterwards
-nyx ping
+NYXD_OPTS="-log-level info -net-driver native"   # any nyxd flags (nyxd -h)
+NYXD_NO_START=0                                  # 1: package installs/upgrades do not (re)start it
 ```
 
-macOS and Windows releases contain the `nyx` client only; on Windows see [Windows](windows.md).
+| Init system | Status / restart | Logs |
+|-------------|------------------|------|
+| systemd | `systemctl status nyxd` / `systemctl restart nyxd` | `journalctl -u nyxd` |
+| OpenRC | `rc-service nyxd status` / `rc-service nyxd restart` | `/var/log/nyxd.log` |
+| runit | `sv status nyxd` / `sv restart nyxd` | runit's log (stderr) |
+| SysV | `/etc/init.d/nyxd status` / `/etc/init.d/nyxd restart` | `/var/log/nyxd.log` |
+
+`/usr/lib/nyxd/nyxd-service` (`/usr/local/lib/nyxd/` for `install.sh` binary installs) does the same on any of
+them: `nyxd-service status|restart|setup|teardown|detect`.
 
 ## Install to `/usr/bin`
 

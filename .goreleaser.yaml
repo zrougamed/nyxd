@@ -46,6 +46,14 @@ archives:
     files:
       - LICENSE
       - README.md
+      # Service files for install.sh binary installs (all init systems).
+      - packaging/linux/nyxd-service
+      - packaging/linux/nyxd.service
+      - packaging/linux/nyxd-user.service
+      - packaging/linux/nyxd.openrc
+      - packaging/linux/nyxd.sysv
+      - packaging/linux/nyxd.default
+      - packaging/linux/runit/run
   # Bare binaries under the names earlier releases used (nyx-windows-amd64.exe,
   # nyxd-linux-arm64, ...); docs and install scripts link to them.
   - id: raw-nyxd
@@ -115,11 +123,37 @@ nfpms:
         packager: archlinux
         file_info:
           mode: 0644
-      - src: packaging/linux/nyxd.openrc
-        dst: /etc/init.d/nyxd
-        packager: apk
+      # nyxd-service sets the service up for the init system in use
+      # (systemd, OpenRC, runit, SysV) from these templates: see
+      # packaging/linux/nyxd-service and the package scripts.
+      - src: packaging/linux/nyxd-service
+        dst: /usr/lib/nyxd/nyxd-service
         file_info:
           mode: 0755
+      - src: packaging/linux/nyxd.service
+        dst: /usr/share/nyxd/init/nyxd.service
+        file_info:
+          mode: 0644
+      - src: packaging/linux/nyxd-user.service
+        dst: /usr/share/nyxd/init/nyxd-user.service
+        file_info:
+          mode: 0644
+      - src: packaging/linux/nyxd.openrc
+        dst: /usr/share/nyxd/init/nyxd.openrc
+        file_info:
+          mode: 0755
+      - src: packaging/linux/nyxd.sysv
+        dst: /usr/share/nyxd/init/nyxd.sysv
+        file_info:
+          mode: 0755
+      - src: packaging/linux/runit/run
+        dst: /usr/share/nyxd/init/runit/run
+        file_info:
+          mode: 0755
+      - src: packaging/linux/nyxd.default
+        dst: /usr/share/nyxd/init/nyxd.default
+        file_info:
+          mode: 0644
       - src: LICENSE
         dst: /usr/share/licenses/nyxd/LICENSE
         file_info:
@@ -131,6 +165,7 @@ nfpms:
     scripts:
       postinstall: packaging/linux/postinstall.sh
       preremove: packaging/linux/preremove.sh
+      postremove: packaging/linux/postremove.sh
     # Native package signatures with the release GPG key (NFPM_KEY_FILE, an
     # armored private key, and NFPM_PASSPHRASE). apk signatures are RSA, not
     # GPG: set NFPM_APK_KEY_FILE to an RSA key to sign them, else they are
@@ -142,7 +177,13 @@ nfpms:
     rpm:
       signature:
         key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+    archlinux:
+      scripts:
+        postupgrade: packaging/linux/postinstall.sh
     apk:
+      # apk and pacman run separate hooks on upgrade: restart with the new binary.
+      scripts:
+        postupgrade: packaging/linux/postinstall.sh
       signature:
         key_file: '{{ envOrDefault "NFPM_APK_KEY_FILE" "" }}'
         key_name: nyxd
@@ -151,6 +192,8 @@ checksum:
   # One checksums.txt (sha256sum format) for everything, signed below.
   name_template: checksums.txt
   algorithm: sha256
+  extra_files:
+    - glob: ./dist-extra/*
 
 signs:
   # A detached binary GPG signature (<file>.sig) for checksums.txt and for
@@ -185,8 +228,9 @@ release:
   github:
     owner: zrougamed
     name: nyxd
-  # WSL2 distro tarballs (scripts/build-wsl-rootfs.sh, signed by the workflow)
-  # and the public key that verifies everything.
+  # WSL2 distro tarballs (scripts/build-wsl-rootfs.sh), the installers
+  # (install.sh, install.ps1), all signed by the workflow, and the public key
+  # that verifies everything.
   extra_files:
     - glob: ./dist-extra/*
 
