@@ -63,7 +63,9 @@ jobs:
       # nyx-wsl-<arch>.tar.gz from the release matching its version and checks
       # it against the .sha256 next to it. Signed here; GoReleaser uploads
       # dist-extra/ as is, with the public key next to it.
-      - name: Build and sign WSL tarballs
+      # The installers go out with every release, so .../releases/latest/download/
+      # install.sh (and install.ps1) always match the newest packages.
+      - name: Build and sign WSL tarballs and installers
         env:
           VERSION: ${{ github.ref_name }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -73,7 +75,9 @@ jobs:
           for goarch in amd64 arm64; do
             scripts/build-wsl-rootfs.sh "${goarch}" dist-extra "${VERSION}"
           done
-          for f in dist-extra/*.tar.gz; do
+          install -m 0755 scripts/install.sh dist-extra/install.sh
+          install -m 0644 packaging/windows/install.ps1 dist-extra/install.ps1
+          for f in dist-extra/*.tar.gz dist-extra/install.sh dist-extra/install.ps1; do
             printf '%s' "${GPG_PASSPHRASE}" | gpg --batch --yes --pinentry-mode=loopback \
               --passphrase-fd=0 --local-user="${GPG_FINGERPRINT}" \
               --output="${f}.sig" --detach-sign "${f}"

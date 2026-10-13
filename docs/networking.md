@@ -109,7 +109,7 @@ Both satisfy `network.Backend` (see compile-time assertions in `native/manager.g
 
 ## systemd
 
-The repo’s `nyxd.service` example runs with **`--net-driver=native`** and does not mount `/etc/cni` in `ReadWritePaths` (native mode does not need it). If you switch the unit to `-net-driver=cni`, add `/etc/cni` (and ensure `/opt/cni/bin` is available on the host) as appropriate for your layout.
+The packaged service (`packaging/linux/nyxd.service`) runs the default **native** driver. To use CNI, set `NYXD_OPTS="-net-driver=cni"` in `/etc/default/nyxd` (and make sure `/opt/cni/bin` exists), then restart the service.
 
 ## Related docs
 

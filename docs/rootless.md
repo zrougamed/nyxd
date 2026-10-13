@@ -142,7 +142,7 @@ nyxd unshare                                  # interactive shell
 
 ```bash
 install -Dm755 bin/nyxd ~/.local/bin/nyxd
-install -Dm644 packaging/nyxd-user.service ~/.config/systemd/user/nyxd.service
+install -Dm644 packaging/linux/nyxd-user.service ~/.config/systemd/user/nyxd.service
 systemctl --user daemon-reload
 systemctl --user enable --now nyxd
 loginctl enable-linger "$USER"     # keep running after logout

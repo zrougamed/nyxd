@@ -1,0 +1,248 @@
+#!/bin/sh
+# nyxd-service: installs, enables, starts, stops and removes the nyxd system
+# service on whatever init system the machine runs: systemd, OpenRC, runit or
+# SysV init. The nyxd packages (post-install / pre-remove) and install.sh
+# both use it, so every install method sets the service up the same way.
+#
+#   nyxd-service detect      print systemd | openrc | runit | sysv | none
+#   nyxd-service setup       install + enable + start (restart if running)
+#   nyxd-service teardown    stop + disable + remove what setup installed
+#   nyxd-service start|stop|restart|status|enable|disable|install|uninstall
+#
+# Environment:
+#   NYXD_BINDIR    directory holding nyxd (default: ../../bin next to this script, else /usr/bin)
+#   NYXD_SHARE     service templates (default: ../../share/nyxd, /usr/share/nyxd, /usr/local/share/nyxd)
+#   NYXD_NO_START  1: install and enable the service, but do not start it
+#                  (also read from /etc/default/nyxd, for package installs)
+#   NYXD_INIT      use this init system instead of detecting one
+#   NYXD_ROOT      prefix for every path written (tests)
+set -eu
+
+ROOT=${NYXD_ROOT:-}
+here=$(cd "$(dirname "$0")" && pwd)
+
+share() {
+	for d in ${NYXD_SHARE:-} "$here/../../share/nyxd" /usr/share/nyxd /usr/local/share/nyxd; do
+		if [ -f "$d/init/nyxd.service" ]; then
+			echo "$d/init"
+			return
+		fi
+	done
+	echo "nyxd-service: service templates not found (set NYXD_SHARE)" >&2
+	exit 1
+}
+
+bindir() {
+	if [ -n "${NYXD_BINDIR:-}" ]; then
+		echo "$NYXD_BINDIR"
+	elif [ -x "$here/../../bin/nyxd" ]; then
+		(cd "$here/../../bin" && pwd)
+	else
+		echo /usr/bin
+	fi
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+detect() {
+	if [ -n "${NYXD_INIT:-}" ]; then
+		echo "$NYXD_INIT"
+	elif [ -d "$ROOT/run/systemd/system" ]; then
+		echo systemd
+	elif [ -d "$ROOT/run/openrc" ] || { have openrc-run && have rc-update; }; then
+		echo openrc
+	elif [ -d "$ROOT/run/runit" ] || [ -d "$ROOT/etc/runit/runsvdir" ]; then
+		echo runit
+	elif [ -d "$ROOT/etc/init.d" ] && { have update-rc.d || have chkconfig; }; then
+		echo sysv
+	else
+		echo none
+	fi
+}
+
+# runit keeps enabled services as links in a directory that differs between
+# distributions. The runlevel directory is the persistent one (Void and
+# Artix: /etc/runit/runsvdir/default; /var/service and /run/runit/service
+# point into it once booted), then the live ones.
+runit_svdir() {
+	for d in "$ROOT/etc/runit/runsvdir/default" "$ROOT/run/runit/service" "$ROOT/var/service" "$ROOT/etc/service"; do
+		if [ -d "$d" ]; then
+			echo "$d"
+			return
+		fi
+	done
+	echo "$ROOT/var/service"
+}
+
+runit_srcdir() {
+	if [ -d "$ROOT/etc/runit/sv" ]; then echo "$ROOT/etc/runit/sv"; else echo "$ROOT/etc/sv"; fi
+}
+
+# put SRC DST MODE: copy a template, pointing it at this install's nyxd.
+put() {
+	mkdir -p "$(dirname "$2")"
+	sed "s#/usr/bin/nyxd#$(bindir)/nyxd#g" "$1" >"$2.nyxd-tmp"
+	chmod "$3" "$2.nyxd-tmp"
+	mv "$2.nyxd-tmp" "$2"
+}
+
+# A package ships its unit in /usr/lib; install.sh writes one in /etc.
+systemd_unit() {
+	if [ -f "$ROOT/usr/lib/systemd/system/nyxd.service" ] && [ "$(bindir)" = /usr/bin ]; then
+		echo "$ROOT/usr/lib/systemd/system/nyxd.service"
+	else
+		echo "$ROOT/etc/systemd/system/nyxd.service"
+	fi
+}
+
+reload_systemd() {
+	if [ -z "$ROOT" ] && [ -d /run/systemd/system ]; then systemctl daemon-reload; fi
+}
+
+install_service() {
+	t=$(share)
+	if [ ! -f "$ROOT/etc/default/nyxd" ]; then put "$t/nyxd.default" "$ROOT/etc/default/nyxd" 0644; fi
+	case $(detect) in
+	systemd)
+		u=$(systemd_unit)
+		case $u in */etc/systemd/*) put "$t/nyxd.service" "$u" 0644 ;; esac
+		reload_systemd
+		;;
+	openrc) put "$t/nyxd.openrc" "$ROOT/etc/init.d/nyxd" 0755 ;;
+	runit) put "$t/runit/run" "$(runit_srcdir)/nyxd/run" 0755 ;;
+	sysv) put "$t/nyxd.sysv" "$ROOT/etc/init.d/nyxd" 0755 ;;
+	esac
+}
+
+# Removes what install_service wrote (/etc/default/nyxd is kept: it holds
+# the admin's settings).
+uninstall_service() {
+	case $(detect) in
+	systemd)
+		rm -f "$ROOT/etc/systemd/system/nyxd.service"
+		reload_systemd || true
+		;;
+	openrc | sysv) rm -f "$ROOT/etc/init.d/nyxd" ;;
+	runit) rm -rf "$(runit_srcdir)/nyxd" ;;
+	esac
+}
+
+enable_service() {
+	case $(detect) in
+	systemd) systemctl enable nyxd.service ;;
+	openrc) rc-update add nyxd default ;;
+	runit)
+		mkdir -p "$(runit_svdir)"
+		if [ ! -e "$(runit_svdir)/nyxd" ]; then ln -s "$(runit_srcdir)/nyxd" "$(runit_svdir)/nyxd"; fi
+		;;
+	sysv)
+		if have update-rc.d; then
+			update-rc.d nyxd defaults
+		elif have chkconfig; then
+			chkconfig --add nyxd && chkconfig nyxd on
+		fi
+		;;
+	esac
+}
+
+disable_service() {
+	case $(detect) in
+	systemd) systemctl disable nyxd.service ;;
+	openrc) rc-update del nyxd default ;;
+	runit) rm -f "$(runit_svdir)/nyxd" ;;
+	sysv)
+		if have update-rc.d; then
+			update-rc.d -f nyxd remove
+		elif have chkconfig; then
+			chkconfig --del nyxd
+		fi
+		;;
+	esac
+}
+
+# ctl start|stop|restart|status
+ctl() {
+	case $(detect) in
+	systemd) systemctl "$1" nyxd.service ;;
+	openrc) rc-service nyxd "$1" ;;
+	runit)
+		# runsvdir picks a new link up within ~5s; sv needs it to have.
+		i=0
+		while [ ! -p "$(runit_svdir)/nyxd/supervise/control" ] && [ "$i" -lt 10 ]; do
+			sleep 1
+			i=$((i + 1))
+		done
+		sv "$1" "$(runit_svdir)/nyxd"
+		;;
+	sysv) "$ROOT/etc/init.d/nyxd" "$1" ;;
+	*) return 1 ;;
+	esac
+}
+
+running() { ctl status >/dev/null 2>&1; }
+
+# no_start: NYXD_NO_START from the environment, else from /etc/default/nyxd
+# (package managers such as apk run their scripts with an empty environment).
+no_start() {
+	if [ -n "${NYXD_NO_START:-}" ]; then
+		echo "$NYXD_NO_START"
+	elif [ -r "$ROOT/etc/default/nyxd" ]; then
+		# shellcheck source=/dev/null
+		(. "$ROOT/etc/default/nyxd" && echo "${NYXD_NO_START:-0}")
+	else
+		echo 0
+	fi
+}
+
+manual() {
+	cat <<MSG
+nyxd-service: no supported init system found (systemd, OpenRC, runit or SysV).
+Start nyxd yourself, as root:
+  sudo $(bindir)/nyxd -socket-group nyx &
+or rootless, as your user:
+  $(bindir)/nyxd &
+MSG
+}
+
+setup() {
+	install_service
+	init=$(detect)
+	if [ "$init" = none ]; then
+		manual
+		return 0
+	fi
+	enable_service >/dev/null
+	if [ "$(no_start)" = 1 ]; then
+		echo "nyxd: $init service installed and enabled (NYXD_NO_START=1: not started)"
+		return 0
+	fi
+	if running; then
+		ctl restart >/dev/null
+	else
+		ctl start >/dev/null
+	fi
+	echo "nyxd: $init service installed, enabled and running"
+}
+
+teardown() {
+	if [ "$(detect)" != none ]; then
+		ctl stop >/dev/null 2>&1 || true
+		disable_service >/dev/null 2>&1 || true
+	fi
+	uninstall_service
+}
+
+case ${1:-} in
+detect) detect ;;
+setup) setup ;;
+teardown) teardown ;;
+install) install_service ;;
+uninstall) uninstall_service ;;
+enable) enable_service ;;
+disable) disable_service ;;
+start | stop | restart | status) ctl "$1" ;;
+*)
+	sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+	exit 2
+	;;
+esac

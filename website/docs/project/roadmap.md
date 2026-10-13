@@ -54,7 +54,7 @@ flowchart LR
 - [x] **Daemon entry** — `cmd/nyxd`: wiring for store, overlay, **`network.Backend`** (`-net-driver` **native** default or **cni**), runtime, log collector, supervisor; graceful shutdown context (30s); root check; **Unix socket HTTP control API** (`-socket`, default `/run/nyxd/nyxd.sock`); startup log **`network backend`** / **`driver`**; `go.sum` maintained via `go mod tidy`.
 - [x] **`nyx` CLI client** — `cmd/nyx`: `ping`, `version`, `pull` (streamed progress + summary by default, `--json` for single JSON; optional **`--username` / `--password`**), `run` (foreground: log follow + **Ctrl+C → `POST …/kill` SIGKILL**; `-d`/`--detach`), `ps`, `rm`, `stop`, `logs` (`-f` / `--tail`), `image ls` / `image rm` / **`image prune`** (`--dry-run`), `exec`, `container` aliases, **`nyx compose up|stop|down`** (compose file discovery, **`down -v`**); `make build-nyx` → `bin/nyx`.
 - [x] **Unit tests** — compose parser, image ref parsing, native IPAM (Linux build); no end-to-end integration tests.
-- [x] **Docs / packaging** — [documentation index](/docs/), **INSTALL** / **USAGE**, **OpenAPI**, [networking](/docs/operations/networking), kernel requirements, native network internals, QEMU Alpine guide, example service units (`Type=simple` in `packaging/nyxd.service`, `Type=notify` in repo `nyxd.service` without `sd_notify` yet).
+- [x] **Docs / packaging** — [documentation index](/docs/), **INSTALL** / **USAGE**, **OpenAPI**, [networking](/docs/operations/networking), kernel requirements, native network internals, QEMU Alpine guide, service files for systemd (system + user), OpenRC, runit and SysV in `packaging/linux/`, set up by `nyxd-service` from the packages, `install.sh` and `make install-native`.
 
 ---
 
