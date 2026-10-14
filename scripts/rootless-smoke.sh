@@ -54,4 +54,12 @@ kill -TERM "$DAEMON"
 wait "$DAEMON" || fail "daemon exit status"
 DAEMON=""
 grep -q "nyxd stopped cleanly" "$WORK/nyxd.log" || fail "unclean shutdown"
+
+# nyxd unshare: a missing command, and a missing $SHELL when none is given.
+st=0
+"$BIN/nyxd" unshare no-such-command-nyx 2>/dev/null || st=$?
+[ "$st" = 127 ] || fail "unshare of a missing command exited $st"
+st=0
+SHELL=/no/such/shell "$BIN/nyxd" unshare </dev/null 2>/dev/null || st=$?
+[ "$st" = 127 ] || fail "unshare with a missing \$SHELL exited $st"
 echo "rootless smoke test: OK"
