@@ -1,0 +1,37 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh disable=SC2034 # read by openrc-run
+
+# nyx VM: mount the data disk (/dev/vdb) on /var/lib/nyxd, formatting it on
+# first boot. The root disk is replaced on upgrade; this one is kept.
+
+description="nyx data disk for /var/lib/nyxd"
+
+depend() {
+	need localmount
+	before nyxd
+}
+
+start() {
+	ebegin "Mounting the nyx data disk"
+	if [ ! -b /dev/vdb ]; then
+		eend 0 "no data disk: nyxd data stays on the root disk"
+		return 0
+	fi
+	# busybox blkid succeeds on a blank disk too: test its output.
+	if [ -z "$(blkid /dev/vdb 2>/dev/null)" ]; then
+		mkfs.ext4 -q -L nyxdata /dev/vdb || { eend 1 "mkfs failed"; return 1; }
+	fi
+	mkdir -p /var/lib/nyxd
+	mountpoint -q /var/lib/nyxd || mount -t ext4 -o noatime /dev/vdb /var/lib/nyxd || { eend 1 "mount failed"; return 1; }
+	# nyx machine init --disk-size grows the disk file: grow the filesystem
+	# to match (online; a no-op when it already fills the disk).
+	resize2fs /dev/vdb >/dev/null 2>&1 || ewarn "could not grow the data disk filesystem"
+	einfo "nyx data disk: $(df -k /var/lib/nyxd | awk 'NR == 2 { print $2 }') KiB"
+	eend 0
+}
+
+stop() {
+	ebegin "Unmounting the nyx data disk"
+	if mountpoint -q /var/lib/nyxd; then umount /var/lib/nyxd; fi
+	eend 0
+}

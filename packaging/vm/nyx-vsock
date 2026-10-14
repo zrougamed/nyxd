@@ -1,0 +1,18 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh disable=SC2034
+# nyx VM: bridge the nyxd socket to vsock port 1024. vfkit exposes that port
+# as a Unix socket on the Mac (virtio-vsock,listen), which nyx connects to.
+
+description="nyxd control socket over vsock"
+command="/usr/bin/socat"
+command_args="VSOCK-LISTEN:1024,reuseaddr,fork UNIX-CONNECT:/run/nyxd/nyxd.sock"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+
+depend() {
+	need nyxd
+}
+
+start_pre() {
+	modprobe -q vmw_vsock_virtio_transport 2>/dev/null || true
+}

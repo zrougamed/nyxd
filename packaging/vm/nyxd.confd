@@ -1,0 +1,4 @@
+# nyx VM: nyxd logs to the console, which vfkit writes to console.log on the
+# Mac (nyx machine logs). /etc/default/nyxd holds the flags.
+output_log="/dev/hvc0"
+error_log="/dev/hvc0"

@@ -1,0 +1,4 @@
+# nyx VM. /var/lib/nyxd is mounted by the nyx-datadisk service.
+/dev/vda	/	ext4	rw,noatime	0 1
+# The Mac's /Users (virtio-fs tag "users"), at the same path.
+users	/Users	virtiofs	rw,nofail	0 0

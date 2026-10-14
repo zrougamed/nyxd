@@ -11,7 +11,7 @@ LDFLAGS  := -w -s \
 	-X main.gitCommit=$(COMMIT) \
 	-X main.buildDate=$(DATE)
 
-.PHONY: all build build-nyx build-windows wsl-rootfs snapshot lint vet test test-overlay test-rootless test-build test-transfer test-wsl coverage clean install install-usr scan scan-trivy scan-grype
+.PHONY: all build build-nyx build-windows wsl-rootfs vm-image test-vm snapshot lint vet test test-overlay test-rootless test-build test-transfer test-wsl coverage clean install install-usr scan scan-trivy scan-grype
 
 BINDIR ?= /usr/local/bin
 
@@ -47,6 +47,17 @@ build-windows:
 WSL_ARCH ?= amd64
 wsl-rootfs:
 	scripts/build-wsl-rootfs.sh $(WSL_ARCH) bin $(VERSION)
+
+# macOS VM image (Alpine + OpenRC + static nyxd and crun, booted by vfkit):
+# bin/nyx-vm-<arch>.tar.gz. VM_ARCH=amd64 for Intel Macs; arm64 on a Linux
+# amd64 host needs binfmt emulation. test-vm boots it under QEMU/KVM.
+VM_ARCH ?= arm64
+vm-image:
+	scripts/build-vm-image.sh $(VM_ARCH) bin $(VERSION)
+
+test-vm: build-nyx
+	scripts/build-vm-image.sh amd64 bin $(VERSION)
+	scripts/vm-smoke.sh bin/nyx-vm-amd64.tar.gz
 
 # Every release archive and Linux package (deb, rpm, apk, Arch) into dist/,
 # unsigned, without publishing. Needs goreleaser v2; see docs/packaging.md.

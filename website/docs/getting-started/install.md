@@ -39,7 +39,7 @@ What it does:
 | Debian, Ubuntu, Fedora, RHEL, openSUSE, Arch, Alpine | the native package (`.deb`, `.rpm`, `.pkg.tar.zst`, `.apk`), so upgrades and removal go through your package manager; `crun` comes as a dependency | enabled and started for the init system in use |
 | Any other Linux (Void, Gentoo, Slackware, ...) | `nyxd`, `nyx` in `/usr/local/bin`; installs `crun` when it can | same |
 | Linux, `--rootless` | `nyxd`, `nyx` in `~/.local/bin`, no root | systemd **user** service |
-| macOS | the `nyx` client in `/usr/local/bin` | none: `nyxd` needs Linux (a VM or a server) |
+| macOS | `nyx` in `/usr/local/bin`, vfkit (Homebrew), the nyx VM that runs `nyxd` | launchd agent runs `nyx machine run` at login ([macos.md](/docs/getting-started/macos)) |
 | Windows | `nyx.exe` in `%LOCALAPPDATA%\Programs\nyx` (added to `PATH`), the nyx WSL2 distro | logon task "nyx machine" runs `nyx machine start` |
 
 The service is set up for **systemd**, **OpenRC**, **runit** or **SysV init**, whichever the machine runs (no

@@ -7,7 +7,7 @@ Minimal OCI container orchestrator for **Linux** (x86_64, arm64, and similar) â€
 
 **Zero Docker. Zero Podman. Zero containerd.**
 
-Builds images from Dockerfiles with **`nyx build`** (no Docker/BuildKit; see **[docs/build.md](docs/build.md)**) and moves them with **`nyx push` / `save` / `load`** (see **[docs/images.md](docs/images.md)**). Runs as **root** or **rootless** (start `nyxd` as a normal user; see **[docs/rootless.md](docs/rootless.md)**). On **Windows**, `nyx.exe` drives `nyxd` in a minimal WSL2 distro (see **[docs/windows.md](docs/windows.md)**). Uses `crun` as the OCI runtime. **Networking** defaults to in-process **native** mode; optional **CNI** plugins are supported. See **[docs/networking.md](docs/networking.md)** for `-net-driver`, the startup log line, and `nyx run` / stop behavior.
+Builds images from Dockerfiles with **`nyx build`** (no Docker/BuildKit; see **[docs/build.md](docs/build.md)**) and moves them with **`nyx push` / `save` / `load`** (see **[docs/images.md](docs/images.md)**). Runs as **root** or **rootless** (start `nyxd` as a normal user; see **[docs/rootless.md](docs/rootless.md)**). On **Windows**, `nyx.exe` drives `nyxd` in a minimal WSL2 distro (see **[docs/windows.md](docs/windows.md)**); on **macOS**, in a small Linux VM on vfkit (see **[docs/macos.md](docs/macos.md)**). Uses `crun` as the OCI runtime. **Networking** defaults to in-process **native** mode; optional **CNI** plugins are supported. See **[docs/networking.md](docs/networking.md)** for `-net-driver`, the startup log line, and `nyx run` / stop behavior.
 
 **Docs index:** **[docs/README.md](docs/README.md)** â€” install, usage, OpenAPI, QEMU Alpine, kernel notes.
 
@@ -77,7 +77,7 @@ irm https://github.com/zrougamed/nyxd/releases/latest/download/install.ps1 | iex
 ```
 
 Installs the package for your distribution (or the binaries) and sets `nyxd` up as a service for systemd,
-OpenRC, runit or SysV init; on Windows it sets up the WSL2 machine and starts it at logon.
+OpenRC, runit or SysV init; on Windows it sets up the WSL2 machine and on macOS the nyx VM, and starts it at login.
 
 See **[docs/INSTALL.md](docs/INSTALL.md)** (Linux install, systemd, cross-build) and **[docs/USAGE.md](docs/USAGE.md)** (`nyx` + `curl`).
 

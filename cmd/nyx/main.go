@@ -25,15 +25,21 @@ import (
 
 const systemSocket = "/run/nyxd/nyxd.sock"
 
-// defaultSocket picks NYXD_SOCKET, else (for non-root users) the user's own
-// rootless daemon at $XDG_RUNTIME_DIR/nyxd/nyxd.sock when it exists, else the
-// system daemon.
+// defaultSocket picks NYXD_SOCKET, else the nyx machine (WSL distro on
+// Windows, the VM's socket on macOS once created), else (for non-root users)
+// the user's own rootless daemon at $XDG_RUNTIME_DIR/nyxd/nyxd.sock when it
+// exists, else the system daemon.
 func defaultSocket() string {
 	if v := os.Getenv("NYXD_SOCKET"); v != "" {
 		return v
 	}
 	if runtime.GOOS == "windows" {
 		return wslScheme + "nyx" // see nyx machine
+	}
+	if runtime.GOOS == "darwin" {
+		if p := darwinMachineSocket(); p != "" {
+			return p // the nyx VM (nyx machine)
+		}
 	}
 	if os.Geteuid() != 0 {
 		if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
@@ -147,8 +153,9 @@ global-options (before <command>):
 commands:
   ping
       check that nyxd is reachable
-  machine <init|start|stop|rm|status|logs> [--name NAME]
-      Windows: manage the WSL2 distro that runs nyxd (no admin rights needed after WSL is enabled)
+  machine <init|start|stop|rm|status|logs|autostart|run> [--name NAME]
+      manage where nyxd runs when the host is not Linux: the WSL2 distro on Windows,
+      the nyx VM (vfkit) on macOS. No admin rights needed. nyx machine (no args) for details
   version
       print daemon version / build info
   login [-u USER] [-p PASS | --password-stdin] [--authfile PATH] [REGISTRY]

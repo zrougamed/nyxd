@@ -1,0 +1,3 @@
+#!/bin/sh
+# Power button (vfkit / Virtualization.framework stop request): shut down cleanly.
+exec poweroff
