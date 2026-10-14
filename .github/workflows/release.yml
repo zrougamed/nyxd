@@ -106,6 +106,14 @@ jobs:
         if: always()
         run: rm -f "${RUNNER_TEMP}/gpg-key.asc" "${RUNNER_TEMP}/apk-key.rsa"
 
+  # The apt, rpm, apk and pacman repositories at pkgs.nyxd.io, rebuilt with
+  # the new release's packages (see repos.yml).
+  repos:
+    if: github.event_name == 'push'
+    needs: publish
+    uses: ./.github/workflows/repos.yml
+    secrets: inherit
+
   snapshot:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

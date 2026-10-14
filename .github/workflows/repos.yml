@@ -1,0 +1,102 @@
+name: Package repositories
+
+# Builds the signed apt, rpm, apk and pacman repositories from the packages of
+# the last KEEP releases (scripts/build-repos.sh) and publishes them, with the
+# installers and a landing page, at https://pkgs.nyxd.io: one commit,
+# force-pushed to the gh-pages branch of zrougamed/nyxd-packages (GitHub
+# Pages). The release workflow runs it after each release; run it by hand to
+# rebuild the repositories. Setup: docs/packaging.md#package-repositories.
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-repos
+  cancel-in-progress: false
+
+env:
+  KEEP: "5"
+  PAGES_REPO: git@github.com:zrougamed/nyxd-packages.git
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # GPG_PRIVATE_KEY signs the apt, rpm and pacman indexes;
+      # APK_RSA_PRIVATE_KEY (the key the .apk files are signed with) the
+      # Alpine index. Without it there is no Alpine repository.
+      - name: Import signing keys
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          APK_RSA_PRIVATE_KEY: ${{ secrets.APK_RSA_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GPG_PRIVATE_KEY}" ]; then
+            echo "::error::secret GPG_PRIVATE_KEY is not set (see docs/packaging.md)"
+            exit 1
+          fi
+          printf '%s\n' "${GPG_PRIVATE_KEY}" | gpg --batch --import
+          fpr="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')"
+          echo "GPG_FINGERPRINT=${fpr}" >> "$GITHUB_ENV"
+          if [ -n "${APK_RSA_PRIVATE_KEY}" ]; then
+            umask 077
+            printf '%s\n' "${APK_RSA_PRIVATE_KEY}" > "${RUNNER_TEMP}/apk-key.rsa"
+            echo "APK_KEY_FILE=${RUNNER_TEMP}/apk-key.rsa" >> "$GITHUB_ENV"
+          else
+            echo "::warning::secret APK_RSA_PRIVATE_KEY is not set: no Alpine repository"
+          fi
+
+      - name: Download the release packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir pkgs
+          tags="$(gh release list --exclude-drafts --exclude-pre-releases --limit "${KEEP}" --json tagName -q '.[].tagName')"
+          for tag in ${tags}; do
+            echo "${tag}"
+            gh release download "${tag}" -D pkgs -p '*.deb' -p '*.rpm' -p '*.apk' -p '*.pkg.tar.zst' -p '*.pkg.tar.zst.sig'
+          done
+
+      - name: Build the repositories
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          scripts/build-repos.sh pkgs site
+          cp scripts/install.sh packaging/windows/install.ps1 packaging/repo/index.html site/
+          echo pkgs.nyxd.io > site/CNAME
+          touch site/.nojekyll
+          du -sh site
+
+      # PACKAGES_DEPLOY_KEY: the private half of a deploy key with write
+      # access on zrougamed/nyxd-packages.
+      - name: Publish to pkgs.nyxd.io
+        env:
+          DEPLOY_KEY: ${{ secrets.PACKAGES_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_KEY}" ]; then
+            echo "::error::secret PACKAGES_DEPLOY_KEY is not set (see docs/packaging.md)"
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "${DEPLOY_KEY}" > "${RUNNER_TEMP}/deploy-key"
+          cd site
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Package repositories (${GITHUB_SHA::12})"
+          # One commit, force-pushed: the branch never accumulates old packages.
+          GIT_SSH_COMMAND="ssh -i ${RUNNER_TEMP}/deploy-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+            git push -q -f "${PAGES_REPO}" gh-pages
+
+      - name: Remove key files
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/apk-key.rsa" "${RUNNER_TEMP}/deploy-key"

@@ -103,3 +103,21 @@ jobs:
           path: .
           fail-build: false
           output-format: table
+
+  # The one-line install from the package repositories, in a fresh container
+  # per distribution (Ubuntu, Debian, Fedora, Rocky, openSUSE, Alpine, Arch):
+  # each must finish within 60 seconds. Throwaway signing keys, local server.
+  repos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # GoReleaser needs the tags for the snapshot version
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install from the repositories
+        run: scripts/repo-smoke.sh

@@ -27,7 +27,7 @@ No other distro is needed: nyx brings its own.
 One command in PowerShell (no administrator rights needed once WSL is enabled):
 
 ```powershell
-irm https://github.com/zrougamed/nyxd/releases/latest/download/install.ps1 | iex
+irm https://pkgs.nyxd.io/install.ps1 | iex
 ```
 
 It downloads `nyx.exe` for your CPU (x64 or ARM64), checks it against `checksums.txt`, puts it in

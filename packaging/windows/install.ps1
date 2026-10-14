@@ -9,7 +9,7 @@
   WSL distro is imported by `nyx machine init`, and a scheduled task named
   "nyx machine" runs `nyx machine start` at logon.
 
-    irm https://github.com/zrougamed/nyxd/releases/latest/download/install.ps1 | iex
+    irm https://pkgs.nyxd.io/install.ps1 | iex
 
   With options, download it first:
     .\install.ps1 -Version v0.10.0 -NoAutostart

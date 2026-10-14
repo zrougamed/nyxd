@@ -11,7 +11,7 @@ LDFLAGS  := -w -s \
 	-X main.gitCommit=$(COMMIT) \
 	-X main.buildDate=$(DATE)
 
-.PHONY: all build build-nyx build-windows wsl-rootfs vm-image test-vm snapshot lint vet test test-overlay test-rootless test-build test-transfer test-wsl coverage clean install install-usr scan scan-trivy scan-grype
+.PHONY: all build build-nyx build-windows wsl-rootfs vm-image test-vm snapshot lint vet test test-overlay test-rootless test-build test-transfer test-wsl test-repos coverage clean install install-usr scan scan-trivy scan-grype
 
 BINDIR ?= /usr/local/bin
 
@@ -89,6 +89,11 @@ test-transfer: build build-nyx
 # that boots the distro tarball in its own namespaces (see scripts/fake-wsl.sh).
 test-wsl: build-nyx wsl-rootfs
 	scripts/wsl-smoke.sh
+
+# The one-line install from the package repositories (pkgs.nyxd.io layout,
+# throwaway keys, local server) in a container per distribution; 60s each.
+test-repos:
+	scripts/repo-smoke.sh
 
 # Statement coverage of the module: unit tests + every e2e script, merged
 # (report in coverage/; COVER_MIN=N fails below N%).
