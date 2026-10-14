@@ -1,12 +1,14 @@
 #!/bin/sh
 # nyxd installer for Linux and macOS.
 #
-#   curl -fsSL https://github.com/zrougamed/nyxd/releases/latest/download/install.sh | sh
+#   curl -fsSL https://pkgs.nyxd.io/install.sh | sh
 #   curl -fsSL .../install.sh | sh -s -- --rootless
 #
-# Linux, as root (sudo is used when needed): installs the native package when
-# the system has a package manager nyxd ships for (apt/dpkg, dnf/yum/zypper,
-# apk, pacman), else the binaries under --prefix. Either way the nyxd service
+# Linux, as root (sudo is used when needed): adds the nyxd package repository
+# (https://pkgs.nyxd.io) for the system's package manager (apt, dnf/yum,
+# zypper, apk, pacman) and installs nyxd from it, so the usual system upgrade
+# keeps it current. Without a supported package manager, it installs the
+# binaries under --prefix. Either way the nyxd service
 # is installed, enabled and started for the init system in use: systemd,
 # OpenRC, runit or SysV (see packaging/linux/nyxd-service).
 #
@@ -19,7 +21,10 @@
 #
 # Options:
 #   --version vX.Y.Z   release to install (default: the latest)
-#   --method M         auto (default) | package | binary
+#   --method M         auto (default) | repo | package | binary
+#                      repo: add the nyxd repository and install from it;
+#                      package: install the release's package file once
+#                      (no repository: no updates with the system's upgrades)
 #   --prefix DIR       binary installs (default /usr/local; --rootless: ~/.local)
 #   --rootless         per-user install, no root daemon (Linux)
 #   --no-start         install and enable the service, do not start it
@@ -27,11 +32,14 @@
 #   --purge            with --uninstall: also delete images, containers and volumes
 #   -y, --yes          do not ask before using sudo
 #
-# Environment: NYXD_RELEASE_URL overrides where release files are downloaded
+# Environment: NYXD_REPO_URL overrides the package repository (default
+# https://pkgs.nyxd.io); NYXD_RELEASE_URL where release files are downloaded
 # from (a mirror, or a local directory for tests: file:///path).
 set -eu
 
 REPO=zrougamed/nyxd
+REPO_URL=${NYXD_REPO_URL:-https://pkgs.nyxd.io}
+REPO_URL=${REPO_URL%/}
 VERSION=""
 METHOD=auto
 PREFIX=""
@@ -62,14 +70,14 @@ while [ $# -gt 0 ]; do
 	--purge) PURGE=1 ;;
 	-y | --yes) YES=1 ;;
 	-h | --help)
-		sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
 		exit 0
 		;;
 	*) die "unknown option $1 (see --help)" ;;
 	esac
 	shift
 done
-case $METHOD in auto | package | binary) ;; *) die "--method must be auto, package or binary" ;; esac
+case $METHOD in auto | repo | package | binary) ;; *) die "--method must be auto, repo, package or binary" ;; esac
 
 OS=$(uname -s)
 case $(uname -m) in
@@ -201,6 +209,88 @@ install_package() { # install_package FORMAT
 	apk) as_root env NYXD_NO_START="$NO_START" apk add --allow-untrusted "$TMP/$f" ;;
 	archlinux) as_root env NYXD_NO_START="$NO_START" pacman -U --noconfirm "$TMP/$f" ;;
 	esac
+}
+
+# --- package repository (pkgs.nyxd.io) -------------------------------------------
+
+# put_file MODE DEST: install stdin as DEST (root-owned).
+put_file() {
+	cat >"$TMP/put"
+	as_root install -D -m "$1" "$TMP/put" "$2"
+}
+
+# add_repo FORMAT: configure the nyxd repository and refresh its metadata.
+add_repo() {
+	case $1 in
+	deb)
+		fetch "$REPO_URL/nyxd.gpg" "$TMP/nyxd.gpg" || return 1
+		put_file 0644 /usr/share/keyrings/nyxd.gpg <"$TMP/nyxd.gpg"
+		echo "deb [signed-by=/usr/share/keyrings/nyxd.gpg] $REPO_URL/apt stable main" | put_file 0644 /etc/apt/sources.list.d/nyxd.list
+		as_root env DEBIAN_FRONTEND=noninteractive apt-get update -qq || return 1
+		;;
+	rpm)
+		fetch "$REPO_URL/nyxd.asc" "$TMP/nyxd.asc" || return 1
+		as_root rpm --import "$TMP/nyxd.asc" || return 1
+		conf=/etc/yum.repos.d/nyxd.repo
+		have zypper && ! have dnf && conf=/etc/zypp/repos.d/nyxd.repo
+		printf '[nyxd]\nname=nyxd\nbaseurl=%s/rpm/$basearch\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=%s/nyxd.asc\n' \
+			"$REPO_URL" "$REPO_URL" | put_file 0644 "$conf"
+		if [ "$conf" = /etc/zypp/repos.d/nyxd.repo ]; then
+			as_root zypper --non-interactive --gpg-auto-import-keys refresh nyxd >/dev/null || return 1
+		fi
+		;;
+	apk)
+		fetch "$REPO_URL/alpine/nyxd.rsa.pub" "$TMP/nyxd.rsa.pub" || return 1
+		put_file 0644 /etc/apk/keys/nyxd.rsa.pub <"$TMP/nyxd.rsa.pub"
+		if ! grep -qx "$REPO_URL/alpine" /etc/apk/repositories 2>/dev/null; then
+			{ cat /etc/apk/repositories 2>/dev/null; echo "$REPO_URL/alpine"; } | put_file 0644 /etc/apk/repositories
+		fi
+		as_root apk update -q >/dev/null || return 1
+		;;
+	archlinux)
+		fetch "$REPO_URL/nyxd.asc" "$TMP/nyxd.asc" || return 1
+		# A fresh install (or container) may have a keyring without a master key.
+		if ! as_root gpg --homedir /etc/pacman.d/gnupg --list-secret-keys 2>/dev/null | grep -q .; then
+			as_root pacman-key --init >/dev/null 2>&1 && as_root pacman-key --populate >/dev/null 2>&1 || return 1
+		fi
+		as_root pacman-key --add "$TMP/nyxd.asc" >/dev/null 2>&1 || return 1
+		fpr=$(gpg --with-colons --show-keys "$TMP/nyxd.asc" 2>/dev/null | awk -F: '/^fpr/ {print $10; exit}')
+		[ -n "$fpr" ] && as_root pacman-key --lsign-key "$fpr" >/dev/null 2>&1 || return 1
+		if ! grep -q '^\[nyxd\]' /etc/pacman.conf; then
+			{ cat /etc/pacman.conf; printf '\n[nyxd]\nServer = %s/arch/$arch\n' "$REPO_URL"; } | put_file 0644 /etc/pacman.conf
+		fi
+		as_root pacman -Sy --noconfirm >/dev/null || return 1
+		;;
+	*) return 1 ;;
+	esac
+}
+
+# install_from_repo FORMAT: install (or upgrade to) nyxd from the repository.
+install_from_repo() {
+	v=${VERSION#v}
+	case $1 in
+	deb) as_root env NYXD_NO_START="$NO_START" DEBIAN_FRONTEND=noninteractive apt-get install -y "nyxd${v:+=$v}" ;;
+	rpm)
+		if have dnf; then as_root env NYXD_NO_START="$NO_START" dnf install -y "nyxd${v:+-$v}"
+		elif have zypper; then as_root env NYXD_NO_START="$NO_START" zypper --non-interactive install "nyxd${v:+=$v}"
+		else as_root env NYXD_NO_START="$NO_START" yum install -y "nyxd${v:+-$v}"
+		fi
+		;;
+	apk) as_root env NYXD_NO_START="$NO_START" apk add "nyxd${v:+=$v}" ;;
+	archlinux) as_root env NYXD_NO_START="$NO_START" pacman -S --needed --noconfirm nyxd ;;
+	esac
+}
+
+# remove_repo: undo add_repo (uninstall).
+remove_repo() {
+	as_root rm -f /etc/apt/sources.list.d/nyxd.list /usr/share/keyrings/nyxd.gpg \
+		/etc/yum.repos.d/nyxd.repo /etc/zypp/repos.d/nyxd.repo /etc/apk/keys/nyxd.rsa.pub
+	if grep -q '/alpine$' /etc/apk/repositories 2>/dev/null; then
+		grep -vx "$REPO_URL/alpine" /etc/apk/repositories | put_file 0644 /etc/apk/repositories
+	fi
+	if grep -q '^\[nyxd\]' /etc/pacman.conf 2>/dev/null; then
+		awk '/^\[nyxd\]$/ {skip = 1; next} /^\[/ {skip = 0} !skip' /etc/pacman.conf | put_file 0644 /etc/pacman.conf
+	fi
 }
 
 ensure_crun() {
@@ -337,6 +427,7 @@ uninstall() {
 		as_root rm -rf "$p/bin/nyxd" "$p/bin/nyx" "$p/lib/nyxd" "$p/share/nyxd"
 		removed=1
 	fi
+	remove_repo
 	[ "$removed" = 1 ] || say "nyxd does not look installed"
 	if [ "$PURGE" = 1 ]; then
 		as_root rm -rf /var/lib/nyxd /etc/default/nyxd
@@ -351,6 +442,26 @@ main() {
 		uninstall
 		return
 	fi
+	fmt=none
+	[ "$OS" = Linux ] && [ "$ROOTLESS" = 0 ] && fmt=$(pkg_manager)
+	# auto: the repository, unless a test or mirror points at release files.
+	if [ "$METHOD" = auto ] && [ "$fmt" != none ] && { [ -z "${NYXD_RELEASE_URL:-}" ] || [ -n "${NYXD_REPO_URL:-}" ]; }; then
+		METHOD=repo
+	fi
+	# pacman installs only the repository's current version.
+	[ "$METHOD" = repo ] && [ "$fmt" = archlinux ] && [ -n "$VERSION" ] && METHOD=package
+	if [ "$METHOD" = repo ]; then
+		[ "$fmt" != none ] || die "no supported package manager found (use --method binary)"
+		say "adding the nyxd repository $REPO_URL"
+		if add_repo "$fmt"; then
+			install_from_repo "$fmt" || die "installing nyxd from $REPO_URL failed"
+			say "nyxd installed from $REPO_URL; your system's upgrades keep it current"
+			return
+		fi
+		say "warning: could not use the repository $REPO_URL; installing the release package instead"
+		remove_repo
+		METHOD=package
+	fi
 	resolve_version
 	case $OS in
 	Darwin) install_macos ;;
@@ -358,7 +469,6 @@ main() {
 		if [ "$ROOTLESS" = 1 ]; then
 			install_rootless
 		else
-			fmt=$(pkg_manager)
 			if [ "$METHOD" = package ] && [ "$fmt" = none ]; then die "no supported package manager found (use --method binary)"; fi
 			if [ "$METHOD" != binary ] && [ "$fmt" != none ]; then
 				install_package "$fmt"

@@ -19,24 +19,26 @@ Networking defaults to **`-net-driver=native`** (no `/opt/cni/bin`). See [networ
 
 ## Quick install
 
-One command per platform. It downloads the release, checks it against the signed `checksums.txt`, and sets
-`nyxd` up as a service that starts at boot.
+One command per platform. On Linux it adds the nyxd package repository for your package manager and
+installs from it (so your system's upgrades keep nyxd current); on macOS and Windows it downloads the
+release and checks it against the signed `checksums.txt`. Either way `nyxd` is set up as a service that
+starts at boot. It takes well under a minute.
 
 ```bash
 # Linux and macOS
-curl -fsSL https://github.com/zrougamed/nyxd/releases/latest/download/install.sh | sh
+curl -fsSL https://pkgs.nyxd.io/install.sh | sh
 ```
 
 ```powershell
 # Windows (PowerShell, no admin rights needed once WSL is enabled)
-irm https://github.com/zrougamed/nyxd/releases/latest/download/install.ps1 | iex
+irm https://pkgs.nyxd.io/install.ps1 | iex
 ```
 
 What it does:
 
 | Platform | Installs | Service |
 |----------|----------|---------|
-| Debian, Ubuntu, Fedora, RHEL, openSUSE, Arch, Alpine | the native package (`.deb`, `.rpm`, `.pkg.tar.zst`, `.apk`), so upgrades and removal go through your package manager; `crun` comes as a dependency | enabled and started for the init system in use |
+| Debian, Ubuntu, Fedora, RHEL, Rocky, openSUSE, Arch, Alpine | the nyxd package repository ([below](#package-repositories)) and the `nyxd` package from it, so upgrades and removal go through your package manager; `crun` comes as a dependency | enabled and started for the init system in use |
 | Any other Linux (Void, Gentoo, Slackware, ...) | `nyxd`, `nyx` in `/usr/local/bin`; installs `crun` when it can | same |
 | Linux, `--rootless` | `nyxd`, `nyx` in `~/.local/bin`, no root | systemd **user** service |
 | macOS | `nyx` in `/usr/local/bin`, vfkit (Homebrew), the nyx VM that runs `nyxd` | launchd agent runs `nyx machine run` at login ([macos.md](/docs/getting-started/macos)) |
@@ -47,6 +49,7 @@ running init, as in a container: it says how to start `nyxd` by hand). Options:
 
 ```bash
 curl -fsSL .../install.sh | sh -s -- --version v0.10.0     # a given release
+curl -fsSL .../install.sh | sh -s -- --method package      # the release package once, no repository
 curl -fsSL .../install.sh | sh -s -- --method binary       # skip the native package
 curl -fsSL .../install.sh | sh -s -- --rootless            # per user, no root daemon
 curl -fsSL .../install.sh | sh -s -- --no-start            # set up and enable, do not start
@@ -59,6 +62,53 @@ Afterwards, let your user talk to the daemon without sudo (log in again afterwar
 sudo usermod -aG nyx "$USER"      # Alpine: sudo addgroup "$USER" nyx
 nyx ping
 ```
+
+## Package repositories
+
+The quick install adds these for you. To set one up by hand (or in configuration management), with the
+same signing key as the releases (fingerprint `C910 E8A2 2680 CCCB BB7E  6ED2 F0DC FE8A 242B 1E99`):
+
+**Debian, Ubuntu** (amd64, arm64)
+
+```bash
+sudo curl -fsSLo /usr/share/keyrings/nyxd.gpg https://pkgs.nyxd.io/nyxd.gpg
+echo "deb [signed-by=/usr/share/keyrings/nyxd.gpg] https://pkgs.nyxd.io/apt stable main" | sudo tee /etc/apt/sources.list.d/nyxd.list
+sudo apt-get update && sudo apt-get install -y nyxd
+```
+
+**Fedora, RHEL, Rocky, AlmaLinux, CentOS Stream** (x86_64, aarch64)
+
+```bash
+sudo curl -fsSLo /etc/yum.repos.d/nyxd.repo https://pkgs.nyxd.io/rpm/nyxd.repo
+sudo dnf install -y nyxd          # dnf imports the key on first use
+```
+
+**openSUSE, SLES**
+
+```bash
+sudo zypper addrepo --refresh https://pkgs.nyxd.io/rpm/nyxd.repo
+sudo zypper --gpg-auto-import-keys install -y nyxd
+```
+
+**Alpine** (x86_64, aarch64)
+
+```bash
+sudo wget -qO /etc/apk/keys/nyxd.rsa.pub https://pkgs.nyxd.io/alpine/nyxd.rsa.pub
+echo https://pkgs.nyxd.io/alpine | sudo tee -a /etc/apk/repositories
+sudo apk add nyxd
+```
+
+**Arch Linux** (x86_64; aarch64 for Arch Linux ARM)
+
+```bash
+curl -fsSL https://pkgs.nyxd.io/nyxd.asc | sudo pacman-key --add -
+sudo pacman-key --lsign-key C910E8A22680CCCBBB7E6ED2F0DCFE8A242B1E99
+printf '[nyxd]\nServer = https://pkgs.nyxd.io/arch/$arch\n' | sudo tee -a /etc/pacman.conf
+sudo pacman -Sy nyxd
+```
+
+From then on `apt upgrade`, `dnf upgrade`, `zypper update`, `apk upgrade` or `pacman -Syu` installs new nyxd
+releases. The repositories keep the last five releases.
 
 ## Install from a release package
 

@@ -70,13 +70,14 @@ Create a tag whose name starts with `v` (for example `v0.2.0`) and push it to Gi
 ## Install and usage
 
 ```bash
-curl -fsSL https://github.com/zrougamed/nyxd/releases/latest/download/install.sh | sh    # Linux, macOS
+curl -fsSL https://pkgs.nyxd.io/install.sh | sh    # Linux, macOS
 ```
 ```powershell
-irm https://github.com/zrougamed/nyxd/releases/latest/download/install.ps1 | iex         # Windows
+irm https://pkgs.nyxd.io/install.ps1 | iex         # Windows
 ```
 
-Installs the package for your distribution (or the binaries) and sets `nyxd` up as a service for systemd,
+Adds the nyxd package repository for your distribution (apt, dnf, zypper, apk, pacman) and installs from
+it, or the binaries elsewhere, and sets `nyxd` up as a service for systemd,
 OpenRC, runit or SysV init; on Windows it sets up the WSL2 machine and on macOS the nyx VM, and starts it at login.
 
 See **[docs/INSTALL.md](docs/INSTALL.md)** (Linux install, systemd, cross-build) and **[docs/USAGE.md](docs/USAGE.md)** (`nyx` + `curl`).

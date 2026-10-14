@@ -17,7 +17,7 @@ Every `v*` tag builds, packages, signs and publishes a GitHub release with
 | Windows (x64, ARM64) | `nyxd_<ver>_windows_amd64.zip`, `_arm64`, `nyx-windows-<arch>.exe` | `nyx.exe` |
 | Windows WSL2 | `nyx-wsl-<arch>.tar.gz` (+ `.sha256`) | the distro `nyx machine init` imports |
 | macOS VM | `nyx-vm-<arch>.tar.gz` (+ `.sha256`) | the VM image `nyx machine init` boots with vfkit ([macos.md](macos.md)) |
-| Installers | `install.sh` (Linux, macOS), `install.ps1` (Windows) | one-command install, upgrade and removal ([INSTALL.md](INSTALL.md#quick-install)) |
+| Installers | `install.sh` (Linux, macOS), `install.ps1` (Windows) | one-command install, upgrade and removal ([INSTALL.md](INSTALL.md#quick-install)); also at `https://pkgs.nyxd.io/install.sh` and `/install.ps1` |
 
 `nyxd` is Linux-only; on macOS and Windows, `nyx` drives a `nyxd` running in
 the nyx VM (vfkit) or in the nyx WSL2 distro. All Linux packages depend on `crun`.
@@ -83,6 +83,49 @@ gpg --keyserver hkps://keys.openpgp.org --send-keys "$FPR"   # then confirm by e
 Put the fingerprint in the README and on the website so users can check the
 key they download. Every release also ships `nyxd-release-key.asc`.
 
+## Package repositories
+
+`https://pkgs.nyxd.io` serves signed repositories built from the packages of the last five releases, so users
+install and upgrade nyxd with their package manager ([INSTALL.md](INSTALL.md#package-repositories)):
+
+| Path | Format | Signed with |
+|------|--------|-------------|
+| `/apt` | apt (`stable main`, amd64, arm64) | `InRelease` / `Release.gpg`: the release GPG key |
+| `/rpm/<arch>`, `/rpm/nyxd.repo` | dnf, yum, zypper (x86_64, aarch64) | `repomd.xml.asc` and every rpm: the release GPG key |
+| `/alpine/<arch>` | apk (x86_64, aarch64) | `APKINDEX.tar.gz` and every apk: `APK_RSA_PRIVATE_KEY` (`/alpine/nyxd.rsa.pub`) |
+| `/arch/<arch>` | pacman (x86_64, aarch64) | `nyxd.db.sig` and a `.sig` per package: the release GPG key |
+| `/nyxd.asc`, `/nyxd.gpg` | the release public key (armored, binary keyring) | |
+| `/install.sh`, `/install.ps1`, `/` | the installers, a landing page | |
+
+`scripts/build-repos.sh PKGDIR OUTDIR` builds them (indexes in Debian, Fedora, Alpine and Arch containers,
+signatures with the local gpg). The **Package repositories** workflow (`.github/workflows/repos.yml`) runs it
+after every release (and by hand to rebuild): it downloads the packages of the last five releases, builds the
+repositories and force-pushes them as a single commit to the `gh-pages` branch of `zrougamed/nyxd-packages`,
+which GitHub Pages serves at `pkgs.nyxd.io`. Nothing accumulates: each run replaces the whole site.
+
+`scripts/repo-smoke.sh` (`make test-repos`, and the `repos` CI job) builds a snapshot signed with throwaway
+keys, builds the repositories, serves them locally and runs the one-line install in fresh Ubuntu 24.04 and
+22.04, Debian 12, Fedora 41, Rocky 9, openSUSE Leap 15.6, Alpine 3.20 and Arch containers: each must finish
+within 60 seconds, leave a working `nyxd`, and uninstall cleanly.
+
+### One-time setup (maintainers)
+
+1. Create the public repository `zrougamed/nyxd-packages` (empty).
+2. Add a deploy key with **write access**, and its private half as the secret `PACKAGES_DEPLOY_KEY` here:
+
+   ```bash
+   ssh-keygen -t ed25519 -N '' -C nyxd-packages -f nyxd-packages
+   gh repo deploy-key add nyxd-packages.pub -R zrougamed/nyxd-packages --allow-write -t "release workflow"
+   gh secret set PACKAGES_DEPLOY_KEY -R zrougamed/nyxd < nyxd-packages
+   rm nyxd-packages nyxd-packages.pub
+   ```
+
+3. Run the workflow once (`gh workflow run repos.yml -R zrougamed/nyxd`), then in `nyxd-packages`:
+   Settings → Pages → *Deploy from a branch*: `gh-pages`, `/ (root)`; custom domain `pkgs.nyxd.io`;
+   *Enforce HTTPS* once the certificate is issued.
+4. DNS: a `CNAME` record `pkgs.nyxd.io` → `zrougamed.github.io`.
+5. `APK_RSA_PRIVATE_KEY` must be set for the Alpine repository (the same key signs the packages and the index).
+
 ## Services and installers
 
 Every install method ends in the same service setup, done by one script,
@@ -108,7 +151,8 @@ The package scripts call it:
 - **post-remove** (`postremove.sh`): on `dpkg --purge`, also `/etc/default/nyxd`. `/var/lib/nyxd` is never removed
   by a package.
 
-`scripts/install.sh` (published with each release) installs the native package where one fits, else the archive under
+`scripts/install.sh` (published with each release and at `pkgs.nyxd.io`) adds the package repository and installs
+from it where a supported package manager exists (`--method package`: the release's package file once), else the archive under
 `/usr/local` plus the same service files, and runs `nyxd-service setup` itself. `packaging/windows/install.ps1`
 does the Windows side: `nyx.exe` on the user `PATH`, `nyx machine init`, and a logon task running
 `nyx machine start`; run again, it replaces `nyxd` inside the existing distro so its data survives.

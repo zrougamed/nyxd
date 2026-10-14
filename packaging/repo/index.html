@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nyxd packages</title>
+<meta name="description" content="Signed apt, dnf, zypper, apk and pacman repositories for nyxd.">
+<style>
+  :root { --bg: #ffffff; --fg: #1b1f24; --muted: #57606a; --code: #f3f4f6; --line: #d8dee4; --accent: #5b3fd1; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --fg: #e6e8eb; --muted: #9aa4af; --code: #1a1d23; --line: #2b3038; --accent: #a796ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 1.8rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 32px 0 8px; }
+  p { color: var(--muted); margin: 0 0 12px; }
+  a { color: var(--accent); }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 0 0 8px; }
+  code { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .key { font-family: ui-monospace, monospace; font-size: 14px; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+<h1>nyxd packages</h1>
+<p>Signed package repositories for <a href="https://nyxd.io">nyxd</a>. One command sets up the repository for
+your distribution and installs nyxd; from then on your system's upgrades keep it current.</p>
+
+<pre><code>curl -fsSL https://pkgs.nyxd.io/install.sh | sh</code></pre>
+<p>Windows (PowerShell): <code>irm https://pkgs.nyxd.io/install.ps1 | iex</code></p>
+
+<p>Signing key: <a href="nyxd.asc">nyxd.asc</a>, fingerprint
+<span class="key">C910 E8A2 2680 CCCB BB7E 6ED2 F0DC FE8A 242B 1E99</span>.</p>
+
+<h2>Debian, Ubuntu</h2>
+<pre><code>sudo curl -fsSLo /usr/share/keyrings/nyxd.gpg https://pkgs.nyxd.io/nyxd.gpg
+echo "deb [signed-by=/usr/share/keyrings/nyxd.gpg] https://pkgs.nyxd.io/apt stable main" | sudo tee /etc/apt/sources.list.d/nyxd.list
+sudo apt-get update &amp;&amp; sudo apt-get install -y nyxd</code></pre>
+
+<h2>Fedora, RHEL, Rocky, AlmaLinux, CentOS Stream</h2>
+<pre><code>sudo curl -fsSLo /etc/yum.repos.d/nyxd.repo https://pkgs.nyxd.io/rpm/nyxd.repo
+sudo dnf install -y nyxd</code></pre>
+
+<h2>openSUSE, SLES</h2>
+<pre><code>sudo zypper addrepo --refresh https://pkgs.nyxd.io/rpm/nyxd.repo
+sudo zypper --gpg-auto-import-keys install -y nyxd</code></pre>
+
+<h2>Alpine</h2>
+<pre><code>sudo wget -qO /etc/apk/keys/nyxd.rsa.pub https://pkgs.nyxd.io/alpine/nyxd.rsa.pub
+echo https://pkgs.nyxd.io/alpine | sudo tee -a /etc/apk/repositories
+sudo apk add nyxd</code></pre>
+
+<h2>Arch Linux</h2>
+<pre><code>curl -fsSL https://pkgs.nyxd.io/nyxd.asc | sudo pacman-key --add -
+sudo pacman-key --lsign-key C910E8A22680CCCBBB7E6ED2F0DCFE8A242B1E99
+printf '[nyxd]\nServer = https://pkgs.nyxd.io/arch/$arch\n' | sudo tee -a /etc/pacman.conf
+sudo pacman -Sy nyxd</code></pre>
+
+<p>x86_64 and arm64 for every distribution. The repositories keep the last five releases; older ones stay on
+<a href="https://github.com/zrougamed/nyxd/releases">GitHub Releases</a>.
+Documentation: <a href="https://nyxd.io/docs/getting-started/install">installing nyxd</a>.</p>
+</main>
+</body>
+</html>

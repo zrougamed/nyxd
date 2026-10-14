@@ -24,7 +24,7 @@ nyx run alpine:3.20 uname -a
 ## Install
 
 ```bash
-curl -fsSL https://github.com/zrougamed/nyxd/releases/latest/download/install.sh | sh
+curl -fsSL https://pkgs.nyxd.io/install.sh | sh
 ```
 
 It installs `nyx` in `/usr/local/bin`, installs vfkit with Homebrew if it is missing, creates the VM and makes
