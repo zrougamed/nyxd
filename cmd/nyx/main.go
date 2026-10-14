@@ -481,16 +481,29 @@ func doKillWithContext(ctx context.Context, socket, id string) error {
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == http.StatusNotFound {
+		return notFoundError{daemonError(resp.StatusCode, body)}
+	}
 	if resp.StatusCode != http.StatusOK {
 		return daemonError(resp.StatusCode, body)
 	}
 	return nil
 }
 
+// notFoundError is a 404 from the control API. daemonError drops the status
+// line, so the message alone no longer says it was a 404.
+type notFoundError struct{ error }
+
+func (e notFoundError) Unwrap() error { return e.error }
+
 // httpStatusNotFound reports whether err is an HTTP 404 from the control API.
 func httpStatusNotFound(err error) bool {
 	if err == nil {
 		return false
+	}
+	var nf notFoundError
+	if errors.As(err, &nf) {
+		return true
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "404") && strings.Contains(strings.ToLower(msg), "not found")
