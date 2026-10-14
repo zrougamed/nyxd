@@ -123,9 +123,13 @@ func doComposeUp(socket string, opts composeCLI) error {
 	if err != nil {
 		return err
 	}
-	auth, err := composeBuild(socket, abs, opts)
-	if err != nil {
-		return err
+	var auth image.AuthMap
+	// A path that exists only in the WSL distro (/mnt/c/...) is read by nyxd
+	// alone: nothing to build or log in for here.
+	if _, statErr := os.Stat(abs); !isWSLEndpoint(socket) || statErr == nil {
+		if auth, err = composeBuild(socket, abs, opts); err != nil {
+			return err
+		}
 	}
 	// The daemon reads the file: give it the path as the daemon sees it.
 	if abs, err = daemonPath(socket, abs); err != nil {
