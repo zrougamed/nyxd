@@ -16,10 +16,11 @@ Every `v*` tag builds, packages, signs and publishes a GitHub release with
 | macOS (Apple silicon, Intel) | `nyxd_<ver>_darwin_arm64.tar.gz`, `_amd64`, `nyx-darwin-<arch>` | the `nyx` client |
 | Windows (x64, ARM64) | `nyxd_<ver>_windows_amd64.zip`, `_arm64`, `nyx-windows-<arch>.exe` | `nyx.exe` |
 | Windows WSL2 | `nyx-wsl-<arch>.tar.gz` (+ `.sha256`) | the distro `nyx machine init` imports |
+| macOS VM | `nyx-vm-<arch>.tar.gz` (+ `.sha256`) | the VM image `nyx machine init` boots with vfkit ([macos.md](macos.md)) |
 | Installers | `install.sh` (Linux, macOS), `install.ps1` (Windows) | one-command install, upgrade and removal ([INSTALL.md](INSTALL.md#quick-install)) |
 
 `nyxd` is Linux-only; on macOS and Windows, `nyx` drives a `nyxd` running in
-a Linux VM or in the nyx WSL2 distro. All Linux packages depend on `crun`.
+the nyx VM (vfkit) or in the nyx WSL2 distro. All Linux packages depend on `crun`.
 
 Signatures:
 
@@ -198,5 +199,3 @@ gpg --verify nyx-windows-amd64.exe.sig nyx-windows-amd64.exe
   Scoop/winget manifests). Releases ship files only; a repository would let
   `apt upgrade` and friends pick up new versions. Until then, running
   `install.sh` / `install.ps1` again upgrades.
-- **A nyxd service on macOS.** `nyxd` is Linux-only and there is no macOS
-  `nyx machine` (VM) provider yet, so the macOS install is the `nyx` client.

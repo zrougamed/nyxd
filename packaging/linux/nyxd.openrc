@@ -8,8 +8,8 @@ description="lightweight OCI container orchestrator"
 command="/usr/bin/nyxd"
 command_background="yes"
 pidfile="/run/${RC_SVCNAME}.pid"
-output_log="/var/log/nyxd.log"
-error_log="/var/log/nyxd.log"
+output_log="${output_log:-/var/log/nyxd.log}"
+error_log="${error_log:-/var/log/nyxd.log}"
 retry="TERM/60/KILL/5"
 
 start_pre() {

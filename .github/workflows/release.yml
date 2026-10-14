@@ -59,13 +59,19 @@ jobs:
             echo "NFPM_APK_KEY_FILE=${RUNNER_TEMP}/apk-key.rsa" >> "$GITHUB_ENV"
           fi
 
-      # WSL2 distro tarballs: `nyx machine init` downloads
-      # nyx-wsl-<arch>.tar.gz from the release matching its version and checks
-      # it against the .sha256 next to it. Signed here; GoReleaser uploads
+      # WSL2 distro tarballs and macOS VM images: `nyx machine init` downloads
+      # nyx-wsl-<arch>.tar.gz (Windows) or nyx-vm-<arch>.tar.gz (macOS) from the
+      # release matching its version and checks it against the .sha256 next to it. Signed here; GoReleaser uploads
       # dist-extra/ as is, with the public key next to it.
       # The installers go out with every release, so .../releases/latest/download/
       # install.sh (and install.ps1) always match the newest packages.
-      - name: Build and sign WSL tarballs and installers
+      # The arm64 macOS VM image is built in an arm64 Alpine container.
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+
+      - name: Build and sign WSL tarballs, macOS VM images and installers
         env:
           VERSION: ${{ github.ref_name }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -74,6 +80,7 @@ jobs:
           mkdir -p dist-extra
           for goarch in amd64 arm64; do
             scripts/build-wsl-rootfs.sh "${goarch}" dist-extra "${VERSION}"
+            scripts/build-vm-image.sh "${goarch}" dist-extra "${VERSION}"
           done
           install -m 0755 scripts/install.sh dist-extra/install.sh
           install -m 0644 packaging/windows/install.ps1 dist-extra/install.ps1

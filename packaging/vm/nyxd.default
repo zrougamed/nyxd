@@ -1,0 +1,3 @@
+# nyxd in the nyx VM: rootful, native networking (each container gets an
+# address on the VM's bridge; nyx forwards published ports to the Mac).
+NYXD_OPTS="-log-level info"

@@ -63,6 +63,9 @@ jobs:
           mkdir -p wsl-rootfs
           tar -xzf bin/nyx-wsl-amd64.tar.gz -C wsl-rootfs
 
+      - name: Build macOS VM image (amd64)
+        run: make vm-image VM_ARCH=amd64
+
       # The distro ships to Windows users as-is: fail on known vulnerabilities in
       # what it contains (nyxd's Go modules; crun is pinned in build-wsl-rootfs.sh).
       - name: Grype scan (WSL distro)

@@ -228,7 +228,8 @@ release:
   github:
     owner: zrougamed
     name: nyxd
-  # WSL2 distro tarballs (scripts/build-wsl-rootfs.sh), the installers
+  # WSL2 distro tarballs (scripts/build-wsl-rootfs.sh), macOS VM images
+  # (scripts/build-vm-image.sh), the installers
   # (install.sh, install.ps1), all signed by the workflow, and the public key
   # that verifies everything.
   extra_files:

@@ -24,31 +24,69 @@ var version = "dev"
 
 const releaseBase = "https://github.com/zrougamed/nyxd/releases/download"
 
-// nyx machine manages the WSL2 distro that runs nyxd on Windows. The distro
-// holds only a static nyxd and crun (no shell, no package manager); nyxd runs
-// with -userns-remap, so containers never run as root of the WSL VM.
+// nyx machine manages where nyxd runs when the host is not Linux: the WSL2
+// distro on Windows (below), the vfkit VM on macOS (machine_vfkit.go). The
+// distro holds only a static nyxd and crun (no shell, no package manager);
+// nyxd runs with -userns-remap, so containers never run as root of the WSL VM.
 func doMachine(args []string) error {
 	const usage = `usage: nyx machine <init|start|stop|rm|status|logs> [--name NAME]
-  init [--image FILE|URL]   import the nyx WSL2 distro (default: release matching this nyx)
-  start                     start nyxd in the distro (no admin rights needed)
-  stop [--terminate]        stop nyxd gracefully (--terminate also shuts the distro down)
-  rm                        stop and unregister the distro, deleting its data
+  init [--image FILE|URL]   Windows: import the nyx WSL2 distro; macOS: create the nyx VM, or
+                            upgrade its system (data kept). Default: the release matching this nyx.
+       [--cpus N] [--memory MiB] [--disk-size GiB]   macOS VM size
+  start                     start nyxd (no admin rights needed)
+  stop [--terminate]        stop nyxd gracefully (--terminate also shuts the WSL distro down)
+  rm                        stop and delete the machine and its data
   status                    show whether nyxd answers
-  logs                      print the daemon log`
+  logs                      print the daemon log
+  autostart on|off          macOS: start the machine at login (launchd)
+  run                       macOS: run the VM in the foreground (what start and launchd run)`
 	if len(args) == 0 {
 		return errors.New(usage)
 	}
 	sub := args[0]
 	fs := flag.NewFlagSet("machine "+sub, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	name := fs.String("name", "nyx", "WSL distro name")
-	image := fs.String("image", "", "distro tarball (file or http(s) URL)")
+	name := fs.String("name", "nyx", "machine name")
+	image := fs.String("image", "", "distro tarball or VM image (file or http(s) URL)")
 	terminate := fs.Bool("terminate", false, "also terminate the WSL distro")
-	if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 0 {
+	cpus := fs.Int("cpus", 0, "VM CPUs (macOS)")
+	memory := fs.Int("memory", 0, "VM memory in MiB (macOS)")
+	disk := fs.Int("disk-size", 0, "VM data disk in GiB (macOS)")
+	if err := fs.Parse(args[1:]); err != nil {
 		return errors.New(usage)
 	}
+	pos := fs.Args()
+	if (sub == "autostart" && (len(pos) != 1 || (pos[0] != "on" && pos[0] != "off"))) || (sub != "autostart" && len(pos) != 0) {
+		return errors.New(usage)
+	}
+	if useVfkit() {
+		vm := vfkitMachine{name: *name}
+		switch sub {
+		case "init":
+			return vm.init(machineOpts{image: *image, cpus: *cpus, memory: *memory, diskSize: *disk})
+		case "start":
+			return vm.start()
+		case "stop":
+			return vm.stop(*terminate)
+		case "rm":
+			return vm.remove()
+		case "status":
+			return vm.status()
+		case "logs":
+			return vm.logs()
+		case "run":
+			return vm.run()
+		case "autostart":
+			return vm.autostart(pos[0] == "on")
+		default:
+			return errors.New(usage)
+		}
+	}
+	if sub == "run" || sub == "autostart" {
+		return errors.New("nyx machine " + sub + " is for the macOS VM; on Windows, install.ps1 registers the logon task")
+	}
 	if runtime.GOOS != "windows" && os.Getenv("NYX_WSL_EXE") == "" {
-		return errors.New("nyx machine manages the WSL2 distro on Windows; on Linux run nyxd directly (see docs/rootless.md)")
+		return errors.New("nyx machine manages the WSL2 distro on Windows and the VM on macOS; on Linux run nyxd directly (see docs/rootless.md)")
 	}
 	m := machine{name: *name}
 	switch sub {

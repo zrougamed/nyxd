@@ -249,6 +249,18 @@ See [windows](windows.md).
 
 ---
 
+## macOS (vfkit VM)
+
+- [x] **`nyx machine` on macOS** — `init` (create, or upgrade the system and keep data; `--cpus`/`--memory`/`--disk-size`), `start`/`stop`/`rm`/`status`/`logs`, `autostart on|off` (launchd agent), `run` (foreground supervisor: vfkit, localhost forwarding of published TCP ports, clean shutdown over vsock then the power button). `nyx` uses the VM's socket by default.
+- [x] **VM image** — `scripts/build-vm-image.sh` / `make vm-image`: Alpine + OpenRC, static nyxd (rootful, native networking) and pinned crun; system disk replaced on upgrade, data disk formatted on first boot and grown with `--disk-size`; `/Users` over virtio-fs; nyxd socket over vsock. Built for amd64 and arm64 by the release workflow.
+- [x] **Boot harness** — `make test-vm` / `scripts/vm-smoke.sh`: boots the image under QEMU with vfkit's devices (vsock API, published port, data disk kept and grown, vsock and power-button shutdown); arm64 runs emulated.
+- [~] **Verified on a real Mac** — not yet: vfkit itself, virtio-fs `/Users`, the DHCP lease lookup, launchd.
+- [ ] **UDP on localhost** — published UDP ports answer on the VM address only.
+
+See [macos](macos.md).
+
+---
+
 ## Security
 
 - [ ] **Default seccomp JSON artifact** — bundle supports hardening fields; no curated default profile shipped beside comments in older specs.
@@ -305,4 +317,4 @@ See [windows](windows.md).
 
 ---
 
-*Last reviewed against repository layout on 2026-05-17. **Update `[x]` / `[~]` / `[ ]` when merging features** — keep this file aligned with shipped behavior (CLI flags, API routes, and daemon defaults).*
+*Last reviewed against repository layout on 2026-10-14. **Update `[x]` / `[~]` / `[ ]` when merging features** — keep this file aligned with shipped behavior (CLI flags, API routes, and daemon defaults).*

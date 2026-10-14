@@ -9,6 +9,7 @@
 | [USAGE.md](USAGE.md) | `nyx` CLI (including **`nyx compose`**), `curl` examples |
 | [openapi.yaml](openapi.yaml) | Control HTTP API (Unix socket) — OpenAPI 3 |
 | [windows.md](windows.md) | Windows: `nyx.exe` + the nyx WSL2 distro (`nyx machine`) |
+| [macos.md](macos.md) | macOS: `nyx` + the nyx VM on vfkit (`nyx machine`) |
 | [rootless.md](rootless.md) | Run nyxd as a normal user (user namespace, limits, `nyxd unshare`, `-userns-remap`) |
 | [networking.md](networking.md) | Native vs CNI vs host, flags, `nyx run` / stop |
 | [kernel-requirements.md](kernel-requirements.md) | Kernel modules, sysctl, disk |

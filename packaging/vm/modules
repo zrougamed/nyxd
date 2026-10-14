@@ -1,0 +1,9 @@
+virtio_net
+virtio_rng
+virtiofs
+vmw_vsock_virtio_transport
+overlay
+bridge
+br_netfilter
+veth
+nf_tables

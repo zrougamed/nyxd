@@ -1,0 +1,15 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh disable=SC2034
+# nyx VM: shut down cleanly when nyx connects to vsock port 1025 (vfkit
+# exposes it as shutdown.sock on the Mac). The arm64 kernel has no driver for
+# the virtual power button (gpio-keys), so `nyx machine stop` uses this first.
+
+description="clean shutdown requests over vsock"
+command="/usr/bin/socat"
+command_args="VSOCK-LISTEN:1025,reuseaddr SYSTEM:/sbin/poweroff"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+
+start_pre() {
+	modprobe -q vmw_vsock_virtio_transport 2>/dev/null || true
+}

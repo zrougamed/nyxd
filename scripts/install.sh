@@ -13,7 +13,9 @@
 # Linux, --rootless: nyxd and nyx in ~/.local/bin, run by a systemd user
 # service; no root needed (subordinate IDs must exist, see docs/rootless.md).
 #
-# macOS: installs the nyx client. nyxd itself needs Linux (a VM or a server).
+# macOS: installs the nyx client and the nyx VM that runs nyxd (vfkit, from
+# Homebrew when missing): `nyx machine init`, then `nyx machine autostart on`,
+# which starts it now and at every login. Run it as your user, not with sudo.
 #
 # Options:
 #   --version vX.Y.Z   release to install (default: the latest)
@@ -273,12 +275,39 @@ install_macos() {
 		as_root install -d "$p/bin" && as_root install -m 0755 "$TMP/$f" "$p/bin/nyx"
 	fi
 	say "installed $p/bin/nyx"
-	say "nyxd runs on Linux: point nyx at one with NYXD_SOCKET or -socket (a VM, a server over ssh -L)."
+
+	# nyxd runs in the nyx VM, which belongs to the user (~/Library/Application Support/nyx/machines).
+	if [ "$(id -u)" = 0 ]; then
+		say "running as root: skipped the nyx VM. As your user, run: nyx machine init && nyx machine autostart on"
+		return
+	fi
+	if ! have vfkit; then
+		have brew || die "the nyx VM needs vfkit: install Homebrew (https://brew.sh) or vfkit, then run this again"
+		say "installing vfkit (brew install vfkit)"
+		brew install vfkit
+	fi
+	# Creates the VM, or upgrades its system to this release (data kept).
+	"$p/bin/nyx" machine init
+	if [ "$NO_START" = 1 ]; then
+		say "start it with: nyx machine start (or nyx machine autostart on, to start at login)"
+	else
+		"$p/bin/nyx" machine autostart on
+		"$p/bin/nyx" machine start
+	fi
 }
 
 uninstall() {
 	if [ "$OS" = Darwin ]; then
 		p=${PREFIX:-/usr/local}
+		if [ -x "$p/bin/nyx" ] && [ "$(id -u)" != 0 ]; then
+			"$p/bin/nyx" machine autostart off || true
+			if [ "$PURGE" = 1 ]; then
+				"$p/bin/nyx" machine rm || true
+			else
+				"$p/bin/nyx" machine stop || true
+				say "kept the nyx VM and its data (~/Library/Application Support/nyx/machines); --purge deletes it"
+			fi
+		fi
 		if [ -w "$p/bin" ]; then rm -f "$p/bin/nyx"; else as_root rm -f "$p/bin/nyx"; fi
 		say "removed $p/bin/nyx"
 		return
