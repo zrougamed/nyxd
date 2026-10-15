@@ -18,7 +18,7 @@
 | [qemu-alpine.md](qemu-alpine.md) | QEMU + Alpine 3.23 for safe testing |
 | [stability.md](stability.md) | What 1.x keeps compatible: API, CLI, flags, data, packages; deprecation and support |
 | [stress-testing.md](stress-testing.md) | Load and failure test (`scripts/stress.sh`) and its CI workflow |
-| [ROADMAP.md](ROADMAP.md) | Delivery checklist, **eBPF**, defaults / hardening, anti-goals |
+| [ROADMAP.md](ROADMAP.md) | What is shipped, what 1.0 needed, what comes next |
 | [../benchmarks/README.md](../benchmarks/README.md) | Docker vs Podman vs nyxd QEMU methodology + result tables |
 
 Community: **[../CONTRIBUTING.md](../CONTRIBUTING.md)** · **[../CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md)** · **[../LICENSE](../LICENSE)** (PolyForm Noncommercial 1.0.0)
