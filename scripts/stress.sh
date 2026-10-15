@@ -35,12 +35,16 @@ IDLE='trap "exit 0" TERM; while :; do sleep 1; done'
 
 WORK=$(mktemp -d)
 export NYXD_SOCKET="$WORK/nyxd.sock"
-NYX="$BIN/nyx"
+# Every client call is bounded: a hang fails the test with the daemon log.
+CMD_TIMEOUT=${STRESS_CMD_TIMEOUT:-120}
+NYX="$WORK/nyx"
 DAEMON=""
 ROOTFUL=0
 [ "$(id -u)" -ne 0 ] || ROOTFUL=1
 RESULTS="$WORK/results"
 : >"$RESULTS"
+printf '#!/bin/sh\nexec timeout %s %s "$@"\n' "$CMD_TIMEOUT" "$BIN/nyx" >"$NYX"
+chmod +x "$NYX"
 
 cleanup() {
 	set +e
@@ -190,7 +194,7 @@ if [ $ROOTFUL = 1 ]; then
 services:
   hog:
     image: $IMAGE
-    command: ["sh", "-c", "sleep 2; head -c 1g /dev/zero | tail"]
+    command: ["sh", "-c", "sleep 2; head -c 1073741824 /dev/zero | tail"]
     restart: "no"
     deploy:
       resources:
@@ -200,13 +204,14 @@ services:
     image: $IMAGE
     command: ["sh", "-c", 'trap "exit 0" TERM; while :; do sleep 1; done']
 EOF
-	"$NYX" compose -f "$WORK/oom/compose.yaml" --project oom up >/dev/null 2>&1 || fail "compose up"
+	"$NYX" compose up -f "$WORK/oom/compose.yaml" --project oom >"$WORK/compose.out" 2>&1 ||
+		fail "compose up: $(tail -5 "$WORK/compose.out")"
 	oom_exit() { grep '"container exited"' "$WORK/nyxd.log" | grep '"id":"oom-hog"' | grep -q '"exitCode":137'; }
 	wait_until 60 "the memory hog was not OOM-killed" oom_exit
 	result "container over its 32 MiB limit" "OOM-killed, exit code 137"
 	"$NYX" exec oom-bystander -- sh -c 'echo ok' | grep -qx ok || fail "bystander stopped with the hog"
 	"$NYX" ping >/dev/null || fail "daemon gone after the OOM kill"
-	"$NYX" compose -f "$WORK/oom/compose.yaml" --project oom down >/dev/null 2>&1 || fail "compose down"
+	"$NYX" compose down -f "$WORK/oom/compose.yaml" --project oom >/dev/null 2>&1 || fail "compose down"
 else
 	result "out of memory" "skipped (rootless: no cgroup limits)"
 fi
@@ -229,7 +234,7 @@ seq 1 10 | xargs -P "$PAR" -I{} "$NYX" rm "crash-{}" >/dev/null || fail "rm cras
 if [ -n "${STRESS_BIG_IMAGE:-}" ]; then
 	echo "== large image: $STRESS_BIG_IMAGE"
 	t0=$(now_ms)
-	"$NYX" pull "$STRESS_BIG_IMAGE" >/dev/null 2>&1 || fail "pull $STRESS_BIG_IMAGE"
+	"$BIN/nyx" pull "$STRESS_BIG_IMAGE" >/dev/null 2>&1 || fail "pull $STRESS_BIG_IMAGE"
 	t1=$(now_ms)
 	result "pull $STRESS_BIG_IMAGE" "$(((t1 - t0) / 1000)) s"
 	"$NYX" run "$STRESS_BIG_IMAGE" -- true >/dev/null 2>&1 || fail "run $STRESS_BIG_IMAGE"
