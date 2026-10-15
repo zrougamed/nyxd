@@ -51,6 +51,12 @@ nyxd (your uid)          host process: writes the ID maps, forwards signals, wai
 The host process only waits and forwards `SIGTERM`/`SIGINT`, so `systemctl --user stop` and Ctrl+C shut down
 cleanly.
 
+**After a crash.** Containers keep running when the daemon is killed, in the user namespace of the daemon that
+started them. A new `nyxd` finds them through crun's pid files and joins that namespace (with util-linux
+`nsenter` and `unshare`, and a new mount namespace) instead of creating one, so `nyx exec`, `stop` and `rm` work on
+the re-adopted containers. Without `nsenter` or `unshare`, it creates a new namespace; the containers are re-adopted
+but, on kernels that restrict access across user namespaces, `nyx exec` into them fails with `Permission denied`.
+
 ### ID mapping modes
 
 | Mode | When | Effect |

@@ -31,6 +31,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -75,6 +76,19 @@ func Current() Info {
 	m := os.Getenv(envMapping)
 	return Info{Rootless: true, SubIDs: m == "subid" || m == "remap", Remap: m == "remap"}
 }
+
+// EnterDaemon is Enter for the daemon with base directory baseDir: when
+// containers started by an earlier daemon still run (it crashed or was
+// killed), the new daemon joins their user namespace instead of creating
+// one, so it can exec into and manage them again.
+func EnterDaemon(baseDir string) (Info, error) {
+	joinBaseDir = baseDir
+	return Enter()
+}
+
+// joinBaseDir is the base directory whose running containers the host stage
+// looks for (EnterDaemon); empty for other callers of Enter.
+var joinBaseDir string
 
 // Enter makes sure the daemon runs inside its user namespace. In the host
 // stage it never returns: it runs the namespaced daemon and exits with its
@@ -168,6 +182,13 @@ func EnterRemap(start, count int, own []string) (Info, error) {
 
 func runHost() int {
 	uid, gid := os.Getuid(), os.Getgid()
+	if joinBaseDir != "" {
+		if pid := previousNamespace("/proc", filepath.Join(joinBaseDir, "run", "crun-pids"), uid); pid > 0 {
+			if code, ok := joinNamespace(pid, uid); ok {
+				return code
+			}
+		}
+	}
 	subUID, errU := lookupSubID("/etc/subuid", uid)
 	subGID, errG := lookupSubID("/etc/subgid", gid)
 	newuidmap, errNU := exec.LookPath("newuidmap")
@@ -341,4 +362,79 @@ func firstErr(errs ...error) error {
 		}
 	}
 	return nil
+}
+
+// previousNamespace returns the pid of a container process, listed in pidDir
+// (crun's --pid-file directory), that runs as uid in a user namespace other
+// than ours: the namespace of an earlier daemon. 0 when there is none.
+func previousNamespace(proc, pidDir string, uid int) int {
+	own, err := os.Readlink(filepath.Join(proc, "self", "ns", "user"))
+	if err != nil {
+		return 0
+	}
+	files, _ := filepath.Glob(filepath.Join(pidDir, "*.pid"))
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+		if err != nil || pid < 1 {
+			continue
+		}
+		dir := filepath.Join(proc, strconv.Itoa(pid))
+		ns, err := os.Readlink(filepath.Join(dir, "ns", "user"))
+		if err != nil || ns == own {
+			continue
+		}
+		if procUID(filepath.Join(dir, "status")) != uid {
+			continue // the pid was reused by someone else's process
+		}
+		return pid
+	}
+	return 0
+}
+
+// procUID returns the real uid in a /proc/<pid>/status file, or -1.
+func procUID(status string) int {
+	b, err := os.ReadFile(status)
+	if err != nil {
+		return -1
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if f := strings.Fields(line); len(f) >= 2 && f[0] == "Uid:" {
+			if n, err := strconv.Atoi(f[1]); err == nil {
+				return n
+			}
+		}
+	}
+	return -1
+}
+
+// joinNamespace runs the daemon in the user namespace of pid, as its root,
+// with a new mount namespace. Go cannot join a user namespace from a running
+// (multithreaded) process, so util-linux nsenter and unshare do it. ok is
+// false when they are missing or cannot start; the caller then creates a new
+// namespace.
+func joinNamespace(pid, uid int) (code int, ok bool) {
+	nsenter, err1 := exec.LookPath("nsenter")
+	unshare, err2 := exec.LookPath("unshare")
+	exe, err3 := os.Executable()
+	if err1 != nil || err2 != nil || err3 != nil {
+		return 0, false
+	}
+	mapping := "single"
+	if b, err := os.ReadFile(fmt.Sprintf("/proc/%d/uid_map", pid)); err == nil && len(strings.Fields(string(b))) > 3 {
+		mapping = "subid"
+	}
+	os.Setenv(EnvHostUID, strconv.Itoa(uid))
+	args := append([]string{fmt.Sprintf("--user=/proc/%d/ns/user", pid), "--", unshare, "--mount", "--", exe}, os.Args[1:]...)
+	cmd := exec.Command(nsenter, args...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	cmd.Env = setEnv(setEnv(os.Environ(), envStage, stageReady), envMapping, mapping)
+	if err := cmd.Start(); err != nil {
+		return 0, false
+	}
+	return forwardAndWait(cmd), true
 }

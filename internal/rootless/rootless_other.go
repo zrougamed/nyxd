@@ -23,6 +23,9 @@ func Current() Info { return Info{} }
 // Enter is only supported on Linux.
 func Enter() (Info, error) { return Info{}, errors.New("rootless mode is supported only on linux") }
 
+// EnterDaemon is only supported on Linux.
+func EnterDaemon(string) (Info, error) { return Enter() }
+
 // EnterRemap is only supported on Linux.
 func EnterRemap(int, int, []string) (Info, error) {
 	return Info{}, errors.New("-userns-remap is supported only on linux")

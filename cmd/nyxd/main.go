@@ -97,7 +97,7 @@ func main() {
 	case rootless.Wanted():
 		// Not root: re-exec inside a user namespace (does not return in the
 		// host process). See internal/rootless and docs/rootless.md.
-		info, err := rootless.Enter()
+		info, err := rootless.EnterDaemon(cfg.BaseDir)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "nyxd:", err)
 			os.Exit(1)

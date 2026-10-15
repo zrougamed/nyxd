@@ -40,5 +40,7 @@ Check these before upgrading from 0.9:
 - `nyx rm` of a container that had just stopped could leave its log files behind.
 - The last output of a container that exits right after writing it could be missing from its
   log.
+- Rootless: after the daemon was killed, `nyx exec` into the containers it re-adopted could fail with
+  `Permission denied`. The new daemon now joins the user namespace those containers run in.
 - A foreground `nyx run` of a very short command could hang while its container restarted in a
   loop.
