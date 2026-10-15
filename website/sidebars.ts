@@ -38,6 +38,7 @@ const sidebars: SidebarsConfig = {
       label: 'Reference',
       items: [
         'reference/api-reference',
+        'reference/stability',
         {
           type: 'category',
           label: 'REST API',

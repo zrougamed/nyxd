@@ -16,6 +16,8 @@
 | [native-network.md](native-network.md) | In-process bridge / IPAM internals |
 | [image-layers.md](image-layers.md) | In-process layer extraction, whiteouts, security rules |
 | [qemu-alpine.md](qemu-alpine.md) | QEMU + Alpine 3.23 for safe testing |
+| [stability.md](stability.md) | What 1.x keeps compatible: API, CLI, flags, data, packages; deprecation and support |
+| [stress-testing.md](stress-testing.md) | Load and failure test (`scripts/stress.sh`) and its CI workflow |
 | [ROADMAP.md](ROADMAP.md) | Delivery checklist, **eBPF**, defaults / hardening, anti-goals |
 | [../benchmarks/README.md](../benchmarks/README.md) | Docker vs Podman vs nyxd QEMU methodology + result tables |
 
