@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -601,6 +602,40 @@ func TestControlLogFollowEdges(t *testing.T) {
 	case <-done:
 	case <-time.After(20 * time.Second):
 		t.Fatal("follow did not end")
+	}
+}
+
+// Following a log keeps every line while the log file rotates underneath.
+func TestControlLogFollowRotation(t *testing.T) {
+	if !nsrun.Run(t) {
+		return
+	}
+	d := start(t)
+	d.Logs.SetRotation(1024, 2) // about 8 lines per file
+	var script []string
+	script = append(script, "sleep 0.5")
+	for i := 1; i <= 40; i++ {
+		script = append(script, fmt.Sprintf("echo l%02d", i))
+		if i%4 == 0 {
+			script = append(script, "sleep 0.15")
+		}
+	}
+	run(t, d, map[string]any{"id": "rot", "args": []string{"sh", "-c", strings.Join(script, "; ")}, "restart": "no"})
+	_, out := d.Do(t, "GET", "/v1/containers/rot/logs?follow=1&tail=1000", nil)
+	var want []string
+	for i := 1; i <= 40; i++ {
+		want = append(want, fmt.Sprintf("l%02d", i))
+	}
+	if got := strings.Fields(out); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("followed across rotations:\n got %v\nwant %v", got, want)
+	}
+	// The files on disk stay within the limit; a plain tail sees the last two files.
+	names, _ := filepath.Glob(filepath.Join(d.Base, "logs", "rot.log*"))
+	if len(names) != 2 {
+		t.Errorf("log files: %v", names)
+	}
+	if got := strings.Fields(logsOf(t, d, "rot", "?tail=1000")); len(got) == 0 || got[len(got)-1] != "l40" || len(got) >= 40 {
+		t.Errorf("tail after rotation: %v", got)
 	}
 }
 

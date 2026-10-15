@@ -3,6 +3,7 @@ package control
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -57,7 +58,8 @@ func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id = canon
-	logPath := filepath.Join(s.dataDir, "logs", id+".log")
+	logDir := filepath.Join(s.dataDir, "logs")
+	logPath := logs.Path(logDir, id)
 	tail := 200
 	if v := r.URL.Query().Get("tail"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 && n < 100000 {
@@ -67,9 +69,21 @@ func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 	follow := r.URL.Query().Get("follow") == "1" || r.URL.Query().Get("follow") == "true"
 	plain := r.URL.Query().Get("plain") != "0"
 
-	data, err := os.ReadFile(logPath)
+	// Open before tailing so that a rotation between the two is seen as a
+	// change of file, not lost.
+	f, err := os.Open(logPath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			http.Error(w, "no log file for this container", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer func() { f.Close() }()
+	lines, offset, err := logs.TailLines(logDir, id, tail)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
 			http.Error(w, "no log file for this container", http.StatusNotFound)
 			return
 		}
@@ -79,10 +93,8 @@ func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fl, canFlush := w.(http.Flusher)
-
-	lines := tailLines(string(data), tail)
 	for _, ln := range lines {
-		writeLogLine(w, []byte(ln), plain)
+		writeLogLine(w, ln, plain)
 	}
 	if canFlush {
 		fl.Flush()
@@ -93,11 +105,36 @@ func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	noWriteDeadline(w) // follow streams until the client disconnects
 
-	offset := int64(len(data))
 	// Fast path: workload already finished before follow began and the log file has not
-	// grown since our ReadFile — close immediately instead of ~1s of idle polling (hyperfine).
+	// grown since it was tailed — close immediately instead of ~1s of idle polling (hyperfine).
 	if st, err := os.Stat(logPath); err == nil && st.Size() == offset && !s.containerInSupervisor(id) {
 		return
+	}
+
+	// drain writes the complete lines of f from offset on.
+	drain := func() {
+		st, err := f.Stat()
+		if err != nil {
+			return
+		}
+		if st.Size() < offset { // truncated in place
+			offset = 0
+		}
+		if st.Size() == offset {
+			return
+		}
+		br := bufio.NewReaderSize(io.NewSectionReader(f, offset, st.Size()-offset), 64*1024)
+		for {
+			b, err := br.ReadBytes('\n')
+			if err != nil {
+				break // a partly written last line is read on the next tick
+			}
+			offset += int64(len(b))
+			writeLogLine(w, b[:len(b)-1], plain)
+		}
+		if canFlush {
+			fl.Flush()
+		}
 	}
 
 	ctx := r.Context()
@@ -113,45 +150,20 @@ func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-tick.C:
 			inSup := s.containerInSupervisor(id)
-			st, err := os.Stat(logPath)
-			if err != nil {
-				if !inSup {
-					idle++
-					if idle >= 4 {
-						return
-					}
-				} else {
-					idle = 0
-				}
-				continue
-			}
-			if st.Size() < offset {
-				offset = 0
-			}
-			if st.Size() > offset {
-				f, err := os.Open(logPath)
-				if err != nil {
-					idle = 0
-					continue
-				}
-				if _, err := f.Seek(offset, io.SeekStart); err != nil {
-					f.Close()
-					idle = 0
-					continue
-				}
-				sc := bufio.NewScanner(f)
-				for sc.Scan() {
-					b := sc.Bytes()
-					writeLogLine(w, append([]byte(nil), b...), plain)
-					offset += int64(len(b)) + 1
-					if canFlush {
-						fl.Flush()
+			before := offset
+			drain()
+			// Rotated or removed: finish the old file, then continue with the
+			// new one from its start.
+			if cur, err := os.Stat(logPath); err == nil {
+				if old, err := f.Stat(); err == nil && !os.SameFile(old, cur) {
+					if nf, err := os.Open(logPath); err == nil {
+						f.Close()
+						f, offset = nf, 0
+						drain()
 					}
 				}
-				f.Close()
-				idle = 0
 			}
-			if !inSup && st.Size() <= offset {
+			if !inSup && offset == before {
 				idle++
 				if idle >= 4 {
 					return
@@ -161,18 +173,6 @@ func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-}
-
-func tailLines(s string, n int) []string {
-	s = strings.TrimSuffix(s, "\n")
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, "\n")
-	if n > 0 && len(parts) > n {
-		parts = parts[len(parts)-n:]
-	}
-	return parts
 }
 
 func writeLogLine(w io.Writer, line []byte, plain bool) {

@@ -97,15 +97,6 @@ func TestGenerateContainerID(t *testing.T) {
 }
 
 func TestLogHelpers(t *testing.T) {
-	if tailLines("", 5) != nil {
-		t.Error("empty")
-	}
-	if got := tailLines("a\nb\nc\n", 2); strings.Join(got, ",") != "b,c" {
-		t.Errorf("tail %v", got)
-	}
-	if got := tailLines("a\nb", 0); len(got) != 2 {
-		t.Errorf("tail all %v", got)
-	}
 	var b bytes.Buffer
 	writeLogLine(&b, []byte(`{"log":"hi"}`), true)
 	writeLogLine(&b, []byte(`{"log":"nl\n"}`), true)

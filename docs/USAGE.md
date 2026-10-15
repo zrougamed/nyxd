@@ -59,6 +59,25 @@ sudo nyx exec <id> sh -c 'hostname'
 sudo nyx exec <id> -- sh -c 'hostname'
 ```
 
+## Container logs
+
+nyxd stores each container's stdout and stderr as JSON lines under
+`/var/lib/nyxd/logs/<id>.log` and rotates the file by size, so a chatty
+service cannot fill the disk:
+
+| nyxd flag | Default | Meaning |
+|-----------|---------|---------|
+| `-log-max-size` | `10m` | Rotate when the log reaches this size (`k`, `m`, `g` suffixes); `0` never rotates |
+| `-log-max-files` | `3` | Files kept per container, the current one included (`<id>.log`, `<id>.log.1`, `<id>.log.2`) |
+
+With the defaults a container keeps at most 30 MiB of logs. Set the flags in
+`NYXD_OPTS` (see the service setup in the install guide), e.g.
+`NYXD_OPTS="-log-max-size 50m -log-max-files 5"`.
+
+`nyx logs --tail N` reads from the end of the files (rotated ones included) without
+loading them whole, and `nyx logs -f` keeps following across rotations. Lines longer
+than 64 KiB are split into several entries. `nyx rm` deletes all of a container's log files.
+
 ## Building images (`nyx build`)
 
 ```bash
