@@ -76,7 +76,8 @@ With the defaults a container keeps at most 30 MiB of logs. Set the flags in
 
 `nyx logs --tail N` reads from the end of the files (rotated ones included) without
 loading them whole, and `nyx logs -f` keeps following across rotations. Lines longer
-than 64 KiB are split into several entries. `nyx rm` deletes all of a container's log files.
+than 64 KiB are split into several entries. A container's logs stay readable after it exits; `nyx rm <id>` deletes them
+(and stops and removes it first if it is still running).
 
 ## Building images (`nyx build`)
 

@@ -119,10 +119,10 @@ func TestBundleMeta(t *testing.T) {
 	if _, err := readBundleRunMeta(b); err == nil {
 		t.Error("corrupt meta")
 	}
-	removeBundleMeta("")
-	removeBundleMeta(b)
-	if _, err := os.Stat(filepath.Join(b, bundleMetaFileName)); !os.IsNotExist(err) {
-		t.Error("meta not removed")
+	removeBundle("")
+	removeBundle(b)
+	if _, err := os.Stat(b); !os.IsNotExist(err) {
+		t.Error("bundle not removed")
 	}
 	if got := portMappingsToPublishStrings([]network.PortMapping{{HostPort: 1, ContainerPort: 2}, {HostPort: 3, ContainerPort: 4, Protocol: "UDP"}}); strings.Join(got, ",") != "1:2/tcp,3:4/udp" {
 		t.Errorf("publish strings %v", got)

@@ -85,11 +85,13 @@ func readBundleRunMeta(bundleDir string) (bundleRunMeta, error) {
 	return meta, nil
 }
 
-func removeBundleMeta(bundleDir string) {
+// removeBundle deletes a container's bundle directory (config.json,
+// resolv.conf, hosts and the run metadata) once crun no longer needs it.
+func removeBundle(bundleDir string) {
 	if bundleDir == "" {
 		return
 	}
-	_ = os.Remove(filepath.Join(bundleDir, bundleMetaFileName))
+	_ = os.RemoveAll(bundleDir)
 }
 
 func restartPolicyFromString(s string) RestartPolicy {

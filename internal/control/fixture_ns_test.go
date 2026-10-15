@@ -639,6 +639,30 @@ func TestControlLogFollowRotation(t *testing.T) {
 	}
 }
 
+// An exited container leaves its logs (readable, removable) and no bundle.
+func TestControlExitedContainerCleanup(t *testing.T) {
+	if !nsrun.Run(t) {
+		return
+	}
+	d := start(t)
+	run(t, d, map[string]any{"id": "brief", "args": []string{"sh", "-c", "sleep 0.3; echo bye"}, "restart": "no"})
+	waitLog(t, d, "brief", "bye")
+	bundle := filepath.Join(d.Base, "bundles", "brief")
+	daemon.WaitFor(t, 15*time.Second, "bundle removed after exit", func() bool {
+		_, err := os.Stat(bundle)
+		return os.IsNotExist(err)
+	})
+	if code, out := d.Do(t, "POST", "/v1/containers/brief/remove", nil); code != 200 {
+		t.Fatalf("remove exited: %d %s", code, out)
+	}
+	if names, _ := filepath.Glob(filepath.Join(d.Base, "logs", "brief.log*")); len(names) != 0 {
+		t.Errorf("logs left: %v", names)
+	}
+	if code, _ := d.Do(t, "POST", "/v1/containers/brief/remove", nil); code != 404 {
+		t.Errorf("second remove: %d", code)
+	}
+}
+
 func TestControlComposeEdges(t *testing.T) {
 	if !nsrun.Run(t) {
 		return

@@ -205,6 +205,7 @@ func (s *Supervisor) Start(ctx context.Context, spec ContainerSpec) error {
 		s.mu.Lock()
 		delete(s.containers, spec.ID)
 		s.mu.Unlock()
+		removeBundle(filepath.Join(s.baseDir, "bundles", spec.ID))
 		return err
 	}
 	if fastExit {
@@ -214,6 +215,7 @@ func (s *Supervisor) Start(ctx context.Context, spec ContainerSpec) error {
 		delete(s.containers, spec.ID)
 		s.mu.Unlock()
 		s.removePersistedState(spec.ID)
+		removeBundle(entry.bundleDir)
 		return nil
 	}
 
@@ -1017,6 +1019,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 			delete(s.containers, e.spec.ID)
 			s.mu.Unlock()
 			s.removePersistedState(e.spec.ID)
+			removeBundle(e.bundleDir)
 			return
 		}
 
@@ -1028,6 +1031,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 			delete(s.containers, e.spec.ID)
 			s.mu.Unlock()
 			s.removePersistedState(e.spec.ID)
+			removeBundle(e.bundleDir)
 			return
 		}
 
@@ -1073,6 +1077,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 				delete(s.containers, e.spec.ID)
 				s.mu.Unlock()
 				s.removePersistedState(e.spec.ID)
+				removeBundle(e.bundleDir)
 				return
 			}
 			if !s.shouldRestart(e, exitCode) {
@@ -1081,6 +1086,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 				delete(s.containers, e.spec.ID)
 				s.mu.Unlock()
 				s.removePersistedState(e.spec.ID)
+				removeBundle(e.bundleDir)
 				return
 			}
 			e.restarts++
@@ -1151,7 +1157,7 @@ func (s *Supervisor) cleanup(e *containerEntry) {
 		network.DeleteNetNS(e.spec.ID)                           //nolint:errcheck
 	}
 	s.ovl.Remove(e.spec.ID) //nolint:errcheck
-	removeBundleMeta(e.bundleDir)
+	removeBundle(e.bundleDir)
 	s.removePersistedState(e.spec.ID)
 }
 

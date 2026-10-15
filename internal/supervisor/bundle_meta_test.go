@@ -2,7 +2,6 @@ package supervisor
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -25,8 +24,8 @@ func TestWriteReadBundleMeta(t *testing.T) {
 	if got.Image != meta.Image || got.IP != meta.IP {
 		t.Fatalf("got %+v", got)
 	}
-	removeBundleMeta(dir)
-	if _, err := os.Stat(filepath.Join(dir, bundleMetaFileName)); !os.IsNotExist(err) {
-		t.Fatalf("expected meta removed")
+	removeBundle(dir)
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("expected bundle removed")
 	}
 }

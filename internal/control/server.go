@@ -26,6 +26,7 @@ import (
 	"github.com/zrougamed/nyxd/internal/compose"
 	"github.com/zrougamed/nyxd/internal/health"
 	"github.com/zrougamed/nyxd/internal/image"
+	"github.com/zrougamed/nyxd/internal/logs"
 	"github.com/zrougamed/nyxd/internal/network"
 	"github.com/zrougamed/nyxd/internal/runtime"
 	"github.com/zrougamed/nyxd/internal/supervisor"
@@ -391,6 +392,13 @@ func (s *Server) handleContainerRemove(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
 	canon, err := s.resolveContainerID(id)
 	if err != nil {
+		// An exited container leaves only its logs: removing it deletes them.
+		if errors.Is(err, errNoSuchContainerID) && safeLogContainerID(id) &&
+			logs.Remove(filepath.Join(s.dataDir, "logs"), id) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "id": id})
+			return
+		}
 		writeResolveError(w, err)
 		return
 	}

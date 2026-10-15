@@ -321,13 +321,21 @@ func countLines(b []byte) int {
 
 // Remove deletes all log files of a container, rotated ones included.
 func (c *Collector) Remove(containerID string) {
-	cur := c.Path(containerID)
-	os.Remove(cur)
-	for i := 1; ; i++ {
-		if err := os.Remove(cur + "." + strconv.Itoa(i)); err != nil && i >= c.maxFiles {
-			return
+	Remove(c.logDir, containerID)
+}
+
+// Remove deletes all log files of a container in logDir: id.log and every
+// rotated id.log.N. It reports whether there was any.
+func Remove(logDir, containerID string) bool {
+	cur := Path(logDir, containerID)
+	found := os.Remove(cur) == nil
+	rotated, _ := filepath.Glob(cur + ".*")
+	for _, p := range rotated {
+		if _, err := strconv.Atoi(strings.TrimPrefix(p, cur+".")); err == nil && os.Remove(p) == nil {
+			found = true
 		}
 	}
+	return found
 }
 
 // ParseSize parses a log size such as "10m", "512k", "1g" or "1048576"
