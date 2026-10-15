@@ -10,10 +10,6 @@ nyx machine start         # boot it; nyx now talks to the nyxd inside
 nyx run alpine:3.20 uname -a
 ```
 
-> **Status: preview.** CI builds the VM image and boots it under QEMU/KVM on Linux with the devices vfkit
-> gives it (`scripts/vm-smoke.sh`), and tests `nyx machine` against a fake vfkit. It has not yet been run on
-> a real Mac. Please report what you find.
-
 ## Requirements
 
 | Need | Notes |
@@ -96,7 +92,7 @@ nyx machine init --image bin/nyx-vm-arm64.tar.gz
 
 A development build of `nyx` has no matching release, so `init` needs `--image`.
 
-## Testing without a Mac
+## End-to-end tests on Linux
 
 `make test-vm` builds the amd64 image and boots it under QEMU/KVM with the devices vfkit gives it (virtio
 disks, virtio-net, a virtio console, vsock). It checks that nyxd answers over vsock, that a published port

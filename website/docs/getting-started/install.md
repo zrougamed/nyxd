@@ -22,7 +22,8 @@ Networking defaults to **`-net-driver=native`** (no `/opt/cni/bin`). See [networ
 One command per platform. On Linux it adds the nyxd package repository for your package manager and
 installs from it (so your system's upgrades keep nyxd current); on macOS and Windows it downloads the
 release and checks it against the signed `checksums.txt`. Either way `nyxd` is set up as a service that
-starts at boot. It takes well under a minute.
+starts at boot. It takes well under a minute; [Get started](/get-started) walks through it for your system,
+up to your first container.
 
 ```bash
 # Linux and macOS

@@ -33,7 +33,7 @@ function Hero() {
           </p>
 
           <div className={styles.heroActions}>
-            <Link className={clsx('button button--lg', styles.btnPrimary)} to="/docs/">
+            <Link className={clsx('button button--lg', styles.btnPrimary)} to="/get-started">
               Get started
             </Link>
             <Link className={clsx('button button--lg', styles.btnGhost)} to="/docs/reference/api/">
@@ -56,14 +56,11 @@ function Hero() {
             <span className={styles.terminalTitle}>nyxd</span>
           </div>
           <pre className={styles.terminalCode}>{
-`# install
-make build && sudo install nyxd /usr/local/bin
-
-# start daemon
-sudo nyxd --base-dir=/var/lib/nyxd
+`# install (Linux, macOS)
+curl -fsSL https://pkgs.nyxd.io/install.sh | sh
 
 # run a container
-nyx run -d nginx:alpine
+nyx run -d --name web -p 8080:80 nginx:alpine
 
 # list running containers
 nyx ps`
@@ -179,13 +176,13 @@ function Cta(): ReactNode {
               Ready to ditch the daemon stack?
             </Heading>
             <p className={styles.ctaBody}>
-              Read the install guide and have nyxd running in under five minutes
-              on any capable Linux host.
+              Pick your system and have nyxd running a container in under 60
+              seconds, on Linux, macOS or Windows.
             </p>
           </div>
           <div className={styles.ctaActions}>
-            <Link className={clsx('button button--lg', styles.btnPrimary)} to="/docs/getting-started/install">
-              Install nyxd
+            <Link className={clsx('button button--lg', styles.btnPrimary)} to="/get-started">
+              Get started
             </Link>
             <Link className={clsx('button button--lg', styles.btnGhostDark)} href="https://github.com/zrougamed/nyxd">
               View source

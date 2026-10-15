@@ -1,0 +1,247 @@
+/* Get started: theme-aware (Infima variables), one column, phone-friendly. */
+
+.page {
+  padding: 3rem 0 4.5rem;
+}
+
+.inner {
+  max-width: 860px;
+}
+
+/* ─── Header ──────────────────────────────────────────────────────────── */
+.header {
+  margin-bottom: 2rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: var(--nyxd-badge-bg);
+  color: var(--nyxd-badge-color);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0.7rem 0 0.4rem;
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  line-height: 1.1;
+}
+
+.lead {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+/* ─── Platform picker ─────────────────────────────────────────────────── */
+.picker {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.pickerGroup {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.pickerGroupName {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--nyxd-card-border);
+  border-radius: 10px;
+  background: var(--nyxd-card-bg);
+  color: var(--ifm-font-color-base);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.chip:hover {
+  border-color: var(--ifm-color-primary);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}
+
+.chipActive {
+  border-color: var(--ifm-color-primary);
+  background: var(--nyxd-badge-bg);
+  box-shadow: inset 0 0 0 1px var(--ifm-color-primary);
+}
+
+.chipLabel {
+  font-weight: 600;
+  color: var(--ifm-heading-color);
+}
+
+.chipHint {
+  font-size: 0.78rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+/* ─── Steps ───────────────────────────────────────────────────────────── */
+.before {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--ifm-color-primary);
+  border-radius: 0 8px 8px 0;
+  background: var(--nyxd-card-bg);
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.step {
+  padding: 1.1rem 1.2rem 0.4rem;
+  border: 1px solid var(--nyxd-card-border);
+  border-radius: 12px;
+  background: var(--nyxd-card-bg);
+  box-shadow: var(--nyxd-card-shadow);
+  min-width: 0; /* let code blocks scroll instead of widening the page */
+}
+
+.stepHead {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.5rem;
+}
+
+.stepNum {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  background: var(--ifm-color-primary);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.stepTitle {
+  flex: 1;
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.stepTime {
+  flex: none;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--nyxd-card-border);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.stepBody {
+  margin: 0 0 0.75rem;
+}
+
+/* ─── Details ─────────────────────────────────────────────────────────── */
+.details {
+  margin-top: 1rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--nyxd-card-border);
+  border-radius: 10px;
+  background: var(--nyxd-card-bg);
+}
+
+.details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ifm-heading-color);
+}
+
+.details[open] summary {
+  margin-bottom: 0.75rem;
+}
+
+.small {
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+/* ─── Next ────────────────────────────────────────────────────────────── */
+.next {
+  margin-top: 3rem;
+}
+
+.nextTitle {
+  font-size: 1.3rem;
+}
+
+.nextGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.75rem;
+}
+
+.nextCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--nyxd-card-border);
+  border-radius: 10px;
+  background: var(--nyxd-card-bg);
+  color: var(--ifm-font-color-base);
+}
+
+.nextCard:hover {
+  border-color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+.nextCard strong {
+  color: var(--ifm-heading-color);
+}
+
+.nextCard span {
+  font-size: 0.9rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding-top: 2rem;
+  }
+  .chips {
+    grid-template-columns: 1fr 1fr;
+  }
+  .step {
+    padding: 0.9rem 0.9rem 0.2rem;
+  }
+}
