@@ -170,6 +170,9 @@ func (c *Collector) rotate(containerID string, lf *logFile) error {
 	return err
 }
 
+// drainGrace is how long Stream keeps reading a pipe after its context ends.
+var drainGrace = 2 * time.Second
+
 // Stream reads log lines from r (container stdout/stderr) and appends them
 // to the container's log file until r is closed or ctx is cancelled.
 // Lines longer than 64 KiB are split into several entries.
@@ -182,9 +185,19 @@ func (c *Collector) Stream(ctx context.Context, containerID, stream string, r io
 	}
 	defer c.release(containerID, lf)
 
+	// A reader with deadlines (the container's stdio pipe) keeps being read
+	// for drainGrace after ctx ends: the context is cancelled as soon as the
+	// container exits, while its last output can still be in the pipe.
+	drain := false
+	if d, ok := r.(interface{ SetReadDeadline(time.Time) error }); ok {
+		drain = true
+		stop := context.AfterFunc(ctx, func() { _ = d.SetReadDeadline(time.Now().Add(drainGrace)) })
+		defer stop()
+	}
+
 	br := bufio.NewReaderSize(r, maxLine)
 	for {
-		if ctx.Err() != nil {
+		if !drain && ctx.Err() != nil {
 			return
 		}
 		chunk, err := br.ReadSlice('\n')
@@ -201,7 +214,9 @@ func (c *Collector) Stream(ctx context.Context, containerID, stream string, r io
 		}
 		switch {
 		case err == nil, errors.Is(err, bufio.ErrBufferFull):
-		case errors.Is(err, io.EOF), ctx.Err() != nil:
+		case errors.Is(err, io.EOF), errors.Is(err, os.ErrDeadlineExceeded):
+			return
+		case !drain && ctx.Err() != nil:
 			return
 		default:
 			c.log.Warn("log read error", "id", containerID, "err", err)

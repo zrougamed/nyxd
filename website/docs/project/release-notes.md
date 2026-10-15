@@ -38,5 +38,7 @@ Check these before upgrading from 0.9:
 ### Fixed
 
 - `nyx rm` of a container that had just stopped could leave its log files behind.
+- The last output of a container that exits right after writing it could be missing from its
+  log.
 - A foreground `nyx run` of a very short command could hang while its container restarted in a
   loop.

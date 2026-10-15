@@ -182,3 +182,34 @@ func TestParseSize(t *testing.T) {
 		}
 	}
 }
+
+func TestStreamDrainsPipeAfterCancel(t *testing.T) {
+	defer func(g time.Duration) { drainGrace = g }(drainGrace)
+	drainGrace = 200 * time.Millisecond
+	dir := t.TempDir()
+	c, err := NewCollector(dir, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pw.Close()
+	// The container exited: its last line is in the pipe and the context is
+	// already cancelled. The writer stays open, so only the deadline ends it.
+	pw.Write([]byte("last\n")) //nolint:errcheck
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan struct{})
+	go func() { c.Stream(ctx, "fast", "stdout", pr); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Stream did not return after the drain grace")
+	}
+	got, err := c.Tail("fast", 10)
+	if err != nil || len(got) != 1 || got[0].Log != "last" {
+		t.Fatalf("tail = %+v, %v; want the line written before the cancel", got, err)
+	}
+}
