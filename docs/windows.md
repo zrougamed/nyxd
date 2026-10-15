@@ -9,10 +9,6 @@ nyx machine start         # start nyxd in it
 nyx run alpine:3.20 uname -a
 ```
 
-> **Status: preview.** CI tests `nyx machine` and the distro end to end on Linux, with a fake `wsl.exe` that
-> boots the real tarball (see [Testing without Windows](#testing-without-windows)). It has not yet been run on a
-> real Windows machine. Please report what you find.
-
 ## Requirements
 
 | Need | Notes |
@@ -155,7 +151,7 @@ The tarball is reproducible (sorted entries, numeric owner `0`, mtime from the l
 Grype cannot identify the static `crun` binary, so its version is pinned in `scripts/build-wsl-rootfs.sh` and
 updated by hand (as is the CA bundle date).
 
-## Testing without Windows
+## End-to-end tests on Linux
 
 ```bash
 make test-wsl        # builds nyx + the distro tarball, runs scripts/wsl-smoke.sh
@@ -173,8 +169,6 @@ The script checks: `machine init` from a URL (checksum mismatch rejected), no sh
 must arrive intact, compose with `C:\` and relative binds, `stop` (daemon only), restart with data kept,
 `stop --terminate`, a second machine (`--name`, local `--image`) with its own data, and `rm`.
 
-What it cannot cover: `wsl.exe` itself, the WSL kernel and its cgroup layout, `localhost` port forwarding, and
-how Windows treats the detached `nyx machine start` process.
 
 ## Troubleshooting
 

@@ -1026,7 +1026,7 @@ components:
           type: string
         restart:
           type: string
-          description: Restart policy (`always`, `on-failure`, `unless-stopped`, `never`, …)
+          description: Restart policy (`always`, `on-failure`, `unless-stopped`, `never`, …); default `never`, as in Docker
         publish:
           type: array
           description: Docker-style port specs (e.g. `8080:80`, `127.0.0.1:9000:443/udp`)

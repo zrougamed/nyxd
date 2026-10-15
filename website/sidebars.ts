@@ -30,6 +30,7 @@ const sidebars: SidebarsConfig = {
         'operations/image-layers',
         'operations/kernel-requirements',
         'operations/qemu-alpine',
+        'operations/stress-testing',
       ],
     },
     {
@@ -37,6 +38,7 @@ const sidebars: SidebarsConfig = {
       label: 'Reference',
       items: [
         'reference/api-reference',
+        'reference/stability',
         {
           type: 'category',
           label: 'REST API',
@@ -54,7 +56,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Project',
-      items: ['project/architecture', 'project/architecture-diagram-kit', 'project/roadmap', 'project/benchmarks'],
+      items: ['project/release-notes', 'project/roadmap', 'project/architecture', 'project/architecture-diagram-kit', 'project/benchmarks'],
     },
   ],
 };

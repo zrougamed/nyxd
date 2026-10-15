@@ -107,3 +107,25 @@ func TestBuildSpecHostNetworkRootless(t *testing.T) {
 		})
 	}
 }
+
+func TestWithSwapLimit(t *testing.T) {
+	if got := withSwapLimit(nil); got != nil {
+		t.Fatalf("nil resources: got %+v", got)
+	}
+	in := &Resources{Memory: &MemoryRes{Limit: 32 << 20}}
+	got := withSwapLimit(in)
+	if got.Memory.Swap != 64<<20 {
+		t.Fatalf("swap = %d, want %d", got.Memory.Swap, 64<<20)
+	}
+	if in.Memory.Swap != 0 {
+		t.Fatal("caller's resources were changed")
+	}
+	set := &Resources{Memory: &MemoryRes{Limit: 32 << 20, Swap: -1}}
+	if withSwapLimit(set).Memory.Swap != -1 {
+		t.Fatal("explicit swap value overridden")
+	}
+	noLimit := &Resources{Memory: &MemoryRes{Reservation: 16 << 20}}
+	if withSwapLimit(noLimit).Memory.Swap != 0 {
+		t.Fatal("swap set without a memory limit")
+	}
+}

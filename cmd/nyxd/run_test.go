@@ -24,7 +24,7 @@ func cfgFor(t *testing.T) Config {
 	t.Helper()
 	base := t.TempDir()
 	return Config{BaseDir: base, CrunBin: "/bin/true", NetDriver: "host", DNS: "auto", LogLevel: "debug",
-		Socket: filepath.Join(base, "nyxd.sock"), Rootless: rootless.Info{Rootless: true}}
+		LogMaxSize: "10m", LogMaxFiles: 3, Socket: filepath.Join(base, "nyxd.sock"), Rootless: rootless.Info{Rootless: true}}
 }
 
 func TestRunStartsAndStops(t *testing.T) {
@@ -70,6 +70,8 @@ func TestRunStartupFailures(t *testing.T) {
 		"image store":         func() Config { return block(cfgFor(t), "images") },
 		"overlay":             func() Config { return block(cfgFor(t), "overlay") },
 		"log collector":       func() Config { return block(cfgFor(t), "logs") },
+		"-log-max-size":       func() Config { c := cfgFor(t); c.LogMaxSize = "lots"; return c },
+		"-log-max-files":      func() Config { c := cfgFor(t); c.LogMaxFiles = 0; return c },
 		"builder":             func() Config { return block(cfgFor(t), "build") },
 		"runtime":             func() Config { c := cfgFor(t); c.CrunBin = "/nonexistent/crun"; return c },
 		"unknown -net-driver": func() Config { c := cfgFor(t); c.NetDriver = "bogus"; return c },

@@ -95,6 +95,7 @@ const config: Config = {
           position: 'left',
           label: 'Documentation',
         },
+        {to: '/get-started', label: 'Get started', position: 'left'},
         {to: '/docs/reference/api/', label: 'API', position: 'left'},
         {
           href: 'https://github.com/zrougamed/nyxd',
@@ -116,6 +117,14 @@ const config: Config = {
             {
               label: 'Install',
               to: '/docs/getting-started/install',
+            },
+            {
+              label: 'Release notes',
+              to: '/docs/project/release-notes',
+            },
+            {
+              label: 'Stability',
+              to: '/docs/reference/stability',
             },
           ],
         },

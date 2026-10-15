@@ -71,6 +71,12 @@
   width: fit-content;
 }
 
+.badge:hover {
+  color: #3ecf5e;
+  text-decoration: none;
+  background: rgba(62, 207, 94, 0.25);
+}
+
 .heroTitle {
   font-size: clamp(2.4rem, 4vw, 3.6rem);
   color: #e8f4ff !important;

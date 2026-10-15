@@ -31,6 +31,8 @@ sudo nyx run --name web nginx:alpine
 
 # Docker-style flags: publish, env, hostname, restart
 sudo nyx run -p 8080:80 -e MYVAR=1 --hostname web --restart no nginx:alpine
+# --restart defaults to no, as in Docker; use unless-stopped or always for a long-running service
+sudo nyx run -d --name web --restart unless-stopped nginx:alpine
 
 # Logs (optional follow; tail count)
 sudo nyx logs web
@@ -58,6 +60,26 @@ sudo nyx stop web
 sudo nyx exec <id> sh -c 'hostname'
 sudo nyx exec <id> -- sh -c 'hostname'
 ```
+
+## Container logs
+
+nyxd stores each container's stdout and stderr as JSON lines under
+`/var/lib/nyxd/logs/<id>.log` and rotates the file by size, so a chatty
+service cannot fill the disk:
+
+| nyxd flag | Default | Meaning |
+|-----------|---------|---------|
+| `-log-max-size` | `10m` | Rotate when the log reaches this size (`k`, `m`, `g` suffixes); `0` never rotates |
+| `-log-max-files` | `3` | Files kept per container, the current one included (`<id>.log`, `<id>.log.1`, `<id>.log.2`) |
+
+With the defaults a container keeps at most 30 MiB of logs. Set the flags in
+`NYXD_OPTS` (see the service setup in the install guide), e.g.
+`NYXD_OPTS="-log-max-size 50m -log-max-files 5"`.
+
+`nyx logs --tail N` reads from the end of the files (rotated ones included) without
+loading them whole, and `nyx logs -f` keeps following across rotations. Lines longer
+than 64 KiB are split into several entries. A container's logs stay readable after it exits; `nyx rm <id>` deletes them
+(and stops and removes it first if it is still running).
 
 ## Building images (`nyx build`)
 
@@ -91,6 +113,11 @@ Details: [Sharing images](/docs/getting-started/images).
 **Depends on:** both `depends_on: [svc]` and the Compose **map** form `depends_on: { svc: { condition: service_healthy } }` are accepted; only service **names** are used for start order (`condition` is ignored — readiness comes from **healthcheck** + sequential start).
 
 **Stop grace:** per-service `stop_grace_period` maps to SIGTERM wait before `nyx stop` / compose stop forces teardown. If omitted, the daemon uses a **10s** default (similar to `docker stop`), not a multi‑minute wait.
+
+**Resources:** `deploy.resources.limits` (`memory`, `cpus`, `pids_limit`, `cpuset_cpus`, …) and `reservations.memory` become cgroup
+limits. A memory limit also caps memory plus swap at twice the limit (Docker's default), so a service over its
+limit is OOM-killed instead of swapping. Rootless without cgroup delegation, limits are not applied (the daemon
+logs a warning).
 
 **Rootless:** published ports, service names and the limits of the shared host network: see [Rootless](/docs/operations/rootless#networking).
 

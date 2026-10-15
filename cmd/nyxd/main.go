@@ -51,6 +51,8 @@ type Config struct {
 	SocketGroup  string // optional POSIX group for socket (0660); lets non-root users in that group run nyx
 	PullPlatform string // OCI platform for multi-arch indexes, e.g. linux/arm64; empty uses GOOS/GOARCH
 	DNS          string // auto (default), embedded, cni, off — see docs/networking.md
+	LogMaxSize   string // container log size that triggers rotation, e.g. 10m; 0 = never rotate
+	LogMaxFiles  int    // container log files kept, the current one included
 
 	Rootless    rootless.Info // set when running in nyxd's own user namespace
 	UsernsRemap string        // "START:COUNT" or "default": root runs the daemon in a remapped user namespace
@@ -95,7 +97,7 @@ func main() {
 	case rootless.Wanted():
 		// Not root: re-exec inside a user namespace (does not return in the
 		// host process). See internal/rootless and docs/rootless.md.
-		info, err := rootless.Enter()
+		info, err := rootless.EnterDaemon(cfg.BaseDir)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "nyxd:", err)
 			os.Exit(1)
@@ -212,6 +214,14 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("log collector: %w", err)
 	}
+	logMax, err := logs.ParseSize(cfg.LogMaxSize)
+	if err != nil {
+		return fmt.Errorf("-log-max-size: %w", err)
+	}
+	if cfg.LogMaxFiles < 1 {
+		return fmt.Errorf("-log-max-files: must be at least 1")
+	}
+	logColl.SetRotation(logMax, cfg.LogMaxFiles)
 
 	gw := netdns.DefaultGateway()
 	var dns netdns.Backend = netdns.Noop{}
@@ -273,6 +283,8 @@ func parseFlags() Config {
 	flag.StringVar(&cfg.PullPlatform, "pull-platform", "", "OCI platform for multi-arch manifests (e.g. linux/arm64); default uses this binary's GOOS/GOARCH")
 	flag.StringVar(&cfg.DNS, "dns", "auto", "DNS: auto (embedded; on CNI only for compose internal networks), embedded, cni (no embedded), off")
 	flag.StringVar(&cfg.UsernsRemap, "userns-remap", "", "As root: run the daemon and containers in a user namespace mapped to host IDs START:COUNT (\"default\" = 100000:65536); no setuid helpers needed")
+	flag.StringVar(&cfg.LogMaxSize, "log-max-size", "10m", "Rotate a container's log file when it reaches this size (k, m, g suffixes); 0 never rotates")
+	flag.IntVar(&cfg.LogMaxFiles, "log-max-files", logs.DefaultMaxFiles, "Log files kept per container, the current one included")
 	flag.BoolVar(&cfg.Version, "version", false, "Print version and exit")
 	flag.Parse()
 

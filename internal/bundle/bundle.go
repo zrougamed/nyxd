@@ -256,7 +256,7 @@ func buildSpec(opts Options, sec *Seccomp) Spec {
 
 	linux := &Linux{
 		Namespaces:        namespaces,
-		Resources:         opts.Resources,
+		Resources:         withSwapLimit(opts.Resources),
 		Seccomp:           sec,
 		RootfsPropagation: "rprivate",
 		UIDMappings:       opts.UIDMappings,
@@ -378,4 +378,19 @@ func mergeEnv(base, overrides []string) []string {
 		out = append(out, k+"="+v)
 	}
 	return out
+}
+
+// withSwapLimit gives a memory limit without a swap value Docker's default:
+// memory plus swap capped at twice the limit. Left unset, the runtime leaves
+// swap unlimited and a container over its limit swaps instead of being
+// OOM-killed. A copy is returned; the caller's value is not changed.
+func withSwapLimit(r *Resources) *Resources {
+	if r == nil || r.Memory == nil || r.Memory.Limit <= 0 || r.Memory.Swap != 0 {
+		return r
+	}
+	rc := *r
+	mem := *r.Memory
+	mem.Swap = 2 * mem.Limit
+	rc.Memory = &mem
+	return &rc
 }

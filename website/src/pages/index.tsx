@@ -19,7 +19,9 @@ function Hero() {
 
       <div className={clsx('container', styles.heroInner)}>
         <div className={styles.heroContent}>
-          <span className={styles.badge}>Minimal OCI Orchestration</span>
+          <Link className={styles.badge} to="/docs/project/release-notes">
+            nyxd 1.0 is out · release notes →
+          </Link>
 
           <Heading as="h1" className={styles.heroTitle}>
             Container runtime<br />
@@ -33,7 +35,7 @@ function Hero() {
           </p>
 
           <div className={styles.heroActions}>
-            <Link className={clsx('button button--lg', styles.btnPrimary)} to="/docs/">
+            <Link className={clsx('button button--lg', styles.btnPrimary)} to="/get-started">
               Get started
             </Link>
             <Link className={clsx('button button--lg', styles.btnGhost)} to="/docs/reference/api/">
@@ -56,14 +58,11 @@ function Hero() {
             <span className={styles.terminalTitle}>nyxd</span>
           </div>
           <pre className={styles.terminalCode}>{
-`# install
-make build && sudo install nyxd /usr/local/bin
-
-# start daemon
-sudo nyxd --base-dir=/var/lib/nyxd
+`# install (Linux, macOS)
+curl -fsSL https://pkgs.nyxd.io/install.sh | sh
 
 # run a container
-nyx run -d nginx:alpine
+nyx run -d --name web -p 8080:80 nginx:alpine
 
 # list running containers
 nyx ps`
@@ -79,7 +78,7 @@ function StatsBar(): ReactNode {
   const stats = [
     {value: 'crun',    label: 'OCI Runtime'},
     {value: 'native',  label: 'Default network'},
-    {value: 'no-deps', label: 'Docker / Podman'},
+    {value: '1.x',     label: 'Stable API + CLI'},
     {value: 'arm64',   label: 'Also supported'},
   ];
   return (
@@ -123,14 +122,14 @@ const features: Feature[] = [
   {
     tag: 'SUPERVISOR',
     title: 'Supervisor + restart policies',
-    body: 'nyxd supervises containers with configurable restart policies and reconciles state after an unclean shutdown.',
+    body: 'Restart policies with backoff, health checks, and containers that keep running and are re-adopted when the daemon crashes or restarts.',
     href: '/docs/getting-started/usage',
   },
   {
     tag: 'API',
     title: 'REST control plane',
-    body: 'All operations are available via a Unix-socket HTTP API fully documented as an OpenAPI 3 spec.',
-    href: '/docs/reference/api/',
+    body: 'Every operation is on a Unix-socket HTTP API, documented as OpenAPI 3 and kept compatible for all of 1.x.',
+    href: '/docs/reference/stability',
   },
   {
     tag: 'SECURITY',
@@ -179,13 +178,13 @@ function Cta(): ReactNode {
               Ready to ditch the daemon stack?
             </Heading>
             <p className={styles.ctaBody}>
-              Read the install guide and have nyxd running in under five minutes
-              on any capable Linux host.
+              Pick your system and have nyxd running a container in under 60
+              seconds, on Linux, macOS or Windows.
             </p>
           </div>
           <div className={styles.ctaActions}>
-            <Link className={clsx('button button--lg', styles.btnPrimary)} to="/docs/getting-started/install">
-              Install nyxd
+            <Link className={clsx('button button--lg', styles.btnPrimary)} to="/get-started">
+              Get started
             </Link>
             <Link className={clsx('button button--lg', styles.btnGhostDark)} href="https://github.com/zrougamed/nyxd">
               View source
