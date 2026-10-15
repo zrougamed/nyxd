@@ -60,9 +60,19 @@ jobs:
           mkdir pkgs
           tags="$(gh release list --exclude-drafts --exclude-pre-releases --limit "${KEEP}" --json tagName -q '.[].tagName')"
           for tag in ${tags}; do
+            # Releases before v0.9.3 have no packages, and gh release download
+            # fails when no asset matches.
+            if ! gh release view "${tag}" --json assets -q '.assets[].name' | grep -qE '\.(deb|rpm|apk|pkg\.tar\.zst)$'; then
+              echo "${tag}: no packages, skipped"
+              continue
+            fi
             echo "${tag}"
             gh release download "${tag}" -D pkgs -p '*.deb' -p '*.rpm' -p '*.apk' -p '*.pkg.tar.zst' -p '*.pkg.tar.zst.sig'
           done
+          if [ -z "$(ls -A pkgs)" ]; then
+            echo "::error::no release has packages"
+            exit 1
+          fi
 
       - name: Build the repositories
         env:
