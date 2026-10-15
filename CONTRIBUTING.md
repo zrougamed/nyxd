@@ -12,6 +12,7 @@ Thank you for helping improve nyxd and `nyx`.
 
 - **Go:** match the version in `go.mod`. Run **`go test ./...`** before opening a PR.
 - **Linux + `crun`:** most behavior is only exercised on Linux; mention your test environment in the PR.
+- **End-to-end:** `make test-rootless`, `test-build`, `test-transfer`, `test-repos` and `sudo make test-stress` (load and failure test, see [docs/stress-testing.md](docs/stress-testing.md)).
 - **Docs:** update `docs/USAGE.md`, `docs/openapi.yaml`, or `docs/ROADMAP.md` when user-visible behavior or the HTTP API changes.
 
 ## License

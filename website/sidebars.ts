@@ -30,6 +30,7 @@ const sidebars: SidebarsConfig = {
         'operations/image-layers',
         'operations/kernel-requirements',
         'operations/qemu-alpine',
+        'operations/stress-testing',
       ],
     },
     {

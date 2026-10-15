@@ -1,0 +1,74 @@
+name: Stress
+
+# Load and failure test (scripts/stress.sh): many containers at once,
+# start/stop churn, a log flood, a container killed by the OOM killer and a
+# daemon crash with containers running. Rootful (every scenario) and
+# rootless. Weekly, by hand, and on pull requests that touch the supervisor,
+# logs or the test itself. Results land in the job summary.
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      containers:
+        description: Containers running at once
+        default: "50"
+      churn:
+        description: Short-lived containers to run
+        default: "200"
+      big_image:
+        description: Also pull this large image (optional)
+        default: ""
+  pull_request:
+    paths:
+      - scripts/stress.sh
+      - .github/workflows/stress.yml
+      - internal/supervisor/**
+      - internal/logs/**
+      - internal/runtime/**
+
+permissions:
+  contents: read
+
+jobs:
+  stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [rootful, rootless]
+    env:
+      STRESS_CONTAINERS: ${{ inputs.containers || '50' }}
+      STRESS_CHURN: ${{ inputs.churn || '200' }}
+      STRESS_BIG_IMAGE: ${{ inputs.big_image || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Prerequisites
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          which crun newuidmap newgidmap nft || { sudo apt-get update && sudo apt-get install -y crun uidmap nftables; }
+          grep -q "^$(id -un):" /etc/subuid || sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$(id -un)"
+
+      - name: Build
+        run: make build build-nyx
+
+      - name: Stress test (${{ matrix.mode }})
+        run: |
+          if [ "${{ matrix.mode }}" = rootful ]; then
+            sudo --preserve-env=STRESS_CONTAINERS,STRESS_CHURN,STRESS_BIG_IMAGE STRESS_REPORT="$RUNNER_TEMP/stress.md" scripts/stress.sh
+          else
+            STRESS_REPORT="$RUNNER_TEMP/stress.md" scripts/stress.sh
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          [ -f "$RUNNER_TEMP/stress.md" ] && cat "$RUNNER_TEMP/stress.md" >> "$GITHUB_STEP_SUMMARY" || true
