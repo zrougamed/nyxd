@@ -56,7 +56,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Project',
-      items: ['project/architecture', 'project/architecture-diagram-kit', 'project/roadmap', 'project/benchmarks'],
+      items: ['project/release-notes', 'project/roadmap', 'project/architecture', 'project/architecture-diagram-kit', 'project/benchmarks'],
     },
   ],
 };

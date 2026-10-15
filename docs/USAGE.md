@@ -31,6 +31,8 @@ sudo nyx run --name web nginx:alpine
 
 # Docker-style flags: publish, env, hostname, restart
 sudo nyx run -p 8080:80 -e MYVAR=1 --hostname web --restart no nginx:alpine
+# --restart defaults to no, as in Docker; use unless-stopped or always for a long-running service
+sudo nyx run -d --name web --restart unless-stopped nginx:alpine
 
 # Logs (optional follow; tail count)
 sudo nyx logs web
@@ -111,6 +113,11 @@ Details: [images.md](images.md).
 **Depends on:** both `depends_on: [svc]` and the Compose **map** form `depends_on: { svc: { condition: service_healthy } }` are accepted; only service **names** are used for start order (`condition` is ignored — readiness comes from **healthcheck** + sequential start).
 
 **Stop grace:** per-service `stop_grace_period` maps to SIGTERM wait before `nyx stop` / compose stop forces teardown. If omitted, the daemon uses a **10s** default (similar to `docker stop`), not a multi‑minute wait.
+
+**Resources:** `deploy.resources.limits` (`memory`, `cpus`, `pids_limit`, `cpuset_cpus`, …) and `reservations.memory` become cgroup
+limits. A memory limit also caps memory plus swap at twice the limit (Docker's default), so a service over its
+limit is OOM-killed instead of swapping. Rootless without cgroup delegation, limits are not applied (the daemon
+logs a warning).
 
 **Rootless:** published ports, service names and the limits of the shared host network: see [rootless.md](rootless.md#networking).
 

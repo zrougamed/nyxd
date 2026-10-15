@@ -118,6 +118,14 @@ const config: Config = {
               label: 'Install',
               to: '/docs/getting-started/install',
             },
+            {
+              label: 'Release notes',
+              to: '/docs/project/release-notes',
+            },
+            {
+              label: 'Stability',
+              to: '/docs/reference/stability',
+            },
           ],
         },
         {

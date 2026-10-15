@@ -18,6 +18,7 @@
 | [qemu-alpine.md](qemu-alpine.md) | QEMU + Alpine 3.23 for safe testing |
 | [stability.md](stability.md) | What 1.x keeps compatible: API, CLI, flags, data, packages; deprecation and support |
 | [stress-testing.md](stress-testing.md) | Load and failure test (`scripts/stress.sh`) and its CI workflow |
+| [release-notes.md](release-notes.md) | What changed in each release; check **Changed** before upgrading |
 | [ROADMAP.md](ROADMAP.md) | What is shipped, what 1.0 needed, what comes next |
 | [../benchmarks/README.md](../benchmarks/README.md) | Docker vs Podman vs nyxd QEMU methodology + result tables |
 
