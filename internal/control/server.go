@@ -900,13 +900,13 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 
 func parseRestartPolicy(s string) supervisor.RestartPolicy {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "", "unless-stopped", "unless_stopped":
+	case "unless-stopped", "unless_stopped":
 		return supervisor.RestartUnlessStopped
 	case "always":
 		return supervisor.RestartAlways
 	case "on-failure", "on_failure":
 		return supervisor.RestartOnFailure
-	case "no", "never":
+	case "", "no", "never":
 		return supervisor.RestartNever
 	default:
 		return supervisor.RestartNever

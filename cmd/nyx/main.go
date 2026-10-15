@@ -173,7 +173,7 @@ commands:
         -p, --publish HOST:PORT[/tcp|udp]   port mapping (repeatable, e.g. -p 8080:80)
         -e, --env KEY=VAL           environment (repeatable)
         --hostname <h> | -h <h>     hostname in container (-h here is hostname, not help)
-        --restart <policy>          always | on-failure | unless-stopped | never
+        --restart <policy>          always | on-failure | unless-stopped | never (default)
         --print-id                  when attached, also print id on stderr
         --json                      machine-readable pull/run output
   ps [-q] [--no-trunc]

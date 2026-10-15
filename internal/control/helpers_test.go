@@ -25,7 +25,7 @@ import (
 
 func TestParseRestartPolicy(t *testing.T) {
 	for in, want := range map[string]supervisor.RestartPolicy{
-		"": supervisor.RestartUnlessStopped, "unless_stopped": supervisor.RestartUnlessStopped,
+		"": supervisor.RestartNever, "unless_stopped": supervisor.RestartUnlessStopped,
 		"Always": supervisor.RestartAlways, "on-failure": supervisor.RestartOnFailure, "on_failure": supervisor.RestartOnFailure,
 		"no": supervisor.RestartNever, "never": supervisor.RestartNever, "bogus": supervisor.RestartNever,
 	} {

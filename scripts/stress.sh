@@ -228,7 +228,8 @@ re_adopted() { [ "$(running)" -eq 10 ]; }
 wait_until 30 "$(running) of 10 containers re-adopted" re_adopted
 t1=$(now_ms)
 result "restart after SIGKILL, 10 re-adopted" "$((t1 - t0)) ms"
-"$NYX" exec crash-5 -- sh -c 'echo ok' | grep -qx ok || fail "exec after re-adopt"
+out=$("$NYX" exec crash-5 -- sh -c 'echo ok' 2>&1)
+[ "$out" = ok ] || fail "exec after re-adopt: $out"
 seq 1 10 | xargs -P "$PAR" -I{} "$NYX" rm "crash-{}" >/dev/null || fail "rm crash-*"
 
 if [ -n "${STRESS_BIG_IMAGE:-}" ]; then
