@@ -228,6 +228,9 @@ release:
   github:
     owner: zrougamed
     name: nyxd
+  # v1.0.0-rc.1 and the like are GitHub pre-releases: not "Latest", so the
+  # installers' default and the package repositories (repos.yml) skip them.
+  prerelease: auto
   # WSL2 distro tarballs (scripts/build-wsl-rootfs.sh), macOS VM images
   # (scripts/build-vm-image.sh), the installers
   # (install.sh, install.ps1), all signed by the workflow, and the public key
