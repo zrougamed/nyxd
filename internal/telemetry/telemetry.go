@@ -18,13 +18,13 @@ type Telemetry struct {
 	mu sync.RWMutex
 
 	// Counters
-	ContainersStarted  atomic.Int64
-	ContainersStopped  atomic.Int64
-	ContainersCrashed  atomic.Int64
+	ContainersStarted   atomic.Int64
+	ContainersStopped   atomic.Int64
+	ContainersCrashed   atomic.Int64
 	ContainersRestarted atomic.Int64
-	ImagesPulled       atomic.Int64
-	HealthchecksFailed atomic.Int64
-	HealthchecksOK     atomic.Int64
+	ImagesPulled        atomic.Int64
+	HealthchecksFailed  atomic.Int64
+	HealthchecksOK      atomic.Int64
 
 	// Per-container gauges
 	containers map[string]*ContainerMetrics
@@ -32,12 +32,12 @@ type Telemetry struct {
 
 // ContainerMetrics holds per-container runtime data.
 type ContainerMetrics struct {
-	Name       string
-	Status     string
-	StartedAt  time.Time
-	PID        int
-	Restarts   int
-	mu         sync.RWMutex
+	Name      string
+	Status    string
+	StartedAt time.Time
+	PID       int
+	Restarts  int
+	mu        sync.RWMutex
 }
 
 // New returns a ready Telemetry instance.

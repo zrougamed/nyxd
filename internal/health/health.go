@@ -54,7 +54,7 @@ type Checker struct {
 
 	mu          sync.RWMutex
 	status      Status
-	consecutive int // consecutive failures
+	consecutive int                      // consecutive failures
 	onUnhealthy func(containerID string) // called when container becomes unhealthy
 
 	cancel context.CancelFunc

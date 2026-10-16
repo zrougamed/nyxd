@@ -18,8 +18,8 @@ import (
 // It is a drop-in replacement for the CNI exec-based Manager.
 // Use NewManager() and call the same Setup/Teardown/EnsureNetwork methods.
 type Manager struct {
-	log  *slog.Logger
-	mu   sync.Mutex
+	log *slog.Logger
+	mu  sync.Mutex
 	// tracks containerID → allocated IP for informational purposes
 	allocs map[string]string
 }
