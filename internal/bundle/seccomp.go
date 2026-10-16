@@ -10,9 +10,9 @@ import (
 
 // Seccomp is the OCI linux.seccomp object (runtime-spec).
 type Seccomp struct {
-	DefaultAction string         `json:"defaultAction"`
-	Architectures []string       `json:"architectures,omitempty"`
-	Syscalls      []SyscallRule  `json:"syscalls,omitempty"`
+	DefaultAction string        `json:"defaultAction"`
+	Architectures []string      `json:"architectures,omitempty"`
+	Syscalls      []SyscallRule `json:"syscalls,omitempty"`
 }
 
 // SyscallRule is one seccomp syscall match rule.

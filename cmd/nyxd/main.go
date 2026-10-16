@@ -39,13 +39,13 @@ var (
 
 // Config holds daemon configuration.
 type Config struct {
-	BaseDir     string
-	CrunBin     string
-	NetDriver   string // "native" (default) or "cni"
-	CNIBinDir   string
-	CNIConfDir  string
-	NetworkName string
-	LogLevel    string
+	BaseDir      string
+	CrunBin      string
+	NetDriver    string // "native" (default) or "cni"
+	CNIBinDir    string
+	CNIConfDir   string
+	NetworkName  string
+	LogLevel     string
 	Version      bool
 	Socket       string // Unix socket for HTTP control API; empty disables
 	SocketGroup  string // optional POSIX group for socket (0660); lets non-root users in that group run nyx

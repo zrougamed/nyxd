@@ -469,12 +469,12 @@ func (s *Store) pullLayers(ctx context.Context, client *registryClient, layers [
 	for i, layer := range layers {
 		cached := s.HasBlob(layer.Digest)
 		emit(PullEvent{
-			Phase:   "layer",
-			Index:   i,
-			Count:   len(layers),
-			Digest:  layer.Digest,
-			Size:    layer.Size,
-			Cached:  cached,
+			Phase:  "layer",
+			Index:  i,
+			Count:  len(layers),
+			Digest: layer.Digest,
+			Size:   layer.Size,
+			Cached: cached,
 		})
 		if cached {
 			emit(PullEvent{Phase: "layer_done", Digest: layer.Digest})
@@ -885,8 +885,6 @@ func (r *idleReader) Close() error {
 	r.cancel()
 	return r.rc.Close()
 }
-
-
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -73,14 +73,14 @@ type Caps struct {
 }
 
 type Linux struct {
-	Namespaces        []Namespace       `json:"namespaces"`
-	Resources         *Resources        `json:"resources,omitempty"`
-	Seccomp           *Seccomp          `json:"seccomp,omitempty"`
-	RootfsPropagation string            `json:"rootfsPropagation,omitempty"`
-	MaskedPaths       []string          `json:"maskedPaths,omitempty"`
-	ReadonlyPaths     []string          `json:"readonlyPaths,omitempty"`
-	UIDMappings       []LinuxIDMapping  `json:"uidMappings,omitempty"`
-	GIDMappings       []LinuxIDMapping  `json:"gidMappings,omitempty"`
+	Namespaces        []Namespace      `json:"namespaces"`
+	Resources         *Resources       `json:"resources,omitempty"`
+	Seccomp           *Seccomp         `json:"seccomp,omitempty"`
+	RootfsPropagation string           `json:"rootfsPropagation,omitempty"`
+	MaskedPaths       []string         `json:"maskedPaths,omitempty"`
+	ReadonlyPaths     []string         `json:"readonlyPaths,omitempty"`
+	UIDMappings       []LinuxIDMapping `json:"uidMappings,omitempty"`
+	GIDMappings       []LinuxIDMapping `json:"gidMappings,omitempty"`
 }
 
 // LinuxIDMapping is one uid/gid map entry (OCI linux.uidMappings / gidMappings).
@@ -96,18 +96,18 @@ type Namespace struct {
 }
 
 type Resources struct {
-	Memory  *MemoryRes   `json:"memory,omitempty"`
-	CPU     *CPURes      `json:"cpu,omitempty"`
-	Pids    *PidsRes     `json:"pids,omitempty"`
-	BlockIO *BlockIORes  `json:"blockIO,omitempty"`
+	Memory  *MemoryRes  `json:"memory,omitempty"`
+	CPU     *CPURes     `json:"cpu,omitempty"`
+	Pids    *PidsRes    `json:"pids,omitempty"`
+	BlockIO *BlockIORes `json:"blockIO,omitempty"`
 }
 
 type MemoryRes struct {
-	Limit          int64  `json:"limit,omitempty"`
-	Swap           int64  `json:"swap,omitempty"`
-	Reservation    int64  `json:"reservation,omitempty"`
-	OomKillDisable *bool  `json:"disableOOMKiller,omitempty"`
-	OomScoreAdj    *int   `json:"oomScoreAdj,omitempty"`
+	Limit          int64 `json:"limit,omitempty"`
+	Swap           int64 `json:"swap,omitempty"`
+	Reservation    int64 `json:"reservation,omitempty"`
+	OomKillDisable *bool `json:"disableOOMKiller,omitempty"`
+	OomScoreAdj    *int  `json:"oomScoreAdj,omitempty"`
 }
 
 type CPURes struct {

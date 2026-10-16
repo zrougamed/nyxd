@@ -22,10 +22,10 @@ type PullEvent struct {
 	Current int64  `json:"current,omitempty"` // absolute bytes transferred for this blob
 
 	// done (subset of oci.ImageConfig for API stability)
-	OK     bool           `json:"ok,omitempty"`
-	Config *PullSummary   `json:"config,omitempty"`
-	RefOut string         `json:"ref_out,omitempty"` // normalized ref echoed back
-	Error  string         `json:"error,omitempty"`
+	OK     bool         `json:"ok,omitempty"`
+	Config *PullSummary `json:"config,omitempty"`
+	RefOut string       `json:"ref_out,omitempty"` // normalized ref echoed back
+	Error  string       `json:"error,omitempty"`
 
 	// phase "run" — terminal event for POST /v1/containers/run when stream=true (after any pull).
 	ContainerID string `json:"container_id,omitempty"`
@@ -33,13 +33,13 @@ type PullEvent struct {
 
 // PullSummary is a small view of the pulled image config for the CLI / NDJSON tail.
 type PullSummary struct {
-	OS             string   `json:"os"`
-	Architecture   string   `json:"architecture"`
-	Entrypoint     []string `json:"entrypoint,omitempty"`
-	Cmd            []string `json:"cmd,omitempty"`
-	WorkingDir     string   `json:"working_dir,omitempty"`
-	EnvLen         int      `json:"env_len,omitempty"`
-	RootFSDiffIDs  int      `json:"rootfs_diff_ids,omitempty"`
+	OS            string   `json:"os"`
+	Architecture  string   `json:"architecture"`
+	Entrypoint    []string `json:"entrypoint,omitempty"`
+	Cmd           []string `json:"cmd,omitempty"`
+	WorkingDir    string   `json:"working_dir,omitempty"`
+	EnvLen        int      `json:"env_len,omitempty"`
+	RootFSDiffIDs int      `json:"rootfs_diff_ids,omitempty"`
 }
 
 func SummaryFromConfig(cfg *oci.ImageConfig) *PullSummary {
