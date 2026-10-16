@@ -59,7 +59,7 @@ const mimeExecStreamV1 = "application/x-nyxd-exec+v1"
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		if !errors.Is(err, errExecReported) {
-			fmt.Fprintf(os.Stderr, "nyx: %v\n", err)
+			fmt.Fprintf(os.Stderr, "nyx: %v\n", explainDialError(err))
 		}
 		os.Exit(1)
 	}
@@ -77,6 +77,9 @@ func run(args []string) error {
 			args = args[1:]
 		case args[0] == "-h" || args[0] == "--help":
 			usage()
+			return nil
+		case args[0] == "-v" || args[0] == "--version":
+			fmt.Printf("nyx %s\n", version)
 			return nil
 		default:
 			return fmt.Errorf("unknown flag %q", args[0])
@@ -149,6 +152,7 @@ usage:
 global-options (before <command>):
   -socket PATH | -socket=PATH   control socket (default when NYXD_SOCKET unset: %s)
   -h, --help                   show this help (must come before the command name)
+  -v, --version                print the nyx version (nyx version also asks the daemon)
 
 commands:
   ping
@@ -272,6 +276,22 @@ func doVersion(socket string) error {
 		return fmt.Errorf("version: %w", daemonError(resp.StatusCode, b))
 	}
 	_, err = io.Copy(os.Stdout, resp.Body)
+	return err
+}
+
+// explainDialError replaces "dial unix …: no such file or directory" and friends
+// with what to do about it: start nyxd, or get access to its socket.
+func explainDialError(err error) error {
+	var op *net.OpError
+	if !errors.As(err, &op) || op.Op != "dial" || op.Addr == nil {
+		return err
+	}
+	switch {
+	case errors.Is(err, syscall.ENOENT), errors.Is(err, syscall.ECONNREFUSED):
+		return fmt.Errorf("cannot reach nyxd at %s: is it running? (e.g. sudo systemctl start nyxd; another socket: -socket or NYXD_SOCKET)", op.Addr)
+	case errors.Is(err, syscall.EACCES):
+		return fmt.Errorf("permission denied on %s: join the nyx group (sudo usermod -aG nyx \"$USER\", then log in again) or use sudo", op.Addr)
+	}
 	return err
 }
 

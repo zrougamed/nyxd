@@ -21,6 +21,9 @@ stay compatible for all of 1.x. What is covered, and what is not, is in
   `pkgs.nyxd.io`, and one-line installers for Linux, macOS and Windows. See
   [Get started](https://nyxd.io/get-started).
 - **`make help`**: `make` with no target lists every target.
+- **`nyx --version`** (`-v`) prints the client version without needing the daemon.
+- **Clearer errors when nyxd can't be reached**: `nyx` says whether the daemon isn't running or
+  you lack access to its socket (join the `nyx` group), instead of a raw `dial unix` error.
 
 ### Changed
 
