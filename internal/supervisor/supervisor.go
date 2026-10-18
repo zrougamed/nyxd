@@ -73,6 +73,9 @@ type ContainerSpec struct {
 	// EmbedDNS marks compose services on CNI with -dns auto that use internal-only networks,
 	// so the embedded resolver registers their hostnames. Ignored for native and for -dns embedded.
 	EmbedDNS bool `json:"embed_dns,omitempty"`
+	// DNS, when set, are IPv4 nameservers written into /etc/resolv.conf instead of
+	// the bridge gateway. A volume mount at /etc/resolv.conf takes precedence.
+	DNS []string `json:"dns,omitempty"`
 	// HostAliases are names that resolve to the container on the host network
 	// (where every container shares the loopback): a compose stack's service
 	// names, so "db:5432" works as it does on a compose network.
@@ -80,12 +83,19 @@ type ContainerSpec struct {
 	// ComposeInternalNet is true when every compose network for the service has internal: true.
 	// The native driver blocks IPv4 egress outside the bridge CIDR (nft forward).
 	ComposeInternalNet bool `json:"compose_internal_net,omitempty"`
+	// NetworkBridge / NetworkSubnet / NetworkGateway select a compose-owned
+	// native bridge. Empty Bridge keeps the daemon default (nyxbr0).
+	NetworkBridge  string `json:"network_bridge,omitempty"`
+	NetworkSubnet  string `json:"network_subnet,omitempty"`
+	NetworkGateway string `json:"network_gateway,omitempty"`
 
 	Privileged      bool                    `json:"privileged,omitempty"`
 	SeccompProfile  string                  `json:"seccomp_profile,omitempty"`
+	ApparmorProfile string                  `json:"apparmor_profile,omitempty"`
 	CapAdd          []string                `json:"cap_add,omitempty"`
 	CapDrop         []string                `json:"cap_drop,omitempty"`
 	NoNewPrivileges *bool                   `json:"no_new_privileges,omitempty"`
+	Rlimits         []bundle.Rlimit         `json:"rlimits,omitempty"`
 	UIDMappings     []bundle.LinuxIDMapping `json:"uid_mappings,omitempty"`
 	GIDMappings     []bundle.LinuxIDMapping `json:"gid_mappings,omitempty"`
 }
@@ -765,8 +775,13 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 	e.netNS = nsPath
 
 	var netOpts *network.SetupOptions
-	if spec.ComposeInternalNet {
-		netOpts = &network.SetupOptions{Internal: true}
+	if spec.ComposeInternalNet || strings.TrimSpace(spec.NetworkBridge) != "" {
+		netOpts = &network.SetupOptions{
+			Internal: spec.ComposeInternalNet,
+			Bridge:   strings.TrimSpace(spec.NetworkBridge),
+			Subnet:   strings.TrimSpace(spec.NetworkSubnet),
+			Gateway:  strings.TrimSpace(spec.NetworkGateway),
+		}
 	}
 	ip, err := s.net.Setup(ctx, spec.ID, nsPath, spec.PortMappings, netOpts)
 	if err != nil {
@@ -807,6 +822,7 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		log.Warn("cgroups unavailable (rootless without delegation): resource limits are not applied")
 		resources = nil
 	}
+	aaProfile := resolveApparmorProfile(spec.ApparmorProfile, log)
 	_, err = bundle.Generate(bundleDir, bundle.Options{
 		ContainerID:     spec.ID,
 		RootFS:          rootFS,
@@ -822,10 +838,12 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		ExtraMounts:     extraMounts,
 		ResolvConfPath:  resolvPath,
 		SeccompProfile:  spec.SeccompProfile,
+		ApparmorProfile: aaProfile,
 		CapAdd:          spec.CapAdd,
 		CapDrop:         spec.CapDrop,
 		Privileged:      spec.Privileged,
 		NoNewPrivileges: spec.NoNewPrivileges,
+		Rlimits:         spec.Rlimits,
 		UIDMappings:     spec.UIDMappings,
 		GIDMappings:     spec.GIDMappings,
 		HostNetwork:     s.hostNetwork(),

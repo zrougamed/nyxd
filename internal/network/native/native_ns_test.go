@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -120,6 +119,52 @@ func addrsIn(t *testing.T, nsPath, ifname string) []string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+func TestNativeBridgeIsolation(t *testing.T) {
+	if !inNS(t) {
+		return
+	}
+	ctx := context.Background()
+	m := NewManager(quiet)
+	ns1, ns2 := newNetNS(t), newNetNS(t)
+	optA := &network.SetupOptions{Bridge: "nyxbr-a", Subnet: "10.91.0.0/16", Gateway: "10.91.0.1"}
+	optB := &network.SetupOptions{Bridge: "nyxbr-b", Subnet: "10.92.0.0/16", Gateway: "10.92.0.1"}
+	if _, err := m.Setup(ctx, "a", ns1, nil, optA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Setup(ctx, "b", ns2, nil, optB); err != nil {
+		t.Fatal(err)
+	}
+	rs := ruleset(t)
+	for _, want := range []string{
+		`nyxd-bridge-iso-nyxbr-a-nyxbr-b`,
+		`nyxd-bridge-iso-nyxbr-b-nyxbr-a`,
+	} {
+		if !strings.Contains(rs, want) {
+			t.Errorf("ruleset lacks %q:\n%s", want, rs)
+		}
+	}
+	// Second ensure is idempotent (existing comments → continue).
+	ensureBridgeIsolation(bridgeConf{Bridge: "nyxbr-a", Subnet: "10.91.0.0/16", Gateway: "10.91.0.1"}, quiet)
+	if err := m.Teardown(ctx, "a", ns1); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Teardown(ctx, "b", ns2); err != nil {
+		t.Fatal(err)
+	}
+	// No host veth / IPAM / bridge bookkeeping left behind.
+	for _, id := range []string{"a", "b"} {
+		if h, _ := vethNames(id); linkExists(h) {
+			t.Errorf("%s: host veth leaked", id)
+		}
+		if _, ok := forgetBridge(id); ok {
+			t.Errorf("%s: containerBridge entry leaked", id)
+		}
+	}
+	if m.IP("a") != "" || m.IP("b") != "" {
+		t.Fatalf("manager still tracks IPs: %v", m.Allocations())
+	}
 }
 
 func TestNativeSetupTeardown(t *testing.T) {
@@ -259,7 +304,7 @@ func TestNativeVethExists(t *testing.T) {
 	if err := attachVethToBridge(h, "nobridge", quiet); err == nil {
 		t.Fatal("attach to unknown bridge")
 	}
-	if err := moveVethToNetNS("nope0", newNetNS(t), "10.88.0.9", GatewayIP, quiet); err == nil {
+	if err := moveVethToNetNS("nope0", newNetNS(t), "10.88.0.9", GatewayIP, ContainerSubnet, quiet); err == nil {
 		t.Fatal("move unknown veth")
 	}
 }
@@ -285,10 +330,10 @@ func TestNativeNftMissing(t *testing.T) {
 	if err := ensureNftFilterTable(); err == nil {
 		t.Fatal("filter table without nft")
 	}
-	if err := addInternalEgressBlock("c", "10.88.0.2", quiet); err == nil {
+	if err := addInternalEgressBlock("c", "10.88.0.2", ContainerSubnet, quiet); err == nil {
 		t.Fatal("internal block without nft")
 	}
-	if err := ensureContainerEgressNAT(quiet); err == nil {
+	if err := ensureContainerEgressNAT(defaultBridgeConf(), quiet); err == nil {
 		t.Fatal("egress nat without nft")
 	}
 }
@@ -307,15 +352,15 @@ func TestNativeNftErrors(t *testing.T) {
 		t.Fatal("output chain failure ignored")
 	}
 	fakeNft(t, egressNATComment, "rule exists")
-	if err := ensureContainerEgressNAT(quiet); err != nil {
+	if err := ensureContainerEgressNAT(defaultBridgeConf(), quiet); err != nil {
 		t.Fatalf("existing egress rule: %v", err)
 	}
 	fakeNft(t, egressNATComment, "bad rule")
-	if err := ensureContainerEgressNAT(quiet); err == nil {
+	if err := ensureContainerEgressNAT(defaultBridgeConf(), quiet); err == nil {
 		t.Fatal("egress rule failure ignored")
 	}
 	fakeNft(t, "list chain ip nyxd-nat postrouting", "list failed")
-	if err := ensureContainerEgressNAT(quiet); err == nil {
+	if err := ensureContainerEgressNAT(defaultBridgeConf(), quiet); err == nil {
 		t.Fatal("list failure ignored")
 	}
 	if err := removePortMappings("x", quiet); err == nil {
@@ -356,16 +401,16 @@ func TestNativeBadConfig(t *testing.T) {
 	if err := ensureBridge(quiet); err == nil { // retried, fails again
 		t.Fatal("bad subnet accepted on retry")
 	}
-	if err := ensureContainerEgressNAT(quiet); err == nil {
+	if err := ensureContainerEgressNAT(bridgeConf{Bridge: BridgeName, Subnet: "bogus", Gateway: GatewayIP}, quiet); err == nil {
 		t.Fatal("egress nat with bad subnet")
 	}
-	if err := addInternalEgressBlock("c", "10.88.0.2", quiet); err == nil {
+	if err := addInternalEgressBlock("c", "10.88.0.2", "bogus", quiet); err == nil {
 		t.Fatal("internal block with bad subnet")
 	}
 	if err := createVethPair("cfgh", "cfgp", quiet); err != nil {
 		t.Fatal(err)
 	}
-	if err := moveVethToNetNS("cfgp", newNetNS(t), "10.88.0.2", GatewayIP, quiet); err == nil {
+	if err := moveVethToNetNS("cfgp", newNetNS(t), "10.88.0.2", GatewayIP, "bogus", quiet); err == nil {
 		t.Fatal("move with bad subnet")
 	}
 	if _, err := Setup(context.Background(), "c", newNetNS(t), nil, nil, quiet); err == nil || !strings.Contains(err.Error(), "bridge") {
@@ -383,9 +428,14 @@ func TestNativeIPAMDirs(t *testing.T) {
 		return
 	}
 	// No NYXD_IPAM_DIR and /var/lib/nyxd not writable: falls back to $TMPDIR.
-	t.Setenv("TMPDIR", t.TempDir())
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
 	t.Setenv("NYXD_IPAM_DIR", "")
-	if a := getIPAM(); a.dir != "/var/lib/nyxd/ipam" && a.dir != filepath.Join(os.Getenv("TMPDIR"), "nyxd-ipam") {
+	resetIPAMForTest()
+	a := getIPAM()
+	root := "/var/lib/nyxd/ipam"
+	fallback := filepath.Join(tmp, "nyxd-ipam")
+	if !strings.HasPrefix(a.dir, root+string(os.PathSeparator)) && !strings.HasPrefix(a.dir, fallback+string(os.PathSeparator)) && a.dir != root && a.dir != fallback {
 		t.Fatalf("ipam dir %s", a.dir)
 	}
 }
@@ -393,17 +443,17 @@ func TestNativeIPAMDirs(t *testing.T) {
 func TestNativeIPAMDirEnv(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "x", "ipam")
 	t.Setenv("NYXD_IPAM_DIR", dir)
-	ipamOnce = sync.Once{}
-	if getIPAM().dir != dir {
+	resetIPAMForTest()
+	if !strings.HasPrefix(getIPAM().dir, dir+string(os.PathSeparator)) {
 		t.Fatal("NYXD_IPAM_DIR ignored")
 	}
-	ipamOnce = sync.Once{}
+	resetIPAMForTest()
 	t.Setenv("NYXD_IPAM_DIR", "/proc/nope/ipam")
 	defer func() {
 		if recover() == nil {
 			t.Fatal("unusable NYXD_IPAM_DIR did not panic")
 		}
-		ipamOnce = sync.Once{}
+		resetIPAMForTest()
 	}()
 	getIPAM()
 }
@@ -512,7 +562,7 @@ func TestNativeFailures(t *testing.T) {
 	// A full subnet: /30 has one address besides the gateway.
 	t.Setenv("NYXD_CONTAINER_SUBNET", "10.88.0.0/30")
 	t.Setenv("NYXD_IPAM_DIR", t.TempDir())
-	ipamOnce = sync.Once{}
+	resetIPAMForTest()
 	if _, err := Setup(ctx, "one", newNetNS(t), nil, nil, quiet); err != nil {
 		t.Fatal(err)
 	}
@@ -562,15 +612,19 @@ func TestNativeIPAMFallback(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)
 	t.Setenv("NYXD_IPAM_DIR", "")
-	if a := getIPAM(); a.dir != filepath.Join(tmp, "nyxd-ipam") {
+	resetIPAMForTest()
+	a := getIPAM()
+	fallback := filepath.Join(tmp, "nyxd-ipam")
+	if !strings.HasPrefix(a.dir, fallback+string(os.PathSeparator)) && a.dir != fallback {
 		t.Fatalf("ipam dir %s", a.dir)
 	}
-	ipamOnce = sync.Once{}
+	resetIPAMForTest()
 	t.Setenv("TMPDIR", "/proc/nope")
 	defer func() {
 		if recover() == nil {
 			t.Fatal("no usable ipam dir did not panic")
 		}
+		resetIPAMForTest()
 	}()
 	getIPAM()
 }
@@ -583,19 +637,18 @@ func TestIPAMErrors(t *testing.T) {
 		"gateway outside": {t.TempDir(), "10.0.0.0/24", "10.0.1.1"},
 		"gateway network": {t.TempDir(), "10.0.0.0/24", "10.0.0.0"},
 		"dir":             {"/proc/nope/ipam", "10.0.0.0/24", "10.0.0.1"},
+		"/31":             {t.TempDir(), "10.0.0.0/31", "10.0.0.1"},
 	} {
-		func() {
-			defer func() {
-				if recover() == nil {
-					t.Errorf("%s: no panic", name)
-				}
-			}()
-			newIPAM(args[0], args[1], args[2])
-		}()
+		if _, err := newIPAM(args[0], args[1], args[2]); err == nil {
+			t.Errorf("%s: expected error", name)
+		}
 	}
 
 	dir := t.TempDir()
-	a := newIPAM(dir, "10.0.0.0/24", "10.0.0.1")
+	a, err := newIPAM(dir, "10.0.0.0/24", "10.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Mkdir(filepath.Join(dir, "zz-not-a-lease"), 0o700); err != nil {
 		t.Fatal(err)
 	}

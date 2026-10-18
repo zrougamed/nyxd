@@ -1,6 +1,27 @@
 # nyxd Native Network Plugin
 
-For **daemon flags**, **systemd**, **`nyx` vs `nyxd`**, and the **`network.Backend`** abstraction, see [Networking overview](/docs/operations/networking).
+For **daemon flags**, **systemd**, **`nyx` vs `nyxd`**, and the **`network.Backend`** abstraction, see [Networking overview](networking.md).
+
+## Compose networks with their own bridge
+
+A compose `networks:` entry may set both `bridge` (host interface name, ≤15 chars)
+and `subnet` (IPv4 CIDR). Services that list that network attach to it; the gateway
+is the first usable address in the subnet (e.g. `10.89.0.0/16` → `10.89.0.1`).
+Embedded DNS listens on that gateway and answers only names registered there.
+nftables drops forwarded traffic between distinct nyxd bridges. Services that omit
+`networks` stay on `nyxbr0`.
+
+```yaml
+networks:
+  runner:
+    driver: bridge
+    bridge: nyxbr-runner
+    subnet: 10.89.0.0/16
+services:
+  job:
+    image: runner:latest
+    networks: [runner]
+```
 
 ## Why no external CNI binaries
 

@@ -61,6 +61,24 @@ paths:
               schema:
                 $ref: "#/components/schemas/VersionResponse"
 
+  /v1/network:
+    get:
+      tags: [system]
+      summary: Active network identity
+      description: |
+        Returns the daemon's active network driver and, for the native driver,
+        the default bridge name, gateway IPv4, and subnet CIDR. Values match
+        the live address on the bridge when the interface exists (stock daemon:
+        `nyxbr0`, `10.88.0.1`, `10.88.0.0/16`).
+      operationId: getNetwork
+      responses:
+        "200":
+          description: Network identity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkResponse"
+
   /v1/containers:
     get:
       tags: [containers]
@@ -774,6 +792,27 @@ components:
           type: string
         buildDate:
           type: string
+
+    NetworkResponse:
+      type: object
+      required: [driver]
+      properties:
+        driver:
+          type: string
+          description: Active `-net-driver` value (`native`, `cni`, or `host`).
+          example: native
+        bridge:
+          type: string
+          description: Default host bridge (native driver).
+          example: nyxbr0
+        gateway:
+          type: string
+          description: Bridge gateway IPv4.
+          example: "10.88.0.1"
+        subnet:
+          type: string
+          description: Container subnet CIDR.
+          example: "10.88.0.0/16"
 
     ContainersResponse:
       type: object

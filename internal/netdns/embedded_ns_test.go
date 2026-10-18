@@ -46,7 +46,7 @@ func TestEmbeddedResolver(t *testing.T) {
 	go up.ActivateAndServe() //nolint:errcheck
 	defer up.Shutdown()      //nolint:errcheck
 
-	e := NewBackend("auto", "native", quiet, net.IPv4(127, 0, 0, 1)).(*Embedded)
+	e := NewEmbedded(quiet, net.IPv4(127, 0, 0, 1))
 	e.upstreams = []string{"127.0.0.1:1", pc.LocalAddr().String()} // first one fails
 	for _, bad := range [][2]string{{"Bad Name", "10.0.0.2"}, {"-x", "10.0.0.2"}, {"web", "not-ip"}, {"web", "fd00::1"}} {
 		if err := e.Register(bad[0], bad[1]); err == nil {
@@ -106,9 +106,9 @@ func TestEmbeddedResolver(t *testing.T) {
 }
 
 func TestBackendSelectionAndUpstreams(t *testing.T) {
-	for mode, embedded := range map[string]bool{"": true, "auto": true, "embedded": true, "off": false, "cni": false, "weird": false} {
+	for mode, zones := range map[string]bool{"": true, "auto": true, "embedded": true, "off": false, "cni": false, "weird": false} {
 		b := NewBackend(mode, "native", quiet, net.IPv4(127, 0, 0, 1))
-		if _, ok := b.(*Embedded); ok != embedded {
+		if _, ok := b.(*Zones); ok != zones {
 			t.Errorf("%q: %T", mode, b)
 		}
 		b.Shutdown()

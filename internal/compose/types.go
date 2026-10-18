@@ -80,11 +80,48 @@ type Service struct {
 	// otherwise path to JSON (absolute or relative to the compose file directory).
 	SeccompProfile string `yaml:"seccomp_profile"`
 
+	// ApparmorProfile is a host-loaded AppArmor profile name applied via
+	// process.apparmorProfile before the entrypoint runs. Empty keeps the
+	// current default (no profile).
+	ApparmorProfile string `yaml:"apparmor_profile"`
+
+	// DNS is an optional list of IPv4 nameserver addresses written into the
+	// container's /etc/resolv.conf. When set, the gateway resolver file is not
+	// mounted. A volume whose destination is /etc/resolv.conf wins over this.
+	DNS []string `yaml:"dns"`
+
+	// Ulimits overrides default process rlimits for this service (e.g. nofile).
+	Ulimits map[string]Ulimit `yaml:"ulimits"`
+
 	// NoNewPrivileges sets no-new-privs in OCI spec.
 	NoNewPrivileges *bool `yaml:"no_new_privileges"`
 
 	// StopTimeout before SIGKILL during shutdown.
 	StopTimeout Duration `yaml:"stop_grace_period"`
+}
+
+// Ulimit is a soft/hard resource limit pair (compose ulimits.<name>).
+// Accepts either `{soft: N, hard: M}` or a bare integer (soft = hard = N).
+type Ulimit struct {
+	Soft uint64 `yaml:"soft"`
+	Hard uint64 `yaml:"hard"`
+}
+
+func (u *Ulimit) UnmarshalYAML(unmarshal func(any) error) error {
+	var n uint64
+	if err := unmarshal(&n); err == nil {
+		u.Soft, u.Hard = n, n
+		return nil
+	}
+	var raw struct {
+		Soft uint64 `yaml:"soft"`
+		Hard uint64 `yaml:"hard"`
+	}
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+	u.Soft, u.Hard = raw.Soft, raw.Hard
+	return nil
 }
 
 // RestartPolicy controls container restart behavior.
@@ -125,6 +162,9 @@ type ResourceSpec struct {
 	CPUs string `yaml:"cpus"`
 	// Memory: "128m", "1g"
 	Memory string `yaml:"memory"`
+	// MemorySwap is memory plus swap (same suffixes as Memory). Equal to Memory
+	// means no extra swap. Omit to keep the runtime default (2× memory limit).
+	MemorySwap string `yaml:"memory_swap,omitempty"`
 	// PidsLimit caps the number of tasks in the cgroup (maps to pids.max).
 	PidsLimit *int `yaml:"pids_limit,omitempty"`
 	// OomKillDisable maps to memory.oom_control (OCI disableOOMKiller).
@@ -135,10 +175,14 @@ type ResourceSpec struct {
 	BlkioWeight    *int   `yaml:"blkio_weight,omitempty"`
 }
 
-// Network describes a CNI-backed network.
+// Network describes a CNI-backed or native bridge network.
 type Network struct {
 	// Driver: bridge | host | none. Default: bridge.
 	Driver string `yaml:"driver"`
+	// Bridge is the host bridge interface name for the native driver.
+	// With Subnet, services attached to this network use that bridge instead
+	// of nyxbr0. Empty keeps the daemon default bridge.
+	Bridge string `yaml:"bridge"`
 	// Subnet in CIDR notation.
 	Subnet string `yaml:"subnet"`
 	// Internal: no external routing.

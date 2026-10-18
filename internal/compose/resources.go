@@ -31,6 +31,20 @@ func BundleResourcesFromDeploy(d *Deploy) (*bundle.Resources, error) {
 			mem = &bundle.MemoryRes{Limit: b}
 		}
 	}
+	if lim.MemorySwap != "" {
+		b, err := parseByteSize(lim.MemorySwap)
+		if err != nil {
+			return nil, fmt.Errorf("deploy.resources.limits.memory_swap: %w", err)
+		}
+		if b > 0 {
+			if mem == nil {
+				mem = &bundle.MemoryRes{}
+			}
+			// Swap is memory+swap total; set before withSwapLimit so an
+			// explicit value equal to Limit means no extra swap.
+			mem.Swap = b
+		}
+	}
 	if res.Memory != "" {
 		b, err := parseByteSize(res.Memory)
 		if err != nil {

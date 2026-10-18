@@ -53,6 +53,87 @@ func activeNetConf() (cidr, gateway string) {
 	return cidr, gateway
 }
 
+// bridgeConf is the host bridge + IPAM parameters for one native network.
+type bridgeConf struct {
+	Bridge  string
+	Subnet  string
+	Gateway string
+}
+
+func defaultBridgeConf() bridgeConf {
+	cidr, gw := activeNetConf()
+	return bridgeConf{Bridge: BridgeName, Subnet: cidr, Gateway: gw}
+}
+
+func bridgeConfFromOpts(opts *network.SetupOptions) (bridgeConf, error) {
+	def := defaultBridgeConf()
+	if opts == nil || strings.TrimSpace(opts.Bridge) == "" {
+		return def, nil
+	}
+	conf := bridgeConf{
+		Bridge:  strings.TrimSpace(opts.Bridge),
+		Subnet:  strings.TrimSpace(opts.Subnet),
+		Gateway: strings.TrimSpace(opts.Gateway),
+	}
+	if err := validateNativeBridgeName(conf.Bridge); err != nil {
+		return bridgeConf{}, err
+	}
+	if conf.Subnet == "" || conf.Gateway == "" {
+		return bridgeConf{}, fmt.Errorf("native network: bridge %q requires subnet and gateway", conf.Bridge)
+	}
+	if _, ipnet, err := net.ParseCIDR(conf.Subnet); err != nil {
+		return bridgeConf{}, fmt.Errorf("native network: subnet %q: %w", conf.Subnet, err)
+	} else if ones, bits := ipnet.Mask.Size(); bits != 32 || ones > 30 {
+		// /31 and /32 have no usable host range for gateway+containers.
+		return bridgeConf{}, fmt.Errorf("native network: subnet %q: need IPv4 prefix length <= 30", conf.Subnet)
+	}
+	if net.ParseIP(conf.Gateway).To4() == nil {
+		return bridgeConf{}, fmt.Errorf("native network: gateway %q: invalid IPv4", conf.Gateway)
+	}
+	return conf, nil
+}
+
+// validateNativeBridgeName restricts custom bridges to the nyxbr* namespace so
+// Setup cannot attach to or address foreign host interfaces (docker0, eth0, …).
+func validateNativeBridgeName(name string) error {
+	if name == "" {
+		return fmt.Errorf("native network: empty bridge name")
+	}
+	if len(name) > 15 {
+		return fmt.Errorf("native network: bridge name %q longer than 15 characters", name)
+	}
+	if name != BridgeName && !strings.HasPrefix(name, "nyxbr") {
+		return fmt.Errorf("native network: bridge name %q must start with \"nyxbr\"", name)
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			continue
+		}
+		return fmt.Errorf("native network: bridge name %q has invalid character %q", name, r)
+	}
+	return nil
+}
+
+// containerBridge remembers which bridgeConf each container used (for Teardown IPAM).
+var (
+	containerBridgeMu sync.Mutex
+	containerBridge   = map[string]bridgeConf{}
+)
+
+func rememberBridge(containerID string, conf bridgeConf) {
+	containerBridgeMu.Lock()
+	containerBridge[containerID] = conf
+	containerBridgeMu.Unlock()
+}
+
+func forgetBridge(containerID string) (bridgeConf, bool) {
+	containerBridgeMu.Lock()
+	conf, ok := containerBridge[containerID]
+	delete(containerBridge, containerID)
+	containerBridgeMu.Unlock()
+	return conf, ok
+}
+
 // tryEnableRouteLocalnet allows IPv4 DNAT from 127.0.0.1 to a bridge-routed
 // container IP (nft output/prerouting) to be forwarded; without it, published
 // ports often work from other hosts but not from curl http://localhost:PORT.
@@ -94,9 +175,9 @@ const (
 const vethInfoPeer = 1
 
 // Setup configures networking for a new container:
-//  1. Ensures nyxbr0 exists and is up
-//  2. Allocates an IP from the subnet
-//  3. Creates a veth pair: host-side joins nyxbr0, peer goes into the container netns
+//  1. Ensures the target bridge exists and is up (default nyxbr0, or opts.Bridge)
+//  2. Allocates an IP from that bridge's subnet
+//  3. Creates a veth pair: host-side joins the bridge, peer goes into the container netns
 //  4. Sets lo up inside the netns
 //  5. Adds nftables DNAT rules for any port mappings
 //  6. Optionally adds an nft forward drop for compose internal networks (opts.Internal).
@@ -104,18 +185,28 @@ const vethInfoPeer = 1
 // Returns the allocated container IP.
 func Setup(ctx context.Context, containerID, netNSPath string, ports []network.PortMapping, opts *network.SetupOptions, log *slog.Logger) (string, error) {
 	internal := opts != nil && opts.Internal
+	conf, err := bridgeConfFromOpts(opts)
+	if err != nil {
+		return "", err
+	}
+
 	// 1. Bridge
-	if err := ensureBridge(log); err != nil {
+	if err := ensureBridgeConf(conf, log); err != nil {
 		return "", fmt.Errorf("bridge: %w", err)
 	}
 
 	// 2. IPAM
-	_, gw := activeNetConf()
-	ip, err := getIPAM().allocate(containerID)
+	ipam, err := getIPAMFor(conf.Subnet, conf.Gateway)
 	if err != nil {
 		return "", fmt.Errorf("ipam: %w", err)
 	}
-	log.Debug("ip allocated", "container", containerID, "ip", ip)
+	ip, err := ipam.allocate(containerID)
+	if err != nil {
+		return "", fmt.Errorf("ipam: %w", err)
+	}
+	log.Debug("ip allocated", "container", containerID, "ip", ip, "bridge", conf.Bridge)
+
+	rollbackIPAM := func() { _ = ipam.release(containerID) }
 
 	// 3. Veth + netns plumbing
 	hostVeth, peerVeth := vethNames(containerID)
@@ -124,19 +215,19 @@ func Setup(ctx context.Context, containerID, netNSPath string, ports []network.P
 	_ = deleteLink(hostVeth)
 	_ = deleteLink(peerVeth)
 	if err := createVethPair(hostVeth, peerVeth, log); err != nil {
-		getIPAM().release(containerID) //nolint:errcheck
+		rollbackIPAM()
 		return "", fmt.Errorf("veth: %w", err)
 	}
 
-	if err := attachVethToBridge(hostVeth, BridgeName, log); err != nil {
+	if err := attachVethToBridge(hostVeth, conf.Bridge, log); err != nil {
 		deleteLink(hostVeth) //nolint:errcheck
-		getIPAM().release(containerID)
+		rollbackIPAM()
 		return "", fmt.Errorf("attach bridge: %w", err)
 	}
 
-	if err := moveVethToNetNS(peerVeth, netNSPath, ip, gw, log); err != nil {
+	if err := moveVethToNetNS(peerVeth, netNSPath, ip, conf.Gateway, conf.Subnet, log); err != nil {
 		deleteLink(hostVeth) //nolint:errcheck
-		getIPAM().release(containerID)
+		rollbackIPAM()
 		return "", fmt.Errorf("move veth: %w", err)
 	}
 
@@ -152,21 +243,22 @@ func Setup(ctx context.Context, containerID, netNSPath string, ports []network.P
 			// Roll back host networking so we do not leave a running container without published ports
 			// while the user believes -p succeeded.
 			deleteLink(hostVeth) //nolint:errcheck
-			getIPAM().release(containerID)
+			rollbackIPAM()
 			return "", fmt.Errorf("port mappings: %w", err)
 		}
 	}
 
 	// 6. Compose internal: block IPv4 egress outside the bridge CIDR (nft forward).
 	if internal {
-		if err := addInternalEgressBlock(containerID, ip, log); err != nil {
+		if err := addInternalEgressBlock(containerID, ip, conf.Subnet, log); err != nil {
 			removePortMappings(containerID, log) //nolint:errcheck
 			deleteLink(hostVeth)                 //nolint:errcheck
-			getIPAM().release(containerID)
+			rollbackIPAM()
 			return "", fmt.Errorf("internal network egress: %w", err)
 		}
 	}
 
+	rememberBridge(containerID, conf)
 	return ip, nil
 }
 
@@ -191,7 +283,13 @@ func Teardown(ctx context.Context, containerID string, log *slog.Logger) error {
 		errs = append(errs, fmt.Errorf("delete veth: %w", err))
 	}
 
-	if err := getIPAM().release(containerID); err != nil {
+	conf, ok := forgetBridge(containerID)
+	if !ok {
+		conf = defaultBridgeConf()
+	}
+	if ipam, err := getIPAMFor(conf.Subnet, conf.Gateway); err != nil {
+		errs = append(errs, fmt.Errorf("ipam: %w", err))
+	} else if err := ipam.release(containerID); err != nil {
 		errs = append(errs, fmt.Errorf("ipam release: %w", err))
 	}
 
@@ -203,44 +301,115 @@ func Teardown(ctx context.Context, containerID string, log *slog.Logger) error {
 
 // ─── Bridge ───────────────────────────────────────────────────────────────────
 
-var bridgeOnce sync.Once
-var bridgeErr error
+var (
+	bridgeReadyMu sync.Mutex
+	bridgeReady   = map[string]error{} // bridge name → nil once created, or last error
+)
 
-// ensureBridge creates nyxbr0 if it doesn't exist and brings it up with the gateway IP.
+// ensureBridge creates the default nyxbr0 bridge (daemon EnsureNetwork path).
 func ensureBridge(log *slog.Logger) error {
-	bridgeOnce.Do(func() {
-		bridgeErr = createBridge(log)
-	})
-	if bridgeErr != nil {
-		// Reset so next call retries.
-		bridgeOnce = sync.Once{}
-		return bridgeErr
+	return ensureBridgeConf(defaultBridgeConf(), log)
+}
+
+// ensureBridgeConf creates conf.Bridge if needed and installs egress NAT for its subnet.
+func ensureBridgeConf(conf bridgeConf, log *slog.Logger) error {
+	bridgeReadyMu.Lock()
+	err, ok := bridgeReady[conf.Bridge]
+	if ok && err == nil {
+		bridgeReadyMu.Unlock()
+		tryEnableIPv4Forwarding(log)
+		if err := ensureContainerEgressNAT(conf, log); err != nil {
+			log.Warn("container egress nat", "err", err)
+		}
+		ensureBridgeIsolation(conf, log)
+		return nil
+	}
+	err = createBridgeConf(conf, log)
+	bridgeReady[conf.Bridge] = err
+	bridgeReadyMu.Unlock()
+	if err != nil {
+		bridgeReadyMu.Lock()
+		delete(bridgeReady, conf.Bridge) // allow retry
+		bridgeReadyMu.Unlock()
+		return err
 	}
 	tryEnableIPv4Forwarding(log)
-	if err := ensureContainerEgressNAT(log); err != nil {
+	if err := ensureContainerEgressNAT(conf, log); err != nil {
 		log.Warn("container egress nat", "err", err)
 	}
+	ensureBridgeIsolation(conf, log)
 	return nil
 }
 
-func createBridge(log *slog.Logger) error {
+// ensureBridgeIsolation drops forwarded traffic between distinct nyxd bridges so
+// a compose stack on its own bridge cannot ingress another stack's bridge.
+func ensureBridgeIsolation(conf bridgeConf, log *slog.Logger) {
+	if err := ensureNftFilterTable(); err != nil {
+		log.Warn("bridge isolation: filter table", "err", err)
+		return
+	}
+	bridgeReadyMu.Lock()
+	others := make([]string, 0, len(bridgeReady))
+	for name, err := range bridgeReady {
+		if err == nil && name != conf.Bridge {
+			others = append(others, name)
+		}
+	}
+	bridgeReadyMu.Unlock()
+
+	portMapNftMu.Lock()
+	defer portMapNftMu.Unlock()
+	for _, other := range others {
+		for _, pair := range [][2]string{{conf.Bridge, other}, {other, conf.Bridge}} {
+			comment := fmt.Sprintf("nyxd-bridge-iso-%s-%s", pair[0], pair[1])
+			lines, err := nftListChainLines("nyxd-filter", "forward")
+			if err != nil {
+				log.Warn("bridge isolation list", "err", err)
+				return
+			}
+			exists := false
+			for _, ln := range lines {
+				if strings.Contains(ln, comment) {
+					exists = true
+					break
+				}
+			}
+			if exists {
+				continue
+			}
+			rule := fmt.Sprintf(
+				`nft add rule ip nyxd-filter forward iifname %q oifname %q drop comment %q`,
+				pair[0], pair[1], comment,
+			)
+			if err := runNftUnlocked(rule); err != nil {
+				log.Warn("bridge isolation rule", "from", pair[0], "to", pair[1], "err", err)
+			}
+		}
+	}
+}
+
+func createBridgeConf(conf bridgeConf, log *slog.Logger) error {
 	fd, err := unixSocket()
 	if err != nil {
 		return err
 	}
 	defer unix.Close(fd)
 
-	// Check if bridge already exists.
-	if linkExists(BridgeName) {
-		log.Debug("bridge already exists", "name", BridgeName)
-		return ensureBridgeIP(fd)
+	// Reuse only an existing *bridge* we own by name. Never adopt eth0/docker0
+	// or add addresses to a non-bridge interface.
+	if linkExists(conf.Bridge) {
+		if !isLinuxBridge(conf.Bridge) {
+			return fmt.Errorf("link %q exists but is not a Linux bridge", conf.Bridge)
+		}
+		log.Debug("bridge already exists", "name", conf.Bridge)
+		return ensureBridgeIP(fd, conf)
 	}
 
 	// RTM_NEWLINK: create bridge interface.
 	req := newNetlinkMsg(unix.RTM_NEWLINK, unix.NLM_F_REQUEST|unix.NLM_F_CREATE|unix.NLM_F_EXCL|unix.NLM_F_ACK)
 	ifinfo := unix.IfInfomsg{Family: unix.AF_UNSPEC}
 	req.addBytes((*[unix.SizeofIfInfomsg]byte)(unsafe.Pointer(&ifinfo))[:])
-	req.addAttrString(unix.IFLA_IFNAME, BridgeName)
+	req.addAttrString(unix.IFLA_IFNAME, conf.Bridge)
 	req.addAttrUint32(unix.IFLA_MTU, MTU)
 
 	// IFLA_LINKINFO → IFLA_INFO_KIND = "bridge"
@@ -249,30 +418,29 @@ func createBridge(log *slog.Logger) error {
 	req.addNested(linkinfo)
 
 	if err := netlinkDo(fd, req); err != nil {
-		return fmt.Errorf("create bridge %s: %w", BridgeName, err)
+		return fmt.Errorf("create bridge %s: %w", conf.Bridge, err)
 	}
-	log.Info("bridge created", "name", BridgeName)
+	log.Info("bridge created", "name", conf.Bridge, "subnet", conf.Subnet, "gateway", conf.Gateway)
 
-	if err := ensureBridgeIP(fd); err != nil {
+	if err := ensureBridgeIP(fd, conf); err != nil {
 		return err
 	}
 
 	// Bring bridge up.
-	return linkSetUp(fd, BridgeName)
+	return linkSetUp(fd, conf.Bridge)
 }
 
-// ensureBridgeIP assigns the gateway address to nyxbr0 if not already set.
-func ensureBridgeIP(fd int) error {
-	cidr, gwStr := activeNetConf()
-	_, subnet, err := net.ParseCIDR(cidr)
+// ensureBridgeIP assigns the gateway address to the bridge if not already set.
+func ensureBridgeIP(fd int, conf bridgeConf) error {
+	_, subnet, err := net.ParseCIDR(conf.Subnet)
 	if err != nil {
 		return fmt.Errorf("bridge subnet: %w", err)
 	}
-	gwIP := net.ParseIP(gwStr).To4()
+	gwIP := net.ParseIP(conf.Gateway).To4()
 	if gwIP == nil {
-		return fmt.Errorf("bridge gateway: invalid IPv4 %q", gwStr)
+		return fmt.Errorf("bridge gateway: invalid IPv4 %q", conf.Gateway)
 	}
-	return addAddr(fd, BridgeName, gwIP, subnet)
+	return addAddr(fd, conf.Bridge, gwIP, subnet)
 }
 
 // ─── Veth pair ────────────────────────────────────────────────────────────────
@@ -341,7 +509,7 @@ func attachVethToBridge(vethName, bridgeName string, log *slog.Logger) error {
 
 // moveVethToNetNS moves peer veth into the container's network namespace,
 // assigns it IP address + default route, and brings it up.
-func moveVethToNetNS(peerVeth, netNSPath, containerIP, gateway string, log *slog.Logger) error {
+func moveVethToNetNS(peerVeth, netNSPath, containerIP, gateway, subnetCIDR string, log *slog.Logger) error {
 	// Open the target netns fd.
 	nsFd, err := unix.Open(netNSPath, unix.O_RDONLY|unix.O_CLOEXEC, 0)
 	if err != nil {
@@ -378,8 +546,7 @@ func moveVethToNetNS(peerVeth, netNSPath, containerIP, gateway string, log *slog
 		defer unix.Close(fd2)
 
 		ip := net.ParseIP(containerIP).To4()
-		cidr, _ := activeNetConf()
-		_, subnet, err := net.ParseCIDR(cidr)
+		_, subnet, err := net.ParseCIDR(subnetCIDR)
 		if err != nil {
 			return fmt.Errorf("container subnet: %w", err)
 		}
@@ -411,35 +578,75 @@ func setLoUp(netNSPath string) error {
 // ─── IPAM ─────────────────────────────────────────────────────────────────────
 
 var (
-	ipamOnce sync.Once
-	ipamInst *ipam
+	ipamMu    sync.Mutex
+	ipamByNet = map[string]*ipam{} // subnet|gateway → allocator
 )
 
-// getIPAM returns the process-wide file-backed IP allocator.
-// Default state dir is /var/lib/nyxd/ipam; override with NYXD_IPAM_DIR.
-// If the default is not writable (e.g. CI without root), falls back to $TMPDIR/nyxd-ipam.
-func getIPAM() *ipam {
-	ipamOnce.Do(func() {
-		dir := strings.TrimSpace(os.Getenv("NYXD_IPAM_DIR"))
-		if dir == "" {
-			def := "/var/lib/nyxd/ipam"
-			if err := os.MkdirAll(def, 0o700); err == nil {
-				dir = def
-			} else {
-				dir = filepath.Join(os.TempDir(), "nyxd-ipam")
-				if err := os.MkdirAll(dir, 0o700); err != nil {
-					panic("ipam dir: cannot create " + dir + ": " + err.Error())
-				}
-			}
-		} else {
-			if err := os.MkdirAll(dir, 0o700); err != nil {
-				panic("ipam dir: cannot create " + dir + ": " + err.Error())
-			}
+// resetIPAMForTest clears cached allocators (tests that change NYXD_IPAM_DIR).
+func resetIPAMForTest() {
+	ipamMu.Lock()
+	ipamByNet = map[string]*ipam{}
+	ipamMu.Unlock()
+}
+
+func ipamRootDir() string {
+	dir := strings.TrimSpace(os.Getenv("NYXD_IPAM_DIR"))
+	if dir == "" {
+		def := "/var/lib/nyxd/ipam"
+		if ipamRootWritable(def) {
+			return def
 		}
-		cidr, gw := activeNetConf()
-		ipamInst = newIPAM(dir, cidr, gw)
-	})
-	return ipamInst
+		dir = filepath.Join(os.TempDir(), "nyxd-ipam")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		panic("ipam dir: cannot create " + dir + ": " + err.Error())
+	}
+	return dir
+}
+
+// ipamRootWritable is true when dir exists (or can be created) and a file can
+// be written there. MkdirAll alone is not enough: the path may already exist
+// but be owned by root.
+func ipamRootWritable(dir string) bool {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return false
+	}
+	probe := filepath.Join(dir, ".nyxd-write-probe")
+	if err := os.WriteFile(probe, []byte("ok"), 0o600); err != nil {
+		return false
+	}
+	_ = os.Remove(probe)
+	return true
+}
+
+// getIPAM returns the allocator for the default bridge subnet.
+func getIPAM() *ipam {
+	cidr, gw := activeNetConf()
+	a, err := getIPAMFor(cidr, gw)
+	if err != nil {
+		panic(err) // default subnet/gateway are compile-time constants
+	}
+	return a
+}
+
+// getIPAMFor returns a file-backed IP allocator for the given subnet/gateway.
+// Default root is /var/lib/nyxd/ipam; override with NYXD_IPAM_DIR. Each network
+// uses a subdirectory so leases do not collide across bridges.
+func getIPAMFor(cidr, gw string) (*ipam, error) {
+	key := strings.TrimSpace(cidr) + "|" + strings.TrimSpace(gw)
+	ipamMu.Lock()
+	defer ipamMu.Unlock()
+	if a, ok := ipamByNet[key]; ok {
+		return a, nil
+	}
+	sum := sha256.Sum256([]byte(key))
+	dir := filepath.Join(ipamRootDir(), hex.EncodeToString(sum[:8]))
+	a, err := newIPAM(dir, cidr, gw)
+	if err != nil {
+		return nil, err
+	}
+	ipamByNet[key] = a
+	return a, nil
 }
 
 // ipam is a simple file-backed IP allocator.
@@ -454,21 +661,21 @@ type ipam struct {
 	bcU    uint32 // broadcast as uint32
 }
 
-func newIPAM(dir, cidr, gwStr string) *ipam {
+func newIPAM(dir, cidr, gwStr string) (*ipam, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		panic("ipam dir: " + err.Error())
+		return nil, fmt.Errorf("ipam dir: %w", err)
 	}
 	_, subnet, err := net.ParseCIDR(cidr)
 	if err != nil {
-		panic("ipam cidr: " + err.Error())
+		return nil, fmt.Errorf("ipam cidr: %w", err)
 	}
 	ip4 := subnet.IP.To4()
 	if ip4 == nil {
-		panic("ipam cidr: IPv4 only")
+		return nil, fmt.Errorf("ipam cidr: IPv4 only")
 	}
 	gw := net.ParseIP(strings.TrimSpace(gwStr)).To4()
 	if gw == nil {
-		panic("ipam gateway: invalid IPv4 " + gwStr)
+		return nil, fmt.Errorf("ipam gateway: invalid IPv4 %s", gwStr)
 	}
 	gwU := ipToU32(gw)
 	base := ipToU32(ip4)
@@ -478,7 +685,7 @@ func newIPAM(dir, cidr, gwStr string) *ipam {
 	// The gateway strictly between network and broadcast address also
 	// guarantees a subnet of at least /30.
 	if gwU <= base || gwU >= broadcast {
-		panic(fmt.Sprintf("ipam: gateway %s not inside subnet %s", gwStr, cidr))
+		return nil, fmt.Errorf("ipam: gateway %s not inside subnet %s", gwStr, cidr)
 	}
 	return &ipam{
 		dir:    dir,
@@ -486,7 +693,7 @@ func newIPAM(dir, cidr, gwStr string) *ipam {
 		gwU:    gwU,
 		baseU:  base,
 		bcU:    broadcast,
-	}
+	}, nil
 }
 
 func (a *ipam) allocate(containerID string) (string, error) {
@@ -699,35 +906,41 @@ func nftLoad(what, rules string) error {
 // interfaces (typically the default route / internet).
 const egressNATComment = "nyxd-container-egress"
 
+func egressNATCommentFor(conf bridgeConf) string {
+	if conf.Bridge == BridgeName {
+		return egressNATComment
+	}
+	return egressNATComment + "-" + conf.Bridge
+}
+
 // ensureContainerEgressNAT adds a postrouting masquerade rule for the container
 // subnet when traffic exits via an interface other than the nyxd bridge. Safe to
-// call repeatedly; skips if a rule with [egressNATComment] is already present.
-// Fixes upgrades from older nyxd that used a non-functional oifname-only masquerade.
-func ensureContainerEgressNAT(log *slog.Logger) error {
+// call repeatedly; skips if a rule with the comment is already present.
+func ensureContainerEgressNAT(conf bridgeConf, log *slog.Logger) error {
 	if err := ensureNftTable(); err != nil {
 		return err
 	}
-	cidr, _ := activeNetConf()
-	if _, _, err := net.ParseCIDR(cidr); err != nil {
-		return fmt.Errorf("egress nat: subnet %q: %w", cidr, err)
+	if _, _, err := net.ParseCIDR(conf.Subnet); err != nil {
+		return fmt.Errorf("egress nat: subnet %q: %w", conf.Subnet, err)
 	}
 
 	portMapNftMu.Lock()
 	defer portMapNftMu.Unlock()
 
+	comment := egressNATCommentFor(conf)
 	lines, err := nftListChainLines("nyxd-nat", "postrouting")
 	if err != nil {
 		return err
 	}
 	for _, ln := range lines {
-		if strings.Contains(ln, egressNATComment) {
+		if strings.Contains(ln, comment) {
 			return nil
 		}
 	}
 
 	rule := fmt.Sprintf(
 		`nft add rule ip nyxd-nat postrouting ip saddr %s oifname != %q masquerade comment %q`,
-		cidr, BridgeName, egressNATComment,
+		conf.Subnet, conf.Bridge, comment,
 	)
 	if err := runNftUnlocked(rule); err != nil {
 		s := strings.ToLower(err.Error())
@@ -736,7 +949,7 @@ func ensureContainerEgressNAT(log *slog.Logger) error {
 		}
 		return err
 	}
-	log.Info("container egress masquerade rule installed", "subnet", cidr, "bridge", BridgeName)
+	log.Info("container egress masquerade rule installed", "subnet", conf.Subnet, "bridge", conf.Bridge)
 	return nil
 }
 
@@ -769,11 +982,10 @@ table ip nyxd-filter {
 	return nftFilterInitErr
 }
 
-func addInternalEgressBlock(containerID, containerIP string, log *slog.Logger) error {
+func addInternalEgressBlock(containerID, containerIP, cidr string, log *slog.Logger) error {
 	if err := ensureNftFilterTable(); err != nil {
 		return err
 	}
-	cidr, _ := activeNetConf()
 	if _, _, err := net.ParseCIDR(cidr); err != nil {
 		return fmt.Errorf("internal filter: subnet %q: %w", cidr, err)
 	}
@@ -1074,6 +1286,15 @@ func linkIndex(name string) (int, error) {
 // linkExists returns true if the named interface exists.
 func linkExists(name string) bool {
 	_, err := net.InterfaceByName(name)
+	return err == nil
+}
+
+// isLinuxBridge reports whether name is a Linux bridge (sysfs bridge/ present).
+func isLinuxBridge(name string) bool {
+	if name == "" || strings.Contains(name, "/") || strings.Contains(name, "\x00") {
+		return false
+	}
+	_, err := os.Stat(filepath.Join("/sys/class/net", name, "bridge"))
 	return err == nil
 }
 

@@ -4,6 +4,8 @@ nyxd runs without root. Start it as a normal user and it re-executes itself insi
 where that user is root. Containers run inside that namespace too: root in a container is your user on the host,
 never real root.
 
+Compared with rootful Linux and macOS/Windows machines: [platform-matrix.md](platform-matrix.md).
+
 ```bash
 nyxd                                   # as your user: rootless mode is automatic
 nyx pull alpine:3.20

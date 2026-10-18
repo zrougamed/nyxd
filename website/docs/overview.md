@@ -20,10 +20,11 @@ It is designed for operators who want a lightweight runtime stack without Docker
 
 ## Start Here
 
-- Installation: [Install nyxd](./getting-started/install.md)
-- CLI and daemon usage: [Usage](./getting-started/usage.md)
+- Installation: [Install nyxd](/docs/getting-started/install)
+- Feature matrix (Linux / macOS / Windows, rootful / rootless): [Platform matrix](/docs/getting-started/platform-matrix)
+- CLI and daemon usage: [Usage](/docs/getting-started/usage)
 - Networking model: [Networking](/docs/operations/networking)
-- API contract: [API Reference](./reference/api-reference.md)
+- API contract: [API Reference](/docs/reference/api-reference)
 
 ## Architecture at a glance
 

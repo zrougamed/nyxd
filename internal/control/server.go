@@ -136,6 +136,7 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/ping", s.handlePing)
 	mux.HandleFunc("GET /v1/version", s.handleVersion)
+	mux.HandleFunc("GET /v1/network", s.handleNetwork)
 	mux.HandleFunc("GET /v1/containers", s.handleContainers)
 	mux.HandleFunc("POST /v1/containers/{id}/exec", s.handleExec)
 	mux.HandleFunc("POST /v1/containers/{id}/stop", s.handleContainerStop)
@@ -203,6 +204,11 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 		"commit":    s.gitCommit,
 		"buildDate": s.buildDate,
 	})
+}
+
+func (s *Server) handleNetwork(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(network.ActiveIdentity(s.netDriver))
 }
 
 func (s *Server) handleContainers(w http.ResponseWriter, r *http.Request) {
@@ -742,15 +748,6 @@ type runRequest struct {
 
 func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 	noWriteDeadline(w) // may pull the image first
-	if s.sup == nil {
-		http.Error(w, "supervisor not available", http.StatusServiceUnavailable)
-		return
-	}
-	if s.store == nil {
-		http.Error(w, "image store not available", http.StatusServiceUnavailable)
-		return
-	}
-	baseCtx := s.baseCtx
 
 	var body runRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
@@ -765,7 +762,21 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(body.ID)
 	if id == "" {
 		id = generateContainerID(imgRef)
+	} else if !safeLogContainerID(id) {
+		// Same charset as log/bundle paths: reject ".." and path separators so a
+		// socket client cannot escape baseDir/bundles or netns dirs.
+		http.Error(w, "invalid container id: use letters, digits, '-' or '_' only (max 256)", http.StatusBadRequest)
+		return
 	}
+	if s.sup == nil {
+		http.Error(w, "supervisor not available", http.StatusServiceUnavailable)
+		return
+	}
+	if s.store == nil {
+		http.Error(w, "image store not available", http.StatusServiceUnavailable)
+		return
+	}
+	baseCtx := s.baseCtx
 
 	stream := body.Stream
 	var streamEnc *json.Encoder

@@ -148,6 +148,13 @@ func composeComparableJSON(s ContainerSpec) []byte {
 		res = &r
 	}
 
+	dns := append([]string(nil), s.DNS...)
+	slices.Sort(dns)
+	rlimits := append([]bundle.Rlimit(nil), s.Rlimits...)
+	slices.SortFunc(rlimits, func(a, b bundle.Rlimit) int {
+		return strings.Compare(a.Type, b.Type)
+	})
+
 	key := struct {
 		ID                 string                  `json:"id"`
 		Image              string                  `json:"image"`
@@ -165,13 +172,19 @@ func composeComparableJSON(s ContainerSpec) []byte {
 		Healthcheck        *health.Config          `json:"healthcheck,omitempty"`
 		Mounts             []bundle.Mount          `json:"mounts"`
 		EmbedDNS           bool                    `json:"embed_dns"`
+		DNS                []string                `json:"dns,omitempty"`
 		ComposeInternalNet bool                    `json:"compose_internal_net"`
+		NetworkBridge      string                  `json:"network_bridge,omitempty"`
+		NetworkSubnet      string                  `json:"network_subnet,omitempty"`
+		NetworkGateway     string                  `json:"network_gateway,omitempty"`
 		Resources          *bundle.Resources       `json:"resources,omitempty"`
 		Privileged         bool                    `json:"privileged"`
 		SeccompProfile     string                  `json:"seccomp_profile"`
+		ApparmorProfile    string                  `json:"apparmor_profile,omitempty"`
 		CapAdd             []string                `json:"cap_add"`
 		CapDrop            []string                `json:"cap_drop"`
 		NoNewPrivileges    *bool                   `json:"no_new_privileges,omitempty"`
+		Rlimits            []bundle.Rlimit         `json:"rlimits,omitempty"`
 		UIDMappings        []bundle.LinuxIDMapping `json:"uid_mappings,omitempty"`
 		GIDMappings        []bundle.LinuxIDMapping `json:"gid_mappings,omitempty"`
 	}{
@@ -191,13 +204,19 @@ func composeComparableJSON(s ContainerSpec) []byte {
 		Healthcheck:        hc,
 		Mounts:             mounts,
 		EmbedDNS:           s.EmbedDNS,
+		DNS:                dns,
 		ComposeInternalNet: s.ComposeInternalNet,
+		NetworkBridge:      s.NetworkBridge,
+		NetworkSubnet:      s.NetworkSubnet,
+		NetworkGateway:     s.NetworkGateway,
 		Resources:          res,
 		Privileged:         s.Privileged,
 		SeccompProfile:     s.SeccompProfile,
+		ApparmorProfile:    s.ApparmorProfile,
 		CapAdd:             capAdd,
 		CapDrop:            capDrop,
 		NoNewPrivileges:    s.NoNewPrivileges,
+		Rlimits:            rlimits,
 		UIDMappings:        uidMaps,
 		GIDMappings:        gidMaps,
 	}

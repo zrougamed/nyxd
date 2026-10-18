@@ -31,6 +31,7 @@ type Process struct {
 	Cwd             string   `json:"cwd"`
 	Capabilities    *Caps    `json:"capabilities,omitempty"`
 	NoNewPrivileges bool     `json:"noNewPrivileges"`
+	ApparmorProfile string   `json:"apparmorProfile,omitempty"`
 	Rlimits         []Rlimit `json:"rlimits,omitempty"`
 }
 
@@ -153,11 +154,15 @@ type Options struct {
 	// SeccompProfile: empty or "default" = built-in deny-list profile; "unconfined" = omit seccomp;
 	// otherwise absolute path to a JSON fragment matching OCI linux.seccomp.
 	SeccompProfile string
-	CapAdd         []string
-	CapDrop        []string
-	Privileged     bool
+	// ApparmorProfile is a host-loaded AppArmor profile name (OCI process.apparmorProfile).
+	ApparmorProfile string
+	CapAdd          []string
+	CapDrop         []string
+	Privileged      bool
 	// NoNewPrivileges defaults to true when nil; ignored (forced false) when Privileged.
 	NoNewPrivileges *bool
+	// Rlimits, when non-empty, replace the default NOFILE/NPROC process rlimits.
+	Rlimits []Rlimit
 	// HostNetwork shares the host network namespace (no network namespace in the spec).
 	HostNetwork bool
 	// Rootless is set when nyxd runs in its own user namespace. sysfs can only
@@ -270,6 +275,14 @@ func buildSpec(opts Options, sec *Seccomp) Spec {
 		linux.ReadonlyPaths = readonlyPaths()
 	}
 
+	rlimits := opts.Rlimits
+	if len(rlimits) == 0 {
+		rlimits = []Rlimit{
+			{Type: "RLIMIT_NOFILE", Hard: 1024, Soft: 1024},
+			{Type: "RLIMIT_NPROC", Hard: 512, Soft: 512},
+		}
+	}
+
 	return Spec{
 		OCIVersion: "1.0.2",
 		Hostname:   hostname,
@@ -281,11 +294,9 @@ func buildSpec(opts Options, sec *Seccomp) Spec {
 			Env:             env,
 			Cwd:             cwd,
 			NoNewPrivileges: noNewPriv,
+			ApparmorProfile: strings.TrimSpace(opts.ApparmorProfile),
 			Capabilities:    capz,
-			Rlimits: []Rlimit{
-				{Type: "RLIMIT_NOFILE", Hard: 1024, Soft: 1024},
-				{Type: "RLIMIT_NPROC", Hard: 512, Soft: 512},
-			},
+			Rlimits:         rlimits,
 		},
 		Mounts: appendMounts(resolvThenDefault(opts.ResolvConfPath, opts.Rootless && opts.HostNetwork), opts.ExtraMounts),
 		Linux:  linux,
@@ -343,8 +354,22 @@ func appendMounts(base, extra []Mount) []Mount {
 	if len(extra) == 0 {
 		return base
 	}
+	// Caller mounts (compose volumes) win on destination: a second mount of the
+	// same path is undefined, so drop generated mounts that collide.
+	taken := make(map[string]struct{}, len(extra))
+	for _, m := range extra {
+		if d := filepath.Clean(m.Destination); d != "" && d != "." {
+			taken[d] = struct{}{}
+		}
+	}
 	out := make([]Mount, 0, len(base)+len(extra))
-	out = append(out, base...)
+	for _, m := range base {
+		d := filepath.Clean(m.Destination)
+		if _, ok := taken[d]; ok {
+			continue
+		}
+		out = append(out, m)
+	}
 	out = append(out, extra...)
 	return out
 }

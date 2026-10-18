@@ -4,6 +4,8 @@ Linux images need a Linux kernel, so on macOS `nyxd` runs in a small **Linux VM*
 the Mac. The VM runs on Apple's Virtualization.framework through [vfkit](https://github.com/crc-org/vfkit).
 There is no Docker Desktop, no TCP listener, and no admin right needed.
 
+Feature availability vs Linux rootful/rootless: [platform-matrix.md](platform-matrix.md).
+
 ```bash
 nyx machine init          # create the VM (downloads the image matching this nyx)
 nyx machine start         # boot it; nyx now talks to the nyxd inside

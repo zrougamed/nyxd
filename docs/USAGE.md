@@ -114,10 +114,20 @@ Details: [images.md](images.md).
 
 **Stop grace:** per-service `stop_grace_period` maps to SIGTERM wait before `nyx stop` / compose stop forces teardown. If omitted, the daemon uses a **10s** default (similar to `docker stop`), not a multi‑minute wait.
 
-**Resources:** `deploy.resources.limits` (`memory`, `cpus`, `pids_limit`, `cpuset_cpus`, …) and `reservations.memory` become cgroup
-limits. A memory limit also caps memory plus swap at twice the limit (Docker's default), so a service over its
-limit is OOM-killed instead of swapping. Rootless without cgroup delegation, limits are not applied (the daemon
+**Resources:** `deploy.resources.limits` (`memory`, `cpus`, `memory_swap`, `pids_limit`, `cpuset_cpus`, …) and `reservations.memory` become cgroup
+limits. A memory limit also caps memory plus swap at twice the limit unless `memory_swap` is set (equal to
+`memory` means no extra swap). Rootless without cgroup delegation, limits are not applied (the daemon
 logs a warning).
+
+**Security / DNS / ulimits:** optional `apparmor_profile` (host-loaded profile; ignored when AppArmor is absent),
+`seccomp_profile`, `ulimits` (e.g. `nofile`), and `dns:` (IPv4 nameservers). A volume at `/etc/resolv.conf`
+is the only resolv mount for that service. Compose `networks` with both `bridge` and `subnet` use a dedicated
+native bridge; services that omit `networks` stay on `nyxbr0`. What applies on Linux vs macOS/Windows machines:
+[platform-matrix.md](platform-matrix.md).
+
+**Docker socket / DinD:** nyxd's socket is not the Docker API. To feed legacy tools that need
+`/var/run/docker.sock`, bind-mount the host Docker socket, or run a DinD image privileged — see
+[docker-socket.md](docker-socket.md).
 
 **Rootless:** published ports, service names and the limits of the shared host network: see [rootless.md](rootless.md#networking).
 

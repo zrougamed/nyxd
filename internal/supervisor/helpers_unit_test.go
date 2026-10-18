@@ -156,6 +156,7 @@ func TestPersistErrors(t *testing.T) {
 type fakeDNS struct {
 	err        error
 	registered map[string]string
+	byGW       map[string]map[string]string
 }
 
 func (f *fakeDNS) Register(h, ip string) error {
@@ -167,6 +168,23 @@ func (f *fakeDNS) Register(h, ip string) error {
 }
 func (f *fakeDNS) Deregister(h string) error { delete(f.registered, h); return f.err }
 func (f *fakeDNS) Shutdown()                 {}
+
+func (f *fakeDNS) RegisterOn(gw, h, ip string) error {
+	if f.byGW == nil {
+		f.byGW = map[string]map[string]string{}
+	}
+	if f.byGW[gw] == nil {
+		f.byGW[gw] = map[string]string{}
+	}
+	f.byGW[gw][h] = ip
+	return f.err
+}
+func (f *fakeDNS) DeregisterOn(gw, h string) error {
+	if f.byGW != nil {
+		delete(f.byGW[gw], h)
+	}
+	return f.err
+}
 
 func TestDNSPolicy(t *testing.T) {
 	for _, c := range []struct {
@@ -194,13 +212,26 @@ func TestDNSPolicy(t *testing.T) {
 	}
 
 	f := &fakeDNS{}
-	s := &Supervisor{netDriver: "native", dnsMode: "auto", dns: f, log: quiet}
+	s := &Supervisor{netDriver: "native", dnsMode: "auto", dns: f, log: quiet, dnsGateway: "10.88.0.1"}
 	s.registerEmbeddedDNS(ContainerSpec{ID: "a"}, "")
 	s.registerEmbeddedDNS(ContainerSpec{ID: "a"}, "10.0.0.2")
-	if f.registered["a"] != "10.0.0.2" {
-		t.Errorf("registered %v", f.registered)
+	// fakeDNS implements RegisterOn, so names land in byGW rather than registered.
+	if f.byGW["10.88.0.1"]["a"] != "10.0.0.2" {
+		t.Errorf("registered %v byGW %v", f.registered, f.byGW)
 	}
 	s.dnsDeregisterForSpec(ContainerSpec{ID: "a"})
+	if len(f.byGW["10.88.0.1"]) != 0 {
+		t.Errorf("deregister left %v", f.byGW)
+	}
+	// Caller dns: skips embedded registration.
+	s.registerEmbeddedDNS(ContainerSpec{ID: "skip", DNS: []string{"1.1.1.1"}}, "10.0.0.9")
+	if f.byGW["10.88.0.1"]["skip"] != "" {
+		t.Fatal("dns: list should skip register")
+	}
+	s.registerEmbeddedDNS(ContainerSpec{ID: "c", NetworkGateway: "10.89.0.1"}, "10.89.0.2")
+	if f.byGW["10.89.0.1"]["c"] != "10.89.0.2" {
+		t.Fatalf("custom gw: %v", f.byGW)
+	}
 	f.err = errors.New("dns down")
 	s.registerEmbeddedDNS(ContainerSpec{ID: "b"}, "10.0.0.3") // logged
 	s.dnsDeregisterForSpec(ContainerSpec{ID: "b"})            // logged
