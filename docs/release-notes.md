@@ -1,5 +1,14 @@
 # Release notes
 
+## 1.1.3
+
+### Fixed
+
+- macOS: vfkit exited immediately (`the VM stopped on its own`) when the machine
+  lived under `~/Library/Application Support/…` — spaces break vfkit’s `unix://`
+  vsock URLs. Machines now live in `~/Library/nyx/machines` (legacy dirs are
+  moved on first use). `nyx machine logs` also shows `vfkit.log`.
+
 ## 1.1.2
 
 ### Fixed

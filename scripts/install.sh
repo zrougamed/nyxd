@@ -366,7 +366,7 @@ install_macos() {
 	fi
 	say "installed $p/bin/nyx"
 
-	# nyxd runs in the nyx VM, which belongs to the user (~/Library/Application Support/nyx/machines).
+	# nyxd runs in the nyx VM (~/Library/nyx/machines).
 	if [ "$(id -u)" = 0 ]; then
 		say "running as root: skipped the nyx VM. As your user, run: nyx machine init && nyx machine autostart on"
 		return
@@ -377,11 +377,14 @@ install_macos() {
 		brew install vfkit
 	fi
 	# Creates the VM, or upgrades its system to this release (data kept).
+	# init may already start the VM after an upgrade; that wait can take ~2 minutes
+	# while Alpine boots (no further output until nyxd answers).
 	"$p/bin/nyx" machine init
 	if [ "$NO_START" = 1 ]; then
 		say "start it with: nyx machine start (or nyx machine autostart on, to start at login)"
 	else
 		"$p/bin/nyx" machine autostart on
+		say "starting the nyx VM (first answer can take up to 2 minutes)"
 		"$p/bin/nyx" machine start
 	fi
 }
@@ -395,7 +398,7 @@ uninstall() {
 				"$p/bin/nyx" machine rm || true
 			else
 				"$p/bin/nyx" machine stop || true
-				say "kept the nyx VM and its data (~/Library/Application Support/nyx/machines); --purge deletes it"
+				say "kept the nyx VM and its data (~/Library/nyx/machines); --purge deletes it"
 			fi
 		fi
 		if [ -w "$p/bin" ]; then rm -f "$p/bin/nyx"; else as_root rm -f "$p/bin/nyx"; fi

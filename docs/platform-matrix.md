@@ -85,7 +85,7 @@ On macOS and Windows the **CLI is native**; the **runtime is always Linux** insi
 
 | Feature | Linux rootful | Linux rootless | Linux userns-remap | macOS machine | Windows machine |
 |---------|:-------------:|:--------------:|:------------------:|:-------------:|:---------------:|
-| Default data dir | `/var/lib/nyxd` | `$XDG_DATA_HOME/nyxd` | `/var/lib/nyxd` | VM disk (`data.img`) | WSL disk (`ext4.vhdx`) |
+| Default data dir | `/var/lib/nyxd` | `$XDG_DATA_HOME/nyxd` | `/var/lib/nyxd` | VM disk under `~/Library/nyx/machines` | WSL disk (`ext4.vhdx`) |
 | Bind-mount host project dirs | Yes | Yes | Yes | Yes under `/Users` | Yes (Windows paths translated) |
 | Bind-mount arbitrary host paths | Yes | Yes | Yes | No (only shared virtio-fs) | Partial (via WSL path rules) |
 
