@@ -233,6 +233,15 @@ func growSparse(path string, size int64) error {
 // vmFiles are the files of a VM image tarball.
 var vmFiles = map[string]bool{"vmlinuz": true, "initramfs": true, "rootfs.img": true, "cmdline": true}
 
+func vmTarRegular(typeflag byte) bool {
+	switch typeflag {
+	case tar.TypeReg, tar.TypeRegA, tar.TypeGNUSparse:
+		return true
+	default:
+		return false
+	}
+}
+
 // extractVMImage unpacks the image tarball into dir, keeping zero blocks as
 // holes (the root disk is mostly empty).
 func extractVMImage(tarPath, dir string) error {
@@ -252,7 +261,9 @@ func extractVMImage(tarPath, dir string) error {
 			return fmt.Errorf("VM image: %w", err)
 		}
 		name := filepath.Base(filepath.Clean(h.Name))
-		if !vmFiles[name] || h.Typeflag != tar.TypeReg {
+		// Release images use GNU sparse (TypeGNUSparse / 'S') for rootfs.img;
+		// plain TypeReg and the legacy NUL regular-file type are also accepted.
+		if !vmFiles[name] || !vmTarRegular(h.Typeflag) {
 			continue
 		}
 		tmp := filepath.Join(dir, name+".new")

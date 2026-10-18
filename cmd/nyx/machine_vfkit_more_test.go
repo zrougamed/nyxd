@@ -322,6 +322,73 @@ func TestExtractVMImageErrors(t *testing.T) {
 	}
 }
 
+func TestExtractVMImageGNUSparse(t *testing.T) {
+	if _, err := exec.LookPath("tar"); err != nil {
+		t.Skip("tar not available")
+	}
+	// GNU tar --sparse emits TypeGNUSparse for mostly-zero files; that is how
+	// release nyx-vm-*.tar.gz packages rootfs.img.
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	os.Mkdir(src, 0o700) //nolint:errcheck
+	for name, data := range map[string][]byte{
+		"vmlinuz": []byte("kernel"), "initramfs": []byte("initrd"), "cmdline": []byte("console=hvc0\n"),
+	} {
+		if err := os.WriteFile(filepath.Join(src, name), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root := filepath.Join(src, "rootfs.img")
+	f, err := os.Create(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(1 << 20); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteAt([]byte("superblock"), 512<<10); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	archive := filepath.Join(tmp, "vm.tar")
+	cmd := exec.Command("tar", "--sparse", "-C", src, "-cf", archive, "vmlinuz", "initramfs", "rootfs.img", "cmdline")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("tar --sparse: %v (%s)", err, out)
+	}
+	// Confirm the archive really used the GNU sparse type (skip if this tar cannot).
+	af, err := os.Open(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(af)
+	var sawSparse bool
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if filepath.Base(h.Name) == "rootfs.img" && h.Typeflag == tar.TypeGNUSparse {
+			sawSparse = true
+		}
+	}
+	af.Close()
+	if !sawSparse {
+		t.Skip("tar did not emit GNU sparse rootfs.img")
+	}
+	out := filepath.Join(tmp, "out")
+	os.Mkdir(out, 0o700) //nolint:errcheck
+	if err := extractVMImage(archive, out); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(out, "rootfs.img"))
+	if err != nil || len(b) != 1<<20 || !bytes.Contains(b, []byte("superblock")) {
+		t.Fatalf("rootfs content: len=%d err=%v", len(b), err)
+	}
+}
+
 func TestVfkitDefaults(t *testing.T) {
 	t.Setenv("NYX_VFKIT", "")
 	t.Setenv("NYX_LAUNCHCTL", "")
