@@ -178,6 +178,10 @@ commands:
         -e, --env KEY=VAL           environment (repeatable)
         --hostname <h> | -h <h>     hostname in container (-h here is hostname, not help)
         --restart <policy>          always | on-failure | unless-stopped | never (default)
+        --rm                        remove container logs/state when it exits (like docker --rm)
+        -i, --interactive           keep stdin open; attach stdin in the foreground
+        -t, --tty                   allocate a PTY for the container init
+        -it                         shorthand for -i -t (interactive shell)
         --print-id                  when attached, also print id on stderr
         --json                      machine-readable pull/run output
   ps [-q] [--no-trunc]
@@ -317,11 +321,24 @@ func formatRunFailure(code int, body string) string {
 	}
 }
 
+const mimeRunStreamV1 = "application/x-nyxd-run+v1"
+
 func doRun(socket string, args []string) error {
 	o, err := parseRunArgs(args)
 	if err != nil {
 		return err
 	}
+	if o.rm {
+		switch strings.ToLower(strings.TrimSpace(o.restart)) {
+		case "always", "unless-stopped", "unless_stopped":
+			return fmt.Errorf("--rm cannot be used with --restart %s", o.restart)
+		}
+	}
+	// Foreground -i/-t: attach stdio to the container init (like docker run -it).
+	if !o.detach && (o.stdin || o.tty) {
+		return doRunAttached(socket, o)
+	}
+
 	body := map[string]any{"image": o.image}
 	// Used only if the daemon has to pull the image.
 	if u, p := registryCredentials(o.image); u != "" {
@@ -344,6 +361,15 @@ func doRun(socket string, args []string) error {
 	}
 	if len(o.publish) > 0 {
 		body["publish"] = o.publish
+	}
+	if o.rm {
+		body["auto_remove"] = true
+	}
+	if o.tty {
+		body["tty"] = true
+	}
+	if o.stdin {
+		body["stdin"] = true
 	}
 	// Foreground: stream pull progress (NDJSON). Detach uses a compact JSON response
 	// unless --json (same as pre-stream behavior) to avoid extra encode/parse cost.
@@ -468,6 +494,109 @@ func doRun(socket string, args []string) error {
 	}
 	logCancel()
 	return killRunContainer(socket, out.ID)
+}
+
+// doRunAttached is foreground `nyx run -i` / `-t` / `-it`: stdio attached to init.
+func doRunAttached(socket string, o runOpts) error {
+	body := map[string]any{"image": o.image, "stdin": o.stdin, "tty": o.tty}
+	if u, p := registryCredentials(o.image); u != "" {
+		body["registry_username"], body["registry_password"] = u, p
+	}
+	if o.name != "" {
+		body["id"] = o.name
+	}
+	if len(o.cmdArgs) > 0 {
+		body["args"] = o.cmdArgs
+	}
+	if len(o.env) > 0 {
+		body["env"] = o.env
+	}
+	if o.hostname != "" {
+		body["hostname"] = o.hostname
+	}
+	if o.restart != "" {
+		body["restart"] = o.restart
+	}
+	if len(o.publish) > 0 {
+		body["publish"] = o.publish
+	}
+	if o.rm {
+		body["auto_remove"] = true
+	}
+	if o.tty && term.IsTerminal(int(os.Stdin.Fd())) {
+		cols, rows, err := term.GetSize(int(os.Stdin.Fd()))
+		if err == nil && cols > 0 && rows > 0 {
+			body["cols"] = cols
+			body["rows"] = rows
+		}
+	}
+	hdr, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	var restoreTTY func()
+	if o.tty && o.stdin && term.IsTerminal(int(os.Stdin.Fd())) {
+		old, terr := term.MakeRaw(int(os.Stdin.Fd()))
+		if terr == nil {
+			fd := int(os.Stdin.Fd())
+			restoreTTY = func() {
+				_ = term.Restore(fd, old)
+				nudgeParentShellRedraw()
+				_, _ = fmt.Fprint(os.Stderr, "\x1b[?25h\x1b[?2004l")
+				_ = os.Stderr.Sync()
+			}
+		}
+	}
+	if restoreTTY != nil {
+		defer restoreTTY()
+	}
+
+	pr, pw := io.Pipe()
+	defer func() {
+		unblockStdinRead()
+		clearStdinReadDeadline()
+	}()
+	go func() {
+		if _, werr := pw.Write(append(hdr, '\n')); werr != nil {
+			_ = pw.CloseWithError(werr)
+			return
+		}
+		if o.stdin {
+			_, _ = io.Copy(pw, os.Stdin)
+		}
+		_ = pw.Close()
+	}()
+
+	c := httpClient(socket)
+	req, err := http.NewRequest(http.MethodPost, "http://unix/v1/containers/run", pr)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", mimeRunStreamV1)
+	resp, err := c.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("run: %s", formatRunFailure(resp.StatusCode, string(bytes.TrimSpace(b))))
+	}
+	if o.printID {
+		if id := resp.Header.Get("X-Nyxd-Container-Id"); id != "" {
+			fmt.Fprintf(os.Stderr, "%s\n", id)
+		}
+	}
+	tailRing := &execTailRing{}
+	_, copyErr := io.Copy(io.MultiWriter(tailRing, os.Stdout), resp.Body)
+	if ferr := execFailureFromTail(tailRing.Bytes()); ferr != nil {
+		if strings.Contains(ferr.Error(), "exit status 130") || strings.Contains(ferr.Error(), "signal: interrupt") {
+			return nil
+		}
+		return ferr
+	}
+	return copyErr
 }
 
 // killRunContainer SIGKILLs the container of an interrupted foreground run.

@@ -172,6 +172,8 @@ type Options struct {
 	// UIDMappings/GIDMappings enable user namespaces when non-empty (crun + newuidmap).
 	UIDMappings []LinuxIDMapping
 	GIDMappings []LinuxIDMapping
+	// Terminal sets process.terminal (PTY for the container init; docker run -t).
+	Terminal bool
 }
 
 // Generate writes an OCI bundle config.json to bundleDir and returns the dir path.
@@ -288,7 +290,7 @@ func buildSpec(opts Options, sec *Seccomp) Spec {
 		Hostname:   hostname,
 		Root:       Root{Path: opts.RootFS, Readonly: opts.ReadOnly},
 		Process: Process{
-			Terminal:        false,
+			Terminal:        opts.Terminal,
 			User:            u,
 			Args:            args,
 			Env:             env,

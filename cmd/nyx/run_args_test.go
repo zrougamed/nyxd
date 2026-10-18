@@ -32,3 +32,24 @@ func TestParseRunArgsCommand(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRunArgsDockerFlags(t *testing.T) {
+	o, err := parseRunArgs(strings.Fields("--rm -it --name sh alpine:3.20"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !o.rm || !o.stdin || !o.tty || o.name != "sh" || o.image != "alpine:3.20" {
+		t.Fatalf("got rm=%v stdin=%v tty=%v name=%q image=%q", o.rm, o.stdin, o.tty, o.name, o.image)
+	}
+	o, err = parseRunArgs(strings.Fields("-d -i -t alpine"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !o.detach || !o.stdin || !o.tty {
+		t.Fatalf("detach/i/t: %+v", o)
+	}
+	o, err = parseRunArgs(strings.Fields("-ti alpine sh"))
+	if err != nil || !o.stdin || !o.tty || strings.Join(o.cmdArgs, " ") != "sh" {
+		t.Fatalf("-ti: %+v err=%v", o, err)
+	}
+}

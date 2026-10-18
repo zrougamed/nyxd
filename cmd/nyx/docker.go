@@ -25,6 +25,9 @@ type runOpts struct {
 	restart  string
 	publish  []string
 	printID  bool // foreground: print container id on stderr (default: off, docker-like)
+	rm       bool // --rm: auto-remove logs/state when the container exits
+	stdin    bool // -i: keep stdin open / attach stdin
+	tty      bool // -t: allocate a PTY for the container init
 }
 
 func parseRunArgs(args []string) (runOpts, error) {
@@ -35,6 +38,19 @@ func parseRunArgs(args []string) (runOpts, error) {
 		switch {
 		case a == "-d" || a == "--detach":
 			o.detach = true
+			i++
+		case a == "--rm":
+			o.rm = true
+			i++
+		case a == "-it" || a == "-ti":
+			o.stdin = true
+			o.tty = true
+			i++
+		case a == "-i" || a == "--interactive":
+			o.stdin = true
+			i++
+		case a == "-t" || a == "--tty":
+			o.tty = true
 			i++
 		case a == "--print-id":
 			o.printID = true

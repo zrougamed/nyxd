@@ -94,7 +94,7 @@ func (bd *build) run(ctx context.Context, st *stageState, in dockerfile.Instruct
 		return err
 	}
 
-	runErr := b.cfg.Runtime.RunForeground(ctx, id, bundleDir, bd.out, bd.out)
+	runErr := b.cfg.Runtime.RunForeground(ctx, id, bundleDir, nil, bd.out, bd.out, false, nil)
 	_ = b.cfg.Runtime.Delete(context.Background(), id, true)
 	if runErr != nil {
 		return fmt.Errorf("process %s did not complete successfully: %w", argvJSON, runErr)

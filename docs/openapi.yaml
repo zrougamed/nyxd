@@ -150,6 +150,7 @@ paths:
       description: |
         Starts an OCI workload via crun. If the image is not in the local store, the daemon pulls it first.
         When `stream: true`, the response is `application/x-ndjson` (same `PullEvent` lines as `POST /v1/images/pull` if a pull runs, then `phase: run` with `container_id`). Otherwise the response is a single JSON `RunResponse`.
+        With `Content-Type: application/x-nyxd-run+v1` (first line JSON `RunRequest`, then optional stdin), the response is an attached stdio stream for `tty` / `stdin` (`nyx run -it`), and `X-Nyxd-Container-Id` is set.
         If `id` is omitted, the server generates one from the image reference.
       operationId: runContainer
       requestBody:
@@ -158,9 +159,14 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/RunRequest"
+          application/x-nyxd-run+v1:
+            schema:
+              type: string
+              format: binary
+            description: JSON header line (RunRequest) then raw stdin until EOF (`nyx run -i` / `-it`).
       responses:
         "200":
-          description: Started (JSON) or pull+run stream (NDJSON when `stream` is true)
+          description: Started (JSON), pull+run stream (NDJSON when `stream` is true), or attached stdio
           content:
             application/json:
               schema:
@@ -171,6 +177,11 @@ paths:
                 format: binary
               description: |
                 Same `PullEvent` lines as image pull when a registry fetch is required, including a final `phase: done` summary after pull, then a terminal `{"phase":"run","ok":true,"container_id":"...","ref":"..."}` line.
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+              description: Attached container stdio when using `application/x-nyxd-run+v1`
         "400":
           description: Validation or start error (plain text or NDJSON `phase:error` when streaming)
         "502":
@@ -1089,6 +1100,26 @@ components:
           type: boolean
           description: |
             When true, use `application/x-ndjson` for the response if a pull is needed or for the terminal `run` line when no pull (same event schema as `POST /v1/images/pull` plus final `phase: run`).
+            Ignored when the request uses `application/x-nyxd-run+v1` (attached stdin/TTY).
+        tty:
+          type: boolean
+          description: Allocate a PTY for the container init (`nyx run -t` / docker `-t`)
+        stdin:
+          type: boolean
+          description: |
+            Keep init stdin open. With `Content-Type: application/x-nyxd-run+v1`, bytes after the
+            JSON header line are streamed to stdin (`nyx run -i` / docker `-i`).
+        auto_remove:
+          type: boolean
+          description: |
+            Delete container logs when the workload exits and will not restart (`nyx run --rm`).
+            Incompatible with restart `always` / `unless-stopped`.
+        rows:
+          type: integer
+          description: Initial PTY height when `tty` is true
+        cols:
+          type: integer
+          description: Initial PTY width when `tty` is true
         healthcheck:
           $ref: "#/components/schemas/RunHealthcheck"
         registry_username:

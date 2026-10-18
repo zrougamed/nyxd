@@ -1,5 +1,15 @@
 # Release notes
 
+## 1.1.4
+
+### New
+
+- **`nyx run --rm`**: remove container logs when the workload exits (Docker-compatible;
+  incompatible with `--restart always` / `unless-stopped`).
+- **`nyx run -i` / `-t` / `-it`**: attach stdin and/or a PTY to the container init
+  (interactive shells and piped stdin), via `application/x-nyxd-run+v1` on
+  `POST /v1/containers/run`.
+
 ## 1.1.3
 
 ### Fixed

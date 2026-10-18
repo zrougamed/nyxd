@@ -20,6 +20,10 @@ sudo nyx run nginx:alpine
 # Command after the image, like docker run ("--" before it is optional)
 sudo nyx run alpine:3.20 sh -c 'echo hello; exit 3'   # nyx exits; the daemon logs exitCode 3
 
+# Interactive shell (docker-like --rm -it) and one-shot cleanup
+sudo nyx run --rm -it alpine:3.20
+sudo nyx run --rm hello-world
+
 # Detach: prints container id only (use --json for the full JSON object on stdout)
 sudo nyx run -d nginx:alpine
 sudo nyx run -d --json nginx:alpine

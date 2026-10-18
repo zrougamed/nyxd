@@ -145,6 +145,15 @@ func TestExecTTYWinSizeDefaults(t *testing.T) {
 	}
 }
 
+func TestRunTTYWinSizeDefaults(t *testing.T) {
+	if runTTYWinSize(runRequest{}) != nil || runTTYWinSize(runRequest{TTY: true}) != nil {
+		t.Error("no size")
+	}
+	if w := runTTYWinSize(runRequest{TTY: true, Rows: 40}); w.Rows != 40 || w.Cols != 80 {
+		t.Errorf("%+v", w)
+	}
+}
+
 func TestResolveHelpers(t *testing.T) {
 	for s, want := range map[string]bool{"": false, "abcDEF09": true, "xyz": false} {
 		if isAllHexDigits(s) != want {

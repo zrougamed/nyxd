@@ -98,6 +98,15 @@ type ContainerSpec struct {
 	Rlimits         []bundle.Rlimit         `json:"rlimits,omitempty"`
 	UIDMappings     []bundle.LinuxIDMapping `json:"uid_mappings,omitempty"`
 	GIDMappings     []bundle.LinuxIDMapping `json:"gid_mappings,omitempty"`
+
+	// Terminal sets OCI process.terminal (docker run -t).
+	Terminal bool `json:"terminal,omitempty"`
+	// StdinOpen keeps container stdin open so interactive shells do not EOF-exit
+	// (docker run -i). With a detached start the write end is held until cleanup.
+	StdinOpen bool `json:"stdin_open,omitempty"`
+	// AutoRemove deletes logs (and remaining state) when the container exits and
+	// will not be restarted (docker run --rm).
+	AutoRemove bool `json:"auto_remove,omitempty"`
 }
 
 // containerEntry tracks runtime state for a supervised container.
@@ -116,7 +125,14 @@ type containerEntry struct {
 	runDone <-chan error
 	// exited is closed by supervise once the foreground run has returned.
 	exited chan struct{}
-	mu     sync.Mutex
+	// stdinHold is the write end of a pipe kept open for StdinOpen without attach
+	// (docker run -d -i). Closed on cleanup so the init process can see EOF.
+	stdinHold *os.File
+	// attachStdin/Stdout are set for RunAttached (foreground docker run -it).
+	attachStdin  io.Reader
+	attachStdout io.Writer
+	attachSize   *runtime.TTYSize
+	mu           sync.Mutex
 }
 
 // exitedChan returns the channel closed when the current foreground run ends,
@@ -226,6 +242,9 @@ func (s *Supervisor) Start(ctx context.Context, spec ContainerSpec) error {
 		s.mu.Unlock()
 		s.removePersistedState(spec.ID)
 		removeBundle(entry.bundleDir)
+		if spec.AutoRemove && s.logColl != nil {
+			s.logColl.Remove(spec.ID)
+		}
 		return nil
 	}
 
@@ -261,6 +280,84 @@ func (s *Supervisor) StartSequential(ctx context.Context, specs []ContainerSpec)
 		}
 	}
 	return nil
+}
+
+// RunAttached starts a container with stdio attached to the caller (docker run -it / -i).
+// It blocks until the init process exits, then tears down state. Restart policy is ignored
+// (the session ends when the client or init exits). AutoRemove deletes logs on exit.
+func (s *Supervisor) RunAttached(ctx context.Context, spec ContainerSpec, stdin io.Reader, stdout io.Writer, sz *runtime.TTYSize) error {
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	s.mu.Lock()
+	if _, exists := s.containers[spec.ID]; exists {
+		s.mu.Unlock()
+		return fmt.Errorf("container %s already running", spec.ID)
+	}
+	entry := &containerEntry{
+		spec:         spec,
+		attachStdin:  stdin,
+		attachStdout: stdout,
+		attachSize:   sz,
+	}
+	s.containers[spec.ID] = entry
+	s.mu.Unlock()
+
+	fastExit, err := s.startOnce(ctx, entry)
+	if err != nil {
+		s.mu.Lock()
+		delete(s.containers, spec.ID)
+		s.mu.Unlock()
+		removeBundle(filepath.Join(s.baseDir, "bundles", spec.ID))
+		return err
+	}
+	if fastExit {
+		s.mu.Lock()
+		delete(s.containers, spec.ID)
+		s.mu.Unlock()
+		s.removePersistedState(spec.ID)
+		removeBundle(entry.bundleDir)
+		if spec.AutoRemove && s.logColl != nil {
+			s.logColl.Remove(spec.ID)
+		}
+		return nil
+	}
+
+	entry.mu.Lock()
+	runDone := entry.runDone
+	exited := entry.exited
+	entry.mu.Unlock()
+	var runErr error
+	select {
+	case <-ctx.Done():
+		killCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		_ = s.rt.Kill(killCtx, spec.ID, "KILL")
+		cancel()
+		if runDone != nil {
+			select {
+			case runErr = <-runDone:
+			case <-time.After(30 * time.Second):
+				runErr = ctx.Err()
+			}
+		} else {
+			runErr = ctx.Err()
+		}
+	case runErr = <-runDone:
+	}
+	if exited != nil {
+		select {
+		case <-exited:
+		default:
+			close(exited)
+		}
+	}
+
+	s.resetLogIO(entry)
+	s.teardownNetwork(context.Background(), spec.ID)
+	s.ovl.Remove(spec.ID) //nolint:errcheck
+	_ = s.rt.Delete(context.Background(), spec.ID, true)
+	s.finishExited(entry)
+	return runErr
 }
 
 // waitStoppedOrForceDelete waits for crun to report stopped; if that times out or fails,
@@ -848,6 +945,7 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		GIDMappings:     spec.GIDMappings,
 		HostNetwork:     s.hostNetwork(),
 		Rootless:        s.rootless,
+		Terminal:        spec.Terminal,
 	})
 	if err != nil {
 		s.teardownNetwork(ctx, spec.ID)
@@ -898,6 +996,28 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		return false, fmt.Errorf("stdio pipe: %w", err)
 	}
 
+	var stdin io.Reader
+	switch {
+	case e.attachStdin != nil || e.attachStdout != nil:
+		stdin = e.attachStdin
+	case spec.StdinOpen:
+		pr, pw, err := os.Pipe()
+		if err != nil {
+			_ = soR.Close()
+			_ = soW.Close()
+			_ = seR.Close()
+			_ = seW.Close()
+			logCancel()
+			s.teardownNetwork(ctx, spec.ID)
+			s.ovl.Remove(spec.ID) //nolint:errcheck
+			return false, fmt.Errorf("stdin pipe: %w", err)
+		}
+		stdin = pr
+		e.mu.Lock()
+		e.stdinHold = pw
+		e.mu.Unlock()
+	}
+
 	if s.logColl != nil {
 		go func() {
 			defer soR.Close()
@@ -918,11 +1038,24 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		}()
 	}
 
+	outW := io.Writer(soW)
+	errW := io.Writer(seW)
+	tty := spec.Terminal
+	var sz *runtime.TTYSize
+	if e.attachStdout != nil {
+		outW = io.MultiWriter(e.attachStdout, soW)
+		errW = io.MultiWriter(e.attachStdout, seW)
+		sz = e.attachSize
+	}
+
 	runErr := make(chan error, 1)
 	go func() {
 		defer soW.Close()
 		defer seW.Close()
-		runErr <- s.rt.RunForeground(logCtx, spec.ID, bundleDir, soW, seW)
+		if rc, ok := stdin.(*os.File); ok && e.attachStdin == nil {
+			defer rc.Close()
+		}
+		runErr <- s.rt.RunForeground(logCtx, spec.ID, bundleDir, stdin, outW, errW, tty, sz)
 	}()
 
 	startDeadline := time.NewTimer(30 * time.Second)
@@ -988,6 +1121,7 @@ func (s *Supervisor) ensureCrunIDFreeForFreshStart(ctx context.Context, id strin
 // status 0 before we observed OCI "running" (race with the status ticker).
 func (s *Supervisor) finishForegroundFastExit(ctx context.Context, e *containerEntry) {
 	s.resetLogIO(e)
+	s.closeStdinHold(e)
 	s.teardownNetwork(ctx, e.spec.ID)
 	s.ovl.Remove(e.spec.ID)            //nolint:errcheck
 	s.rt.Delete(ctx, e.spec.ID, false) //nolint:errcheck
@@ -1044,11 +1178,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 
 		if intentionallyStopped {
 			s.rt.Delete(ctx, e.spec.ID, false) //nolint:errcheck
-			s.mu.Lock()
-			delete(s.containers, e.spec.ID)
-			s.mu.Unlock()
-			s.removePersistedState(e.spec.ID)
-			removeBundle(e.bundleDir)
+			s.finishExited(e)
 			return
 		}
 
@@ -1056,11 +1186,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 		if !s.shouldRestart(e, exitCode) {
 			log.Info("not restarting", "policy", e.spec.RestartPolicy, "restarts", e.restarts)
 			s.rt.Delete(ctx, e.spec.ID, false) //nolint:errcheck
-			s.mu.Lock()
-			delete(s.containers, e.spec.ID)
-			s.mu.Unlock()
-			s.removePersistedState(e.spec.ID)
-			removeBundle(e.bundleDir)
+			s.finishExited(e)
 			return
 		}
 
@@ -1177,6 +1303,7 @@ func (s *Supervisor) teardownNetwork(ctx context.Context, id string) {
 func (s *Supervisor) cleanup(e *containerEntry) {
 	e.stopHealth()
 	s.resetLogIO(e)
+	s.closeStdinHold(e)
 	if s.logColl != nil {
 		s.logColl.Remove(e.spec.ID)
 	}
@@ -1188,6 +1315,30 @@ func (s *Supervisor) cleanup(e *containerEntry) {
 	s.ovl.Remove(e.spec.ID) //nolint:errcheck
 	removeBundle(e.bundleDir)
 	s.removePersistedState(e.spec.ID)
+}
+
+// finishExited drops supervisor state after a final exit (no restart). With
+// AutoRemove, logs are deleted as well (docker run --rm).
+func (s *Supervisor) finishExited(e *containerEntry) {
+	s.closeStdinHold(e)
+	s.mu.Lock()
+	delete(s.containers, e.spec.ID)
+	s.mu.Unlock()
+	s.removePersistedState(e.spec.ID)
+	removeBundle(e.bundleDir)
+	if e.spec.AutoRemove && s.logColl != nil {
+		s.logColl.Remove(e.spec.ID)
+	}
+}
+
+func (s *Supervisor) closeStdinHold(e *containerEntry) {
+	e.mu.Lock()
+	h := e.stdinHold
+	e.stdinHold = nil
+	e.mu.Unlock()
+	if h != nil {
+		_ = h.Close()
+	}
 }
 
 func (s *Supervisor) resetLogIO(e *containerEntry) {

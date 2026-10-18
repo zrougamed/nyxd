@@ -114,9 +114,11 @@ func (r *Runtime) pidFilePath(containerID string) string {
 
 // RunForeground runs the container in the foreground: crun blocks until the init
 // process exits. Container stdout/stderr are wired to the given writers (typically
-// pipes feeding a log collector). No --detach flag. Uses --pid-file so OCI state
-// under --root matches detached runs (some crun versions rely on this for status).
-func (r *Runtime) RunForeground(ctx context.Context, containerID, bundleDir string, stdout, stderr io.Writer) error {
+// pipes feeding a log collector). When tty is true, stdio uses a host PTY (OCI
+// process.terminal must also be set in the bundle). stdin may be nil.
+// No --detach flag. Uses --pid-file so OCI state under --root matches detached
+// runs (some crun versions rely on this for status).
+func (r *Runtime) RunForeground(ctx context.Context, containerID, bundleDir string, stdin io.Reader, stdout, stderr io.Writer, tty bool, sz *TTYSize) error {
 	if stdout == nil {
 		stdout = io.Discard
 	}
@@ -124,20 +126,74 @@ func (r *Runtime) RunForeground(ctx context.Context, containerID, bundleDir stri
 		stderr = io.Discard
 	}
 	pidFile := r.pidFilePath(containerID)
-	cmd := exec.CommandContext(ctx, r.binary, r.args(
+	args := r.args(
 		"--root", r.rootDir,
 		"run",
 		"--bundle", bundleDir,
 		"--pid-file", pidFile,
 		containerID,
-	)...)
+	)
+	if tty {
+		return r.runForegroundTTY(ctx, args, stdin, stdout, stderr, sz)
+	}
+	cmd := exec.CommandContext(ctx, r.binary, args...)
 	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	cmd.Stdin = nil
 	var errBuf bytes.Buffer
 	cmd.Stderr = io.MultiWriter(stderr, &errBuf)
+	if stdin != nil {
+		cmd.Stdin = stdin
+		cmd.WaitDelay = 800 * time.Millisecond
+	}
 	if err := cmd.Run(); err != nil {
+		if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
+			return nil
+		}
 		return &StartExitError{Err: err, Output: errBuf.String()}
+	}
+	return nil
+}
+
+func (r *Runtime) runForegroundTTY(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, sz *TTYSize) error {
+	cmd := exec.CommandContext(ctx, r.binary, args...)
+	cmd.WaitDelay = 800 * time.Millisecond
+
+	ws := &pty.Winsize{Rows: 24, Cols: 80}
+	if sz != nil {
+		if sz.Rows > 0 {
+			ws.Rows = sz.Rows
+		}
+		if sz.Cols > 0 {
+			ws.Cols = sz.Cols
+		}
+	}
+
+	ptyMaster, err := pty.StartWithSize(cmd, ws)
+	if err != nil {
+		return &StartExitError{Err: err, Output: err.Error()}
+	}
+
+	out := stdout
+	if stderr != nil && stderr != out {
+		out = io.MultiWriter(out, stderr)
+	}
+	if stdin != nil {
+		go func() { _, _ = io.Copy(ptyMaster, stdin) }()
+	}
+	copyDone := make(chan struct{})
+	go func() {
+		defer close(copyDone)
+		_, _ = io.Copy(out, ptyMaster)
+	}()
+
+	waitErr := cmd.Wait()
+	_ = ptyMaster.Close()
+	<-copyDone
+
+	if waitErr != nil {
+		if errors.Is(waitErr, exec.ErrWaitDelay) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
+			return nil
+		}
+		return &StartExitError{Err: waitErr, Output: waitErr.Error()}
 	}
 	return nil
 }

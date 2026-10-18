@@ -179,7 +179,7 @@ func TestExecWriters(t *testing.T) {
 	if err := fakeRuntime(t, "fail").Exec(ctx, "c", []string{"x"}, nil, nil, nil, false, nil); err == nil || !strings.Contains(err.Error(), "crun exec") {
 		t.Errorf("exec failure: %v", err)
 	}
-	if err := fakeRuntime(t, "running").RunForeground(ctx, "c", t.TempDir(), nil, nil); err == nil || !strings.Contains(err.Error(), "run failed") {
+	if err := fakeRuntime(t, "running").RunForeground(ctx, "c", t.TempDir(), nil, nil, nil, false, nil); err == nil || !strings.Contains(err.Error(), "run failed") {
 		t.Errorf("run failure carries stderr: %v", err)
 	}
 }

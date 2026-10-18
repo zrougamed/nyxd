@@ -32,7 +32,7 @@ func TestExecRealContainer(t *testing.T) {
 	ctx := context.Background()
 	b := appbin.Bundle(t, dir, "c", "sleep", "60")
 	done := make(chan error, 1)
-	go func() { done <- r.RunForeground(ctx, "c", b, nil, nil) }()
+	go func() { done <- r.RunForeground(ctx, "c", b, nil, nil, nil, false, nil) }()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		if s, err := r.State(ctx, "c"); err == nil && s.Status == "running" {
