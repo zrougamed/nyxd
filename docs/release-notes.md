@@ -1,5 +1,46 @@
 # Release notes
 
+## 1.1.0
+
+Compose and native-network controls for multi-bridge stacks, plus a macOS VM init fix
+and docs for what works in each environment. Compatible with 1.0; see
+[Stability and compatibility](stability.md).
+
+### New
+
+- **Compose `apparmor_profile`**: applied when the host has AppArmor and the named profile
+  is loaded; otherwise logged and skipped so the same file works on SELinux-only or Alpine
+  hosts.
+- **Compose `dns` and `/etc/resolv.conf`**: set nameservers from the compose file, or keep a
+  caller-owned resolv.conf bind mount without nyxd rewriting it.
+- **Compose `ulimits` and `memory_swap`**: `ulimits` map to OCI rlimits; deploy memory swap
+  follows Docker-style defaults when omitted.
+- **`GET /v1/network`**: returns the active driver, bridge, gateway and subnet over the
+  control socket.
+- **Per-network native bridges**: compose `networks` with `bridge` + `subnet` get their own
+  `nyxbr*` bridge, IPAM, NAT, cross-bridge isolation and embedded DNS zone; services that
+  omit `networks` stay on `nyxbr0`.
+- **Platform matrix**: feature availability for Linux rootful/rootless/userns-remap and
+  macOS/Windows machines — [platform-matrix.md](platform-matrix.md).
+- **Docker socket docs**: mounting a host `docker.sock` or running DinD under nyxd —
+  [docker-socket.md](docker-socket.md).
+
+### Changed
+
+- Socket-group access (`--socket-group`) is documented as root-equivalent for container
+  operations (same trust model as the Docker group).
+- Custom native bridge names must start with `nyxbr`; foreign host interfaces are not
+  adopted.
+
+### Fixed
+
+- macOS: `nyx machine init` failed with `VM image: rootfs.img missing` because release
+  tarballs pack that file as a GNU sparse member.
+- Embedded DNS could race or deadlock under concurrent zone updates and shutdown.
+- Reject unsafe container IDs on `run` so paths cannot escape the data directory.
+- IPAM no longer panics on `/31` or `/32` subnets; tiny prefixes are rejected with an error.
+- Website dependency advisory on the old Faker 5 package used by the OpenAPI explorer.
+
 ## 1.0.0
 
 The first stable release. From here on, nyxd follows [Semantic Versioning](https://semver.org): the
