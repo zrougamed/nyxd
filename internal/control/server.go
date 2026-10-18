@@ -748,15 +748,6 @@ type runRequest struct {
 
 func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 	noWriteDeadline(w) // may pull the image first
-	if s.sup == nil {
-		http.Error(w, "supervisor not available", http.StatusServiceUnavailable)
-		return
-	}
-	if s.store == nil {
-		http.Error(w, "image store not available", http.StatusServiceUnavailable)
-		return
-	}
-	baseCtx := s.baseCtx
 
 	var body runRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
@@ -771,7 +762,21 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(body.ID)
 	if id == "" {
 		id = generateContainerID(imgRef)
+	} else if !safeLogContainerID(id) {
+		// Same charset as log/bundle paths: reject ".." and path separators so a
+		// socket client cannot escape baseDir/bundles or netns dirs.
+		http.Error(w, "invalid container id: use letters, digits, '-' or '_' only (max 256)", http.StatusBadRequest)
+		return
 	}
+	if s.sup == nil {
+		http.Error(w, "supervisor not available", http.StatusServiceUnavailable)
+		return
+	}
+	if s.store == nil {
+		http.Error(w, "image store not available", http.StatusServiceUnavailable)
+		return
+	}
+	baseCtx := s.baseCtx
 
 	stream := body.Stream
 	var streamEnc *json.Encoder

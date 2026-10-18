@@ -203,7 +203,7 @@ func TestServerWithoutBackends(t *testing.T) {
 		return resp.StatusCode, string(b)
 	}
 	for _, r := range []struct{ method, path string }{
-		{"POST", "/v1/containers/run"}, {"POST", "/v1/compose/up"}, {"POST", "/v1/compose/stop"},
+		{"POST", "/v1/compose/up"}, {"POST", "/v1/compose/stop"},
 		{"POST", "/v1/compose/down"}, {"POST", "/v1/containers/x/stop"}, {"POST", "/v1/containers/x/remove"},
 		{"POST", "/v1/containers/x/kill"}, {"GET", "/v1/images"}, {"POST", "/v1/images/remove"},
 		{"POST", "/v1/images/prune"}, {"POST", "/v1/images/pull"}, {"POST", "/v1/images/tag"},
@@ -213,6 +213,12 @@ func TestServerWithoutBackends(t *testing.T) {
 		if code, body := do(r.method, r.path, "{}"); code != http.StatusServiceUnavailable {
 			t.Errorf("%s %s: %d %s", r.method, r.path, code, body)
 		}
+	}
+	if code, body := do("POST", "/v1/containers/run", `{"image":"alpine","id":"../escape"}`); code != http.StatusBadRequest || !strings.Contains(body, "invalid container id") {
+		t.Errorf("bad id: %d %s", code, body)
+	}
+	if code, body := do("POST", "/v1/containers/run", `{"image":"alpine"}`); code != http.StatusServiceUnavailable {
+		t.Errorf("run without supervisor: %d %s", code, body)
 	}
 	if code, body := do("GET", "/v1/containers?detail=1", ""); code != 200 || !strings.Contains(body, `"containers":null`) {
 		t.Errorf("containers: %d %s", code, body)

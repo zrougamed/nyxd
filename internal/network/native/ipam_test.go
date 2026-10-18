@@ -11,7 +11,10 @@ import (
 
 func TestIPAMAllocateRelease(t *testing.T) {
 	dir := t.TempDir()
-	a := newIPAM(dir, "10.88.0.0/24", "10.88.0.1")
+	a, err := newIPAM(dir, "10.88.0.0/24", "10.88.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ids := []string{"c1", "c2", "c3"}
 	ips := make([]string, len(ids))
@@ -48,7 +51,10 @@ func TestIPAMAllocateRelease(t *testing.T) {
 
 func TestIPAMConcurrent(t *testing.T) {
 	dir := t.TempDir()
-	a := newIPAM(dir, "10.88.0.0/24", "10.88.0.1")
+	a, err := newIPAM(dir, "10.88.0.0/24", "10.88.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	const n = 20
 	var wg sync.WaitGroup
@@ -79,7 +85,10 @@ func TestIPAMConcurrent(t *testing.T) {
 
 func TestIPAMExhaustion(t *testing.T) {
 	// /29: .0 network, .1 gateway, .2–.6 hosts, .7 broadcast → 5 allocatable addresses.
-	a := newIPAM(t.TempDir(), "10.0.0.0/29", "10.0.0.1")
+	a, err := newIPAM(t.TempDir(), "10.0.0.0/29", "10.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for i := range 5 {
 		_, err := a.allocate(fmt.Sprintf("c%d", i))
@@ -87,11 +96,22 @@ func TestIPAMExhaustion(t *testing.T) {
 			t.Fatalf("allocation %d failed unexpectedly: %v", i, err)
 		}
 	}
-	_, err := a.allocate("overflow")
+	_, err = a.allocate("overflow")
 	if err == nil {
 		t.Fatal("expected exhaustion, got nil")
 	}
 	t.Logf("exhaustion (expected): %v", err)
+}
+
+func TestNewIPAMRejectsTinySubnet(t *testing.T) {
+	_, err := newIPAM(t.TempDir(), "10.0.0.0/31", "10.0.0.1")
+	if err == nil {
+		t.Fatal("/31 must fail")
+	}
+	_, err = newIPAM(t.TempDir(), "10.0.0.0/32", "10.0.0.0")
+	if err == nil {
+		t.Fatal("/32 must fail")
+	}
 }
 
 func TestIPConversion(t *testing.T) {

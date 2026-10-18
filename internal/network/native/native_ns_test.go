@@ -637,19 +637,18 @@ func TestIPAMErrors(t *testing.T) {
 		"gateway outside": {t.TempDir(), "10.0.0.0/24", "10.0.1.1"},
 		"gateway network": {t.TempDir(), "10.0.0.0/24", "10.0.0.0"},
 		"dir":             {"/proc/nope/ipam", "10.0.0.0/24", "10.0.0.1"},
+		"/31":             {t.TempDir(), "10.0.0.0/31", "10.0.0.1"},
 	} {
-		func() {
-			defer func() {
-				if recover() == nil {
-					t.Errorf("%s: no panic", name)
-				}
-			}()
-			newIPAM(args[0], args[1], args[2])
-		}()
+		if _, err := newIPAM(args[0], args[1], args[2]); err == nil {
+			t.Errorf("%s: expected error", name)
+		}
 	}
 
 	dir := t.TempDir()
-	a := newIPAM(dir, "10.0.0.0/24", "10.0.0.1")
+	a, err := newIPAM(dir, "10.0.0.0/24", "10.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Mkdir(filepath.Join(dir, "zz-not-a-lease"), 0o700); err != nil {
 		t.Fatal(err)
 	}

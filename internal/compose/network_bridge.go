@@ -53,6 +53,10 @@ func gatewayFromSubnet(cidr string) (string, error) {
 	if ip4 == nil {
 		return "", fmt.Errorf("subnet %q: IPv4 only", cidr)
 	}
+	ones, bits := ipnet.Mask.Size()
+	if bits != 32 || ones > 30 {
+		return "", fmt.Errorf("subnet %q: need IPv4 prefix length <= 30", cidr)
+	}
 	// First usable host address (network + 1), matching nyxbr0 → 10.88.0.1.
 	gw := make(net.IP, len(ip4))
 	copy(gw, ip4.Mask(ipnet.Mask))
@@ -71,8 +75,12 @@ func validateBridgeName(name string) error {
 	if len(name) > 15 {
 		return fmt.Errorf("bridge name %q longer than 15 characters", name)
 	}
+	// Must be a nyxd-owned name so compose cannot adopt docker0/eth0/etc.
+	if name != "nyxbr0" && !strings.HasPrefix(name, "nyxbr") {
+		return fmt.Errorf("bridge name %q must start with \"nyxbr\"", name)
+	}
 	for _, r := range name {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
 			continue
 		}
 		return fmt.Errorf("bridge name %q has invalid character %q", name, r)

@@ -45,6 +45,18 @@ func TestBridgeConfFromOpts(t *testing.T) {
 	if err != nil || got.Bridge != "nyxbr-x" || got.Gateway != "10.1.0.1" {
 		t.Fatalf("%+v %v", got, err)
 	}
+	_, err = bridgeConfFromOpts(&network.SetupOptions{
+		Bridge: "docker0", Subnet: "172.17.0.0/16", Gateway: "172.17.0.1",
+	})
+	if err == nil {
+		t.Fatal("foreign bridge name")
+	}
+	_, err = bridgeConfFromOpts(&network.SetupOptions{
+		Bridge: "nyxbr-x", Subnet: "10.1.0.0/31", Gateway: "10.1.0.1",
+	})
+	if err == nil {
+		t.Fatal("/31 rejected")
+	}
 }
 
 func TestEgressNATCommentFor(t *testing.T) {

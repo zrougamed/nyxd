@@ -52,6 +52,12 @@ func TestResolveServiceBridgeErrors(t *testing.T) {
 		t.Fatal("bad char")
 	}
 	_, err = ResolveServiceBridge(&Stack{Networks: map[string]Network{
+		"bad": {Bridge: "docker0", Subnet: "172.17.0.0/16"},
+	}}, Service{Networks: []string{"bad"}})
+	if err == nil || !strings.Contains(err.Error(), "nyxbr") {
+		t.Fatalf("foreign bridge: %v", err)
+	}
+	_, err = ResolveServiceBridge(&Stack{Networks: map[string]Network{
 		"bad": {Bridge: "nyxbr1", Subnet: "not-cidr"},
 	}}, Service{Networks: []string{"bad"}})
 	if err == nil {
@@ -80,6 +86,9 @@ func TestResolveServiceBridgeErrors(t *testing.T) {
 	}
 	if _, err := gatewayFromSubnet("10.1.0.0/32"); err == nil {
 		t.Fatal("/32 has no usable gateway")
+	}
+	if _, err := gatewayFromSubnet("10.1.0.0/31"); err == nil {
+		t.Fatal("/31 has no usable gateway")
 	}
 	got, err = ResolveServiceBridge(&Stack{Networks: map[string]Network{
 		"ok": {Bridge: "nyxbr_ok", Subnet: "10.91.0.0/16"},

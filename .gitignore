@@ -3,6 +3,8 @@ bin/
 coverage/
 dist/
 dist-extra/
+# Release signing material (never commit; keep outside the tree or in a secrets store)
+.secrets/
 # Built CLI binaries (never commit; use make / goreleaser)
 /nyx
 /nyx.exe

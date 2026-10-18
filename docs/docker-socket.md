@@ -19,9 +19,10 @@ services:
 ```
 
 nyxd bind-mounts the host socket into the container like any other volume.
-The process inside talks to the **host Docker daemon**, not to nyxd. Prefer
-read-only where the tool allows it (`:ro`), and treat socket access as full
-host-engine privilege.
+The process inside talks to the **host Docker daemon**, not to nyxd.
+`:ro` on the bind does **not** reduce Docker API power (the engine still
+accepts privileged create/exec); treat socket access as full host-engine
+privilege either way.
 
 Rootless nyxd cannot usefully mount a root-owned Docker socket unless that
 socket is reachable from the user namespace (unusual). Prefer rootful nyxd for

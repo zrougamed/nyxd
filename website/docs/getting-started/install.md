@@ -199,7 +199,10 @@ With a **rootful** `nyxd`, the **`nyx` client** can run as a normal user if it c
 
 5. As your user: `nyx ping`, `nyx ps`, `nyx run -d …` without `sudo`.
 
-This does **not** grant root on the box—only what the HTTP API allows. The daemon still performs privileged container operations.
+Socket-group membership is **root-equivalent for container operations**: the API accepts
+`privileged`, capability changes, host bind mounts, and host networking. Treat the `nyx` /
+`nyxd` group like `docker` group access—only trusted operators. The daemon still runs those
+actions as root (or as the rootless userns owner).
 
 ## Build on the target host
 

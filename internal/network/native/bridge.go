@@ -75,16 +75,43 @@ func bridgeConfFromOpts(opts *network.SetupOptions) (bridgeConf, error) {
 		Subnet:  strings.TrimSpace(opts.Subnet),
 		Gateway: strings.TrimSpace(opts.Gateway),
 	}
+	if err := validateNativeBridgeName(conf.Bridge); err != nil {
+		return bridgeConf{}, err
+	}
 	if conf.Subnet == "" || conf.Gateway == "" {
 		return bridgeConf{}, fmt.Errorf("native network: bridge %q requires subnet and gateway", conf.Bridge)
 	}
-	if _, _, err := net.ParseCIDR(conf.Subnet); err != nil {
+	if _, ipnet, err := net.ParseCIDR(conf.Subnet); err != nil {
 		return bridgeConf{}, fmt.Errorf("native network: subnet %q: %w", conf.Subnet, err)
+	} else if ones, bits := ipnet.Mask.Size(); bits != 32 || ones > 30 {
+		// /31 and /32 have no usable host range for gateway+containers.
+		return bridgeConf{}, fmt.Errorf("native network: subnet %q: need IPv4 prefix length <= 30", conf.Subnet)
 	}
 	if net.ParseIP(conf.Gateway).To4() == nil {
 		return bridgeConf{}, fmt.Errorf("native network: gateway %q: invalid IPv4", conf.Gateway)
 	}
 	return conf, nil
+}
+
+// validateNativeBridgeName restricts custom bridges to the nyxbr* namespace so
+// Setup cannot attach to or address foreign host interfaces (docker0, eth0, …).
+func validateNativeBridgeName(name string) error {
+	if name == "" {
+		return fmt.Errorf("native network: empty bridge name")
+	}
+	if len(name) > 15 {
+		return fmt.Errorf("native network: bridge name %q longer than 15 characters", name)
+	}
+	if name != BridgeName && !strings.HasPrefix(name, "nyxbr") {
+		return fmt.Errorf("native network: bridge name %q must start with \"nyxbr\"", name)
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			continue
+		}
+		return fmt.Errorf("native network: bridge name %q has invalid character %q", name, r)
+	}
+	return nil
 }
 
 // containerBridge remembers which bridgeConf each container used (for Teardown IPAM).
@@ -169,7 +196,10 @@ func Setup(ctx context.Context, containerID, netNSPath string, ports []network.P
 	}
 
 	// 2. IPAM
-	ipam := getIPAMFor(conf.Subnet, conf.Gateway)
+	ipam, err := getIPAMFor(conf.Subnet, conf.Gateway)
+	if err != nil {
+		return "", fmt.Errorf("ipam: %w", err)
+	}
 	ip, err := ipam.allocate(containerID)
 	if err != nil {
 		return "", fmt.Errorf("ipam: %w", err)
@@ -257,7 +287,9 @@ func Teardown(ctx context.Context, containerID string, log *slog.Logger) error {
 	if !ok {
 		conf = defaultBridgeConf()
 	}
-	if err := getIPAMFor(conf.Subnet, conf.Gateway).release(containerID); err != nil {
+	if ipam, err := getIPAMFor(conf.Subnet, conf.Gateway); err != nil {
+		errs = append(errs, fmt.Errorf("ipam: %w", err))
+	} else if err := ipam.release(containerID); err != nil {
 		errs = append(errs, fmt.Errorf("ipam release: %w", err))
 	}
 
@@ -363,8 +395,12 @@ func createBridgeConf(conf bridgeConf, log *slog.Logger) error {
 	}
 	defer unix.Close(fd)
 
-	// Check if bridge already exists.
+	// Reuse only an existing *bridge* we own by name. Never adopt eth0/docker0
+	// or add addresses to a non-bridge interface.
 	if linkExists(conf.Bridge) {
+		if !isLinuxBridge(conf.Bridge) {
+			return fmt.Errorf("link %q exists but is not a Linux bridge", conf.Bridge)
+		}
 		log.Debug("bridge already exists", "name", conf.Bridge)
 		return ensureBridgeIP(fd, conf)
 	}
@@ -586,24 +622,31 @@ func ipamRootWritable(dir string) bool {
 // getIPAM returns the allocator for the default bridge subnet.
 func getIPAM() *ipam {
 	cidr, gw := activeNetConf()
-	return getIPAMFor(cidr, gw)
+	a, err := getIPAMFor(cidr, gw)
+	if err != nil {
+		panic(err) // default subnet/gateway are compile-time constants
+	}
+	return a
 }
 
 // getIPAMFor returns a file-backed IP allocator for the given subnet/gateway.
 // Default root is /var/lib/nyxd/ipam; override with NYXD_IPAM_DIR. Each network
 // uses a subdirectory so leases do not collide across bridges.
-func getIPAMFor(cidr, gw string) *ipam {
+func getIPAMFor(cidr, gw string) (*ipam, error) {
 	key := strings.TrimSpace(cidr) + "|" + strings.TrimSpace(gw)
 	ipamMu.Lock()
 	defer ipamMu.Unlock()
 	if a, ok := ipamByNet[key]; ok {
-		return a
+		return a, nil
 	}
 	sum := sha256.Sum256([]byte(key))
 	dir := filepath.Join(ipamRootDir(), hex.EncodeToString(sum[:8]))
-	a := newIPAM(dir, cidr, gw)
+	a, err := newIPAM(dir, cidr, gw)
+	if err != nil {
+		return nil, err
+	}
 	ipamByNet[key] = a
-	return a
+	return a, nil
 }
 
 // ipam is a simple file-backed IP allocator.
@@ -618,21 +661,21 @@ type ipam struct {
 	bcU    uint32 // broadcast as uint32
 }
 
-func newIPAM(dir, cidr, gwStr string) *ipam {
+func newIPAM(dir, cidr, gwStr string) (*ipam, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		panic("ipam dir: " + err.Error())
+		return nil, fmt.Errorf("ipam dir: %w", err)
 	}
 	_, subnet, err := net.ParseCIDR(cidr)
 	if err != nil {
-		panic("ipam cidr: " + err.Error())
+		return nil, fmt.Errorf("ipam cidr: %w", err)
 	}
 	ip4 := subnet.IP.To4()
 	if ip4 == nil {
-		panic("ipam cidr: IPv4 only")
+		return nil, fmt.Errorf("ipam cidr: IPv4 only")
 	}
 	gw := net.ParseIP(strings.TrimSpace(gwStr)).To4()
 	if gw == nil {
-		panic("ipam gateway: invalid IPv4 " + gwStr)
+		return nil, fmt.Errorf("ipam gateway: invalid IPv4 %s", gwStr)
 	}
 	gwU := ipToU32(gw)
 	base := ipToU32(ip4)
@@ -642,7 +685,7 @@ func newIPAM(dir, cidr, gwStr string) *ipam {
 	// The gateway strictly between network and broadcast address also
 	// guarantees a subnet of at least /30.
 	if gwU <= base || gwU >= broadcast {
-		panic(fmt.Sprintf("ipam: gateway %s not inside subnet %s", gwStr, cidr))
+		return nil, fmt.Errorf("ipam: gateway %s not inside subnet %s", gwStr, cidr)
 	}
 	return &ipam{
 		dir:    dir,
@@ -650,7 +693,7 @@ func newIPAM(dir, cidr, gwStr string) *ipam {
 		gwU:    gwU,
 		baseU:  base,
 		bcU:    broadcast,
-	}
+	}, nil
 }
 
 func (a *ipam) allocate(containerID string) (string, error) {
@@ -1243,6 +1286,15 @@ func linkIndex(name string) (int, error) {
 // linkExists returns true if the named interface exists.
 func linkExists(name string) bool {
 	_, err := net.InterfaceByName(name)
+	return err == nil
+}
+
+// isLinuxBridge reports whether name is a Linux bridge (sysfs bridge/ present).
+func isLinuxBridge(name string) bool {
+	if name == "" || strings.Contains(name, "/") || strings.Contains(name, "\x00") {
+		return false
+	}
+	_, err := os.Stat(filepath.Join("/sys/class/net", name, "bridge"))
 	return err == nil
 }
 
