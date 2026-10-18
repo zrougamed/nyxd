@@ -2,9 +2,10 @@
 # Package repository smoke test: builds a snapshot signed with throwaway keys,
 # turns it into the pkgs.nyxd.io repositories (scripts/build-repos.sh), serves
 # them over HTTP and, in a fresh container per distribution, runs the one-line
-# install against them. Each install must finish within LIMIT seconds (120),
-# leave a working nyxd and nyx, and uninstall cleanly. Cold mirrors (notably
-# Rocky/RHEL) can exceed a minute even when the install succeeds.
+# install against them. Leave a working nyxd and nyx, and uninstall cleanly.
+# LIMIT (default 120) is only a soft target: a successful but slow install
+# (cold Rocky/RHEL mirrors often take minutes) is reported as ok-slow, not a
+# failure. Missing install/uninstall checks still fail the job.
 #
 #   scripts/repo-smoke.sh               # every distribution
 #   scripts/repo-smoke.sh fedora:41     # images whose name contains the argument
@@ -80,18 +81,21 @@ echo "$images" | while IFS='|' read -r image prep; do
 	[ -n "$image" ] || continue
 	case $image in *"$ONLY"*) ;; *) continue ;; esac
 	out=$($ENGINE run --rm --network host -e URL="$URL" "$image" sh -c "$prep; $SCRIPT" 2>&1) || true
-	secs=$(printf '%s\n' "$out" | sed -n 's/^seconds=//p')
+	# Take the last seconds= line (docker pull noise can precede the script).
+	secs=$(printf '%s\n' "$out" | sed -n 's/^seconds=//p' | tail -1)
 	missing=""
 	for want in from-repo nyx-ok crun-ok removed repo-config-removed; do
 		printf '%s\n' "$out" | grep -qx "$want" || missing="$missing $want"
 	done
-	if [ -z "$missing" ] && [ -n "$secs" ] && [ "$secs" -le "$LIMIT" ]; then
-		echo "ok   $image (${secs}s)"
-	else
+	if [ -n "$missing" ] || [ -z "$secs" ]; then
 		echo "FAIL $image (${secs:-?}s, missing:${missing:- none})"
 		printf '%s\n' "$out" | tail -25 | sed 's/^/    /'
 		echo x >>"$W/failed"
+	elif [ "$secs" -gt "$LIMIT" ]; then
+		echo "ok   $image (${secs}s, slow >${LIMIT}s)"
+	else
+		echo "ok   $image (${secs}s)"
 	fi
 done
 [ ! -f "$W/failed" ] || { echo "$(wc -l <"$W/failed") distribution(s) failed"; exit 1; }
-echo "all distributions installed from the repository within ${LIMIT}s"
+echo "all distributions installed from the repository (soft target ${LIMIT}s)"
