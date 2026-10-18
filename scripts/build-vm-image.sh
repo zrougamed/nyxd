@@ -130,6 +130,8 @@ $DOCKER run --rm --platform "linux/$ARCH" -v "$WORK:/work" "docker.io/library/al
 '
 
 TAR="$OUT/nyx-vm-$ARCH.tar.gz"
+# Prefer a GNU sparse member for rootfs.img (small archive). Older nyx clients
+# only accepted TypeReg; current nyx also accepts TypeGNUSparse ('S').
 tar --sparse -C "$WORK/out" -cf - vmlinuz initramfs rootfs.img cmdline | gzip -n -9 >"$TAR"
 (cd "$OUT" && sha256sum "nyx-vm-$ARCH.tar.gz" >"nyx-vm-$ARCH.tar.gz.sha256")
 echo "built $TAR ($(du -h "$TAR" | cut -f1))"
