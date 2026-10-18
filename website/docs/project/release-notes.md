@@ -1,5 +1,14 @@
 # Release notes
 
+## 1.1.2
+
+### Fixed
+
+- macOS: after a failed start or an upgrade, a leftover `run.pid` made `nyx machine run`
+  exit with "already running", so vfkit never restarted and `nyx` fell back to
+  `/run/nyxd/nyxd.sock`. `nyx machine start` and upgrades now replace a supervisor that
+  is not answering.
+
 ## 1.1.1
 
 ### Fixed

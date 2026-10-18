@@ -112,7 +112,7 @@ func TestVfkitStartSpawnsRun(t *testing.T) {
 	if err := m.start(); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(lctlLog); !strings.Contains(string(b), "kickstart gui/") {
+	if b, _ := os.ReadFile(lctlLog); !strings.Contains(string(b), "kickstart") || !strings.Contains(string(b), "gui/") {
 		t.Errorf("launchctl calls:\n%s", b)
 	}
 	out, _, _ = nyx(t, "machine", "logs", "--name", "bg")
@@ -404,20 +404,21 @@ func TestVfkitAutostartErrors(t *testing.T) {
 	if darwinMachineSocket() != "" {
 		t.Error("socket before init")
 	}
+	if err := m.autostart(true); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("autostart before init: %v", err)
+	}
 	dir, _ := m.dir()
-	os.MkdirAll(dir, 0o700)              //nolint:errcheck
-	os.WriteFile(m.socket(), nil, 0o600) //nolint:errcheck
+	os.MkdirAll(dir, 0o700) //nolint:errcheck
+	if darwinMachineSocket() != "" {
+		t.Error("socket without config")
+	}
+	m.saveConfig(vmConfig{CPUs: 1}) //nolint:errcheck
 	if got := darwinMachineSocket(); got != m.socket() {
 		t.Errorf("darwinMachineSocket = %q", got)
 	}
 	if vmIP("02:00:00:00:00:01") != "" {
 		t.Error("vmIP without leases")
 	}
-
-	if err := m.autostart(true); err == nil || !strings.Contains(err.Error(), "does not exist") {
-		t.Errorf("autostart before init: %v", err)
-	}
-	m.saveConfig(vmConfig{CPUs: 1}) //nolint:errcheck
 	pl, _ := m.plistPath()
 	t.Setenv("NYX_FAKE_LAUNCHCTL_FAIL", "1")
 	if err := m.autostart(true); err == nil || !strings.Contains(err.Error(), "Bootstrap failed") {

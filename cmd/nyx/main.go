@@ -288,6 +288,9 @@ func explainDialError(err error) error {
 	}
 	switch {
 	case errors.Is(err, syscall.ENOENT), errors.Is(err, syscall.ECONNREFUSED):
+		if runtime.GOOS == "darwin" && darwinMachineSocket() != "" {
+			return fmt.Errorf("cannot reach nyxd at %s: is the nyx machine running? (nyx machine start)", op.Addr)
+		}
 		return fmt.Errorf("cannot reach nyxd at %s: is it running? (e.g. sudo systemctl start nyxd; another socket: -socket or NYXD_SOCKET)", op.Addr)
 	case errors.Is(err, syscall.EACCES):
 		return fmt.Errorf("permission denied on %s: join the nyx group (sudo usermod -aG nyx \"$USER\", then log in again) or use sudo", op.Addr)
