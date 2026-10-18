@@ -3,6 +3,7 @@
 | Doc | Purpose |
 |-----|---------|
 | [INSTALL.md](INSTALL.md) | Linux install, systemd, cross-build |
+| [platform-matrix.md](platform-matrix.md) | Feature matrix per OS / rootful / rootless / macOS & Windows machines |
 | [packaging.md](packaging.md) | Release packages (deb, rpm, apk, Arch, macOS, Windows), GPG signing, verifying downloads |
 | [build.md](build.md) | `nyx build`: Dockerfile builds without Docker/BuildKit, cache, supported syntax |
 | [images.md](images.md) | `nyx tag` / `push` / `save` / `load`: registries, archives, credentials |

@@ -85,6 +85,8 @@ releases. The package repositories keep the last five releases.
 | | |
 |-|-|
 | Linux | kernel and cgroup v2 requirements in [kernel-requirements.md](/docs/operations/kernel-requirements); x86_64 and arm64 |
-| Distributions with packages | Debian, Ubuntu, Fedora, RHEL and compatible, openSUSE / SLES, Alpine, Arch (see [INSTALL.md](/docs/getting-started/install)) |
-| macOS | `nyx` with `nyx machine` (Apple silicon and Intel), see [macos.md](/docs/getting-started/macos) |
-| Windows | `nyx` with `nyx machine` on WSL 2 (x64 and arm64), see [windows.md](/docs/getting-started/windows) |
+| Distributions with packages | Debian, Ubuntu, Fedora, RHEL and compatible, openSUSE / SLES, Alpine, Arch (see [Install](/docs/getting-started/install)) |
+| macOS | `nyx` with `nyx machine` (Apple silicon and Intel), see [macOS](/docs/getting-started/macos) |
+| Windows | `nyx` with `nyx machine` on WSL 2 (x64 and arm64), see [Windows](/docs/getting-started/windows) |
+
+Which features apply in each environment (rootful, rootless, macOS VM, Windows WSL): [Platform matrix](/docs/getting-started/platform-matrix).

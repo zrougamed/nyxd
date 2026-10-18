@@ -2,7 +2,7 @@
 
 **nyxd** runs on **any** Linux host that meets the kernel and tooling requirements below (desktop, VM, VPS, edge box, ARM or x86). It was first written for a home **Raspberry Pi** so containers could run without Docker or a heavy daemon; that same footprint applies everywhere you want a minimal stack.
 
-Typical setups: run **nyxd** on the host and **nyx** locally, or call the Unix-socket HTTP API from another machine you trust.
+Typical setups: run **nyxd** on the host and **nyx** locally, or call the Unix-socket HTTP API from another machine you trust. For macOS/Windows machines and rootful vs rootless feature differences, see [platform-matrix.md](platform-matrix.md).
 
 ## What you need on each Linux host
 

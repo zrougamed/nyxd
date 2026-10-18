@@ -88,3 +88,5 @@ releases. The package repositories keep the last five releases.
 | Distributions with packages | Debian, Ubuntu, Fedora, RHEL and compatible, openSUSE / SLES, Alpine, Arch (see [INSTALL.md](INSTALL.md)) |
 | macOS | `nyx` with `nyx machine` (Apple silicon and Intel), see [macos.md](macos.md) |
 | Windows | `nyx` with `nyx machine` on WSL 2 (x64 and arm64), see [windows.md](windows.md) |
+
+Which features apply in each environment (rootful, rootless, macOS VM, Windows WSL): [platform-matrix.md](platform-matrix.md).

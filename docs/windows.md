@@ -3,6 +3,8 @@
 Linux images need a Linux kernel, so on Windows `nyxd` runs in a small **WSL2 distro** and `nyx.exe` talks to
 it from Windows. There is no Docker Desktop, no TCP listener, and no admin right needed once WSL is enabled.
 
+Feature availability vs Linux rootful/rootless: [platform-matrix.md](platform-matrix.md).
+
 ```powershell
 nyx machine init          # import the nyx distro (downloads the release matching nyx.exe)
 nyx machine start         # start nyxd in it

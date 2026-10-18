@@ -122,7 +122,8 @@ logs a warning).
 **Security / DNS / ulimits:** optional `apparmor_profile` (host-loaded profile; ignored when AppArmor is absent),
 `seccomp_profile`, `ulimits` (e.g. `nofile`), and `dns:` (IPv4 nameservers). A volume at `/etc/resolv.conf`
 is the only resolv mount for that service. Compose `networks` with both `bridge` and `subnet` use a dedicated
-native bridge; services that omit `networks` stay on `nyxbr0`.
+native bridge; services that omit `networks` stay on `nyxbr0`. What applies on Linux vs macOS/Windows machines:
+[Platform matrix](/docs/getting-started/platform-matrix).
 
 **Docker socket / DinD:** nyxd's socket is not the Docker API. To feed legacy tools that need
 `/var/run/docker.sock`, bind-mount the host Docker socket, or run a DinD image privileged — see

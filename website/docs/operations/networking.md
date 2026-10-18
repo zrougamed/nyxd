@@ -21,7 +21,7 @@ Set **`NYXD_GATEWAY_IP`** (and **`NYXD_CONTAINER_SUBNET`**) to match the bridge 
 
 **Compose (native):** a service may set `dns:` (IPv4 nameservers) or mount `/etc/resolv.conf`; either replaces the gateway resolv file. A `networks:` entry with both `bridge:` and `subnet:` gets its own host bridge and an embedded DNS zone on that bridge's gateway; services that omit `networks` stay on `nyxbr0`. See [Native network](/docs/operations/native-network).
 
-**AppArmor:** `apparmor_profile` is applied only when the host has AppArmor and the named profile is loaded. On SELinux-only or Alpine hosts the field is ignored (warning logged) so the same compose file does not fail crun.
+**AppArmor:** `apparmor_profile` is applied only when the host has AppArmor and the named profile is loaded. On SELinux-only or Alpine hosts the field is ignored (warning logged) so the same compose file does not fail crun. macOS/Windows hosts have no AppArmor (the CLI still runs; the runtime is Linux inside `nyx machine`) — see [Platform matrix](/docs/getting-started/platform-matrix).
 
 **Control API:** `GET /v1/network` returns the active driver, default bridge, gateway, and subnet.
 
