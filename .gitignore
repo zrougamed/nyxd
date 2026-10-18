@@ -3,3 +3,8 @@ bin/
 coverage/
 dist/
 dist-extra/
+# Built CLI binaries (never commit; use make / goreleaser)
+/nyx
+/nyx.exe
+/nyxd
+/nyxd.exe
