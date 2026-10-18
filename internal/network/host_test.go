@@ -158,6 +158,27 @@ func TestForwardErrors(t *testing.T) {
 	}
 }
 
+func TestHostBackendSetupRollback(t *testing.T) {
+	busy := freePort(t, "tcp")
+	ln, err := net.Listen("tcp", "127.0.0.1:"+itoa(busy))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	okPort := freePort(t, "tcp")
+	b := NewHostBackend()
+	_, err = b.Setup(context.Background(), "roll", "", []PortMapping{
+		{HostPort: okPort, ContainerPort: okPort + 1},
+		{HostPort: busy, ContainerPort: busy + 1},
+	}, nil)
+	if err == nil {
+		t.Fatal("expected bind failure on second forwarder")
+	}
+	if len(b.Forwarded("roll")) != 0 {
+		t.Fatalf("rollback left forwards: %v", b.Forwarded("roll"))
+	}
+}
+
 func itoa(n int) string { return strconv.Itoa(n) }
 
 func syscallEACCES() error { return syscall.EACCES }

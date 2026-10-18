@@ -27,6 +27,7 @@ const sidebars: SidebarsConfig = {
         'operations/rootless',
         'operations/networking',
         'operations/native-network',
+        'operations/docker-socket',
         'operations/image-layers',
         'operations/kernel-requirements',
         'operations/qemu-alpine',

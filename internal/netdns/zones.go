@@ -17,6 +17,9 @@ type Zones struct {
 	log       *slog.Logger
 	defaultGW string
 	upstreams []string
+	// udpPort is the listen port (default "53"). Tests may set a high port
+	// so coverage does not require CAP_NET_BIND_SERVICE.
+	udpPort string
 
 	mu    sync.Mutex
 	zones map[string]*zone // gateway IPv4 string → zone
@@ -48,8 +51,20 @@ func NewZones(log *slog.Logger, defaultGW net.IP) *Zones {
 		log:       log,
 		defaultGW: gw,
 		upstreams: up,
+		udpPort:   "53",
 		zones:     make(map[string]*zone),
 	}
+}
+
+// SetUDPPort overrides the DNS listen port (tests only; production stays on 53).
+func (z *Zones) SetUDPPort(port string) {
+	port = strings.TrimSpace(port)
+	if port == "" {
+		port = "53"
+	}
+	z.mu.Lock()
+	z.udpPort = port
+	z.mu.Unlock()
 }
 
 // Register publishes host on the default gateway zone.
@@ -151,7 +166,11 @@ func (z *Zones) startZone(zn *zone) error {
 	if zn.started {
 		return zn.err
 	}
-	addr := net.JoinHostPort(zn.gw.String(), "53")
+	port := z.udpPort
+	if port == "" {
+		port = "53"
+	}
+	addr := net.JoinHostPort(zn.gw.String(), port)
 	pc, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return fmt.Errorf("embedded dns listen %s: %w", addr, err)

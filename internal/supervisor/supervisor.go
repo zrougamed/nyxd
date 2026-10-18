@@ -822,6 +822,7 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		log.Warn("cgroups unavailable (rootless without delegation): resource limits are not applied")
 		resources = nil
 	}
+	aaProfile := resolveApparmorProfile(spec.ApparmorProfile, log)
 	_, err = bundle.Generate(bundleDir, bundle.Options{
 		ContainerID:     spec.ID,
 		RootFS:          rootFS,
@@ -837,7 +838,7 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		ExtraMounts:     extraMounts,
 		ResolvConfPath:  resolvPath,
 		SeccompProfile:  spec.SeccompProfile,
-		ApparmorProfile: spec.ApparmorProfile,
+		ApparmorProfile: aaProfile,
 		CapAdd:          spec.CapAdd,
 		CapDrop:         spec.CapDrop,
 		Privileged:      spec.Privileged,

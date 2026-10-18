@@ -121,6 +121,36 @@ func addrsIn(t *testing.T, nsPath, ifname string) []string {
 	return out
 }
 
+func TestNativeBridgeIsolation(t *testing.T) {
+	if !inNS(t) {
+		return
+	}
+	ctx := context.Background()
+	m := NewManager(quiet)
+	ns1, ns2 := newNetNS(t), newNetNS(t)
+	optA := &network.SetupOptions{Bridge: "nyxbr-a", Subnet: "10.91.0.0/16", Gateway: "10.91.0.1"}
+	optB := &network.SetupOptions{Bridge: "nyxbr-b", Subnet: "10.92.0.0/16", Gateway: "10.92.0.1"}
+	if _, err := m.Setup(ctx, "a", ns1, nil, optA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Setup(ctx, "b", ns2, nil, optB); err != nil {
+		t.Fatal(err)
+	}
+	rs := ruleset(t)
+	for _, want := range []string{
+		`nyxd-bridge-iso-nyxbr-a-nyxbr-b`,
+		`nyxd-bridge-iso-nyxbr-b-nyxbr-a`,
+	} {
+		if !strings.Contains(rs, want) {
+			t.Errorf("ruleset lacks %q:\n%s", want, rs)
+		}
+	}
+	// Second ensure is idempotent (existing comments → continue).
+	ensureBridgeIsolation(bridgeConf{Bridge: "nyxbr-a", Subnet: "10.91.0.0/16", Gateway: "10.91.0.1"}, quiet)
+	_ = m.Teardown(ctx, "a", ns1)
+	_ = m.Teardown(ctx, "b", ns2)
+}
+
 func TestNativeSetupTeardown(t *testing.T) {
 	if !inNS(t) {
 		return

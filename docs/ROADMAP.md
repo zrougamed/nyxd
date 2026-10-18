@@ -122,7 +122,8 @@ major distribution.
 - [x] **Supply chain** — every release signed (GPG); govulncheck, Trivy and Grype in CI; pinned
       actions and tool versions.
 - [ ] **Read-only root filesystem by default** — with tmpfs for `/tmp` and `/run`.
-- [ ] **AppArmor** profile.
+- [x] **AppArmor** profile (`apparmor_profile` compose key; skipped when AppArmor is unavailable).
+- [ ] **Docker API shim** on a socket for legacy `docker.sock` clients (today: mount host Docker socket or DinD; see [docker-socket.md](docker-socket.md)).
 - [ ] **Rootless resource limits** — cgroup v2 delegation (limits are dropped rootless today).
 - [ ] **Socket peer checks** — beyond file permissions.
 
