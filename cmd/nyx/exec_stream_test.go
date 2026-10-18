@@ -87,3 +87,25 @@ func TestMaybeExecShellHint_noFalsePositiveOnGeneric255(t *testing.T) {
 		t.Fatalf("expected unchanged error, got %v", out)
 	}
 }
+
+func TestRunFailureFromTail(t *testing.T) {
+	err := runFailureFromTail([]byte("x\nnyxd: run: container exited while starting\n"))
+	if err == nil || err.Error() != "container exited while starting" {
+		t.Fatalf("got %v", err)
+	}
+	if runFailureFromTail([]byte("no marker")) != nil {
+		t.Fatal("expected nil")
+	}
+}
+
+func TestMaybeRunShellHint(t *testing.T) {
+	err := errors.New("container exited while starting")
+	tail := []byte("executable file `bash` not found in $PATH\n")
+	out := maybeRunShellHint(err, []string{"bash"}, "alpine", tail)
+	if !errors.Is(out, errExecReported) {
+		t.Fatalf("got %v", out)
+	}
+	if maybeRunShellHint(err, []string{"sh"}, "alpine", tail) != err {
+		t.Fatal("sh should be unchanged")
+	}
+}

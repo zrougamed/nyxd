@@ -590,13 +590,43 @@ func doRunAttached(socket string, o runOpts) error {
 	}
 	tailRing := &execTailRing{}
 	_, copyErr := io.Copy(io.MultiWriter(tailRing, os.Stdout), resp.Body)
-	if ferr := execFailureFromTail(tailRing.Bytes()); ferr != nil {
+	tail := tailRing.Bytes()
+	if ferr := runFailureFromTail(tail); ferr != nil {
 		if strings.Contains(ferr.Error(), "exit status 130") || strings.Contains(ferr.Error(), "signal: interrupt") {
 			return nil
 		}
-		return ferr
+		return maybeRunShellHint(ferr, o.cmdArgs, o.image, tail)
 	}
-	return copyErr
+	if copyErr != nil {
+		return maybeRunShellHint(copyErr, o.cmdArgs, o.image, tail)
+	}
+	return maybeRunShellHint(nil, o.cmdArgs, o.image, tail)
+}
+
+// maybeRunShellHint prints a short tip when init is bash but the image has none (e.g. alpine).
+func maybeRunShellHint(err error, argv []string, image string, tail []byte) error {
+	if len(argv) < 1 {
+		return err
+	}
+	base := strings.ToLower(filepath.Base(strings.TrimSpace(argv[0])))
+	if base != "bash" {
+		return err
+	}
+	low := strings.ToLower(string(tail))
+	if err != nil {
+		low += "\n" + strings.ToLower(err.Error())
+	}
+	if !strings.Contains(low, "executable file") &&
+		!strings.Contains(low, "not found in $path") &&
+		!strings.Contains(low, "no such file") {
+		return err
+	}
+	img := strings.TrimSpace(image)
+	if img == "" {
+		img = "<image>"
+	}
+	fmt.Fprintf(os.Stderr, "nyx: no bash in this image; try: nyx run --rm -it %s sh\n", img)
+	return errExecReported
 }
 
 // killRunContainer SIGKILLs the container of an interrupted foreground run.
@@ -719,9 +749,10 @@ func execErrIsBenignUserInterrupt(err error, opts execCLIOptions) bool {
 // tail is the raw exec byte stream (PTY + nyxd trailer); crun often prints the real reason
 // there while failureFromTail only captures the short "nyxd: exec: crun exec: exit status 255" line.
 func maybeExecShellHint(err error, argv []string, containerID string, tail []byte) error {
-	if err == nil || len(argv) == 0 || containerID == "" {
+	if err == nil || len(argv) == 0 {
 		return err
 	}
+	_ = containerID
 	base := strings.ToLower(filepath.Base(strings.TrimSpace(argv[0])))
 	if base != "bash" {
 		return err

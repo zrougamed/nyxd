@@ -15,6 +15,10 @@ var errExecReported = errors.New("exec error already printed")
 // when crun exec fails (HTTP 200 was already sent so the client can stream stdout).
 const execFailureMarker = "nyxd: exec:"
 
+// runFailureMarker is the attached-run counterpart (nyx run -it) when init fails
+// after HTTP 200 was already sent.
+const runFailureMarker = "nyxd: run:"
+
 // execTailRing records the tail of the raw exec byte stream for [execFailureFromTail].
 type execTailRing struct {
 	max int
@@ -69,7 +73,7 @@ func (f *nyxdExecTrailerFilter) emitLine(line []byte) error {
 		return nil
 	}
 	low := bytes.ToLower(bytes.TrimSpace(raw))
-	if bytes.HasPrefix(low, []byte("nyxd: exec:")) {
+	if bytes.HasPrefix(low, []byte("nyxd: exec:")) || bytes.HasPrefix(low, []byte("nyxd: run:")) {
 		return nil
 	}
 	_, err := f.dst.Write(line)
@@ -118,7 +122,7 @@ func (f *bashExecCleanFilter) handleLine(line []byte) error {
 		return nil
 	}
 	low := bytes.ToLower(bytes.TrimSpace(raw))
-	if bytes.HasPrefix(low, []byte("nyxd: exec:")) {
+	if bytes.HasPrefix(low, []byte("nyxd: exec:")) || bytes.HasPrefix(low, []byte("nyxd: run:")) {
 		return nil
 	}
 	if bytes.Contains(low, []byte("executable file")) && bytes.Contains(low, []byte("bash")) {
@@ -161,7 +165,15 @@ func (f *bashExecCleanFilter) Flush() error {
 }
 
 func execFailureFromTail(tail []byte) error {
-	idx := bytes.LastIndex(tail, []byte(execFailureMarker))
+	return streamFailureFromTail(tail, execFailureMarker, "exec failed")
+}
+
+func runFailureFromTail(tail []byte) error {
+	return streamFailureFromTail(tail, runFailureMarker, "run failed")
+}
+
+func streamFailureFromTail(tail []byte, marker, emptyMsg string) error {
+	idx := bytes.LastIndex(tail, []byte(marker))
 	if idx < 0 {
 		return nil
 	}
@@ -169,9 +181,9 @@ func execFailureFromTail(tail []byte) error {
 	if nl := bytes.IndexByte(line, '\n'); nl >= 0 {
 		line = line[:nl]
 	}
-	msg := strings.TrimSpace(strings.TrimPrefix(string(line), execFailureMarker))
+	msg := strings.TrimSpace(strings.TrimPrefix(string(line), marker))
 	if msg == "" {
-		return errors.New("exec failed")
+		return errors.New(emptyMsg)
 	}
 	return errors.New(msg)
 }
