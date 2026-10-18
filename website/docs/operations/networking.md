@@ -19,6 +19,10 @@ nyxd can run a small **embedded DNS** server on the bridge gateway (UDP port 53,
 
 Set **`NYXD_GATEWAY_IP`** (and **`NYXD_CONTAINER_SUBNET`**) to match the bridge your CNI plugin uses if it differs from the native defaults.
 
+**Compose (native):** a service may set `dns:` (IPv4 nameservers) or mount `/etc/resolv.conf`; either replaces the gateway resolv file. A `networks:` entry with both `bridge:` and `subnet:` gets its own host bridge and an embedded DNS zone on that bridge's gateway; services that omit `networks` stay on `nyxbr0`. See [native-network.md](native-network.md).
+
+**Control API:** `GET /v1/network` returns the active driver, default bridge, gateway, and subnet.
+
 ## Default: native (no `/opt/cni/bin`)
 
 By default, `nyxd` runs with:
@@ -49,7 +53,7 @@ Native networking is implemented under `internal/network/native/` (bridge, veth,
 ## Host network (`-net-driver=host`)
 
 Containers share the host network namespace: no bridge, no NAT, no netns, no extra binaries. It is the
-default (and only) driver for [rootless nyxd](/docs/operations/rootless), and can be selected explicitly when rootful.
+default (and only) driver for [rootless nyxd](rootless.md), and can be selected explicitly when rootful.
 
 - `-p/--publish` is ignored with a warning; services bind host ports directly.
 - The host `/etc/resolv.conf` is bind-mounted read-only; embedded DNS (`-dns`) is off.
@@ -114,5 +118,5 @@ The packaged service (`packaging/linux/nyxd.service`) runs the default **native*
 ## Related docs
 
 - [Native network internals](native-network.md) — bridge, IPAM, nftables, kernel modules
-- [Kernel requirements](/docs/operations/kernel-requirements) — modules and sysctl
-- [Roadmap](/docs/project/roadmap) — delivery checklist including `-net-driver`
+- [Kernel requirements](kernel-requirements.md) — modules and sysctl
+- [Roadmap](ROADMAP.md) — delivery checklist including `-net-driver`

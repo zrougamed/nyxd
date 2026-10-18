@@ -220,6 +220,9 @@ func TestServerWithoutBackends(t *testing.T) {
 	if code, body := do("GET", "/v1/version", ""); code != 200 || !strings.Contains(body, `"version":"v1"`) {
 		t.Errorf("version: %d %s", code, body)
 	}
+	if code, body := do("GET", "/v1/network", ""); code != 200 || !strings.Contains(body, `"driver"`) {
+		t.Errorf("network: %d %s", code, body)
+	}
 	if code, _ := do("GET", "/v1/containers/x/logs", ""); code != 404 {
 		t.Errorf("logs without file: %d", code)
 	}

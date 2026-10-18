@@ -3,6 +3,7 @@ package compose
 import (
 	"context"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -118,6 +119,21 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 			return nil, fmt.Errorf("service %q resources: %w", name, err)
 		}
 
+		rlimits, err := BundleRlimitsFromUlimits(svc.Ulimits)
+		if err != nil {
+			return nil, fmt.Errorf("service %q ulimits: %w", name, err)
+		}
+
+		bridgeNet, err := ResolveServiceBridge(stack, svc)
+		if err != nil {
+			return nil, fmt.Errorf("service %q networks: %w", name, err)
+		}
+
+		dnsServers, err := validateDNSServers(svc.DNS)
+		if err != nil {
+			return nil, fmt.Errorf("service %q dns: %w", name, err)
+		}
+
 		env, err := ServiceEnv(&svc, meta.ComposeDir)
 		if err != nil {
 			return nil, fmt.Errorf("service %q: %w", name, err)
@@ -141,13 +157,19 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 			Healthcheck:        hc,
 			ExtraMounts:        mounts,
 			EmbedDNS:           embedDNS,
+			DNS:                dnsServers,
 			ComposeInternalNet: internalNet,
+			NetworkBridge:      bridgeNet.Bridge,
+			NetworkSubnet:      bridgeNet.Subnet,
+			NetworkGateway:     bridgeNet.Gateway,
 			Resources:          res,
 			Privileged:         svc.Privileged,
 			SeccompProfile:     ResolveSeccompProfilePath(meta.ComposeDir, svc.SeccompProfile),
+			ApparmorProfile:    strings.TrimSpace(svc.ApparmorProfile),
 			CapAdd:             append([]string(nil), svc.CapAdd...),
 			CapDrop:            append([]string(nil), svc.CapDrop...),
 			NoNewPrivileges:    svc.NoNewPrivileges,
+			Rlimits:            rlimits,
 		}
 		out = append(out, spec)
 	}
@@ -182,6 +204,25 @@ func composeArgs(svc *Service, cfg *oci.ImageConfig) []string {
 	out := append([]string(nil), ep...)
 	out = append(out, cmd...)
 	return out
+}
+
+func validateDNSServers(servers []string) ([]string, error) {
+	if len(servers) == 0 {
+		return nil, nil
+	}
+	out := make([]string, 0, len(servers))
+	for _, s := range servers {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		ip := net.ParseIP(s)
+		if ip == nil || ip.To4() == nil {
+			return nil, fmt.Errorf("invalid IPv4 nameserver %q", s)
+		}
+		out = append(out, ip.To4().String())
+	}
+	return out, nil
 }
 
 func composeRestartPolicy(r RestartPolicy) supervisor.RestartPolicy {

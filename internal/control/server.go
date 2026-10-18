@@ -136,6 +136,7 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/ping", s.handlePing)
 	mux.HandleFunc("GET /v1/version", s.handleVersion)
+	mux.HandleFunc("GET /v1/network", s.handleNetwork)
 	mux.HandleFunc("GET /v1/containers", s.handleContainers)
 	mux.HandleFunc("POST /v1/containers/{id}/exec", s.handleExec)
 	mux.HandleFunc("POST /v1/containers/{id}/stop", s.handleContainerStop)
@@ -203,6 +204,11 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 		"commit":    s.gitCommit,
 		"buildDate": s.buildDate,
 	})
+}
+
+func (s *Server) handleNetwork(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(network.ActiveIdentity(s.netDriver))
 }
 
 func (s *Server) handleContainers(w http.ResponseWriter, r *http.Request) {

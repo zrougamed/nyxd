@@ -108,6 +108,56 @@ func TestBuildSpecHostNetworkRootless(t *testing.T) {
 	}
 }
 
+func TestGenerateApparmorAndUlimits(t *testing.T) {
+	dir := t.TempDir()
+	_, err := Generate(dir, Options{
+		ContainerID:     "c",
+		RootFS:          dir,
+		Args:            []string{"/bin/true"},
+		ApparmorProfile: "gh-buildkit",
+		Rlimits: []Rlimit{
+			{Type: "RLIMIT_NOFILE", Soft: 65536, Hard: 65536},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec Spec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if spec.Process.ApparmorProfile != "gh-buildkit" {
+		t.Fatalf("apparmor=%q", spec.Process.ApparmorProfile)
+	}
+	if len(spec.Process.Rlimits) != 1 || spec.Process.Rlimits[0].Soft != 65536 {
+		t.Fatalf("rlimits=%+v", spec.Process.Rlimits)
+	}
+}
+
+func TestAppendMountsResolvWins(t *testing.T) {
+	base := resolvThenDefault("/host/resolv", false)
+	extra := []Mount{{
+		Type: "bind", Source: "/caller/resolv", Destination: "/etc/resolv.conf",
+		Options: []string{"rbind", "ro"},
+	}}
+	got := appendMounts(base, extra)
+	var resolv int
+	var src string
+	for _, m := range got {
+		if filepath.Clean(m.Destination) == "/etc/resolv.conf" {
+			resolv++
+			src = m.Source
+		}
+	}
+	if resolv != 1 || src != "/caller/resolv" {
+		t.Fatalf("resolv mounts=%d src=%q", resolv, src)
+	}
+}
+
 func TestWithSwapLimit(t *testing.T) {
 	if got := withSwapLimit(nil); got != nil {
 		t.Fatalf("nil resources: got %+v", got)

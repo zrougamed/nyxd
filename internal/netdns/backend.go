@@ -26,7 +26,9 @@ func NewBackend(dnsMode, netDriver string, log *slog.Logger, gw net.IP) Backend 
 	case "off", "cni":
 		return Noop{}
 	case "embedded", "auto":
-		return NewEmbedded(log, gw)
+		// Zones supports one UDP/53 listener per bridge gateway so compose
+		// networks with their own bridges keep isolated name spaces.
+		return NewZones(log, gw)
 	default:
 		return Noop{}
 	}
