@@ -55,7 +55,7 @@ Native networking is implemented under `internal/network/native/` (bridge, veth,
 ## Host network (`-net-driver=host`)
 
 Containers share the host network namespace: no bridge, no NAT, no netns, no extra binaries. It is the
-default (and only) driver for [rootless nyxd](rootless.md), and can be selected explicitly when rootful.
+default (and only) driver for [rootless nyxd](/docs/operations/rootless), and can be selected explicitly when rootful.
 
 - `-p/--publish` is ignored with a warning; services bind host ports directly.
 - The host `/etc/resolv.conf` is bind-mounted read-only; embedded DNS (`-dns`) is off.
@@ -121,5 +121,5 @@ The packaged service (`packaging/linux/nyxd.service`) runs the default **native*
 
 - [Native network internals](/docs/operations/native-network) — bridge, IPAM, nftables, kernel modules
 - [Docker sockets](/docs/operations/docker-socket) — host `docker.sock` mounts and DinD under nyxd
-- [Kernel requirements](kernel-requirements.md) — modules and sysctl
-- [Roadmap](ROADMAP.md) — delivery checklist including `-net-driver`
+- [Kernel requirements](/docs/operations/kernel-requirements) — modules and sysctl
+- [Roadmap](/docs/project/roadmap) — delivery checklist including `-net-driver`
