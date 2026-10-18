@@ -2,8 +2,9 @@
 # Package repository smoke test: builds a snapshot signed with throwaway keys,
 # turns it into the pkgs.nyxd.io repositories (scripts/build-repos.sh), serves
 # them over HTTP and, in a fresh container per distribution, runs the one-line
-# install against them. Each install must finish within LIMIT seconds (60),
-# leave a working nyxd and nyx, and uninstall cleanly.
+# install against them. Each install must finish within LIMIT seconds (120),
+# leave a working nyxd and nyx, and uninstall cleanly. Cold mirrors (notably
+# Rocky/RHEL) can exceed a minute even when the install succeeds.
 #
 #   scripts/repo-smoke.sh               # every distribution
 #   scripts/repo-smoke.sh fedora:41     # images whose name contains the argument
@@ -13,7 +14,7 @@ set -eu
 cd "$(dirname "$0")/.."
 ENGINE=${ENGINE:-docker}
 GORELEASER=${GORELEASER:-go run github.com/goreleaser/goreleaser/v2@v2.18.2}
-LIMIT=${LIMIT:-60}
+LIMIT=${LIMIT:-120}
 ONLY=${1:-}
 W=$(mktemp -d)
 HTTPD=""
