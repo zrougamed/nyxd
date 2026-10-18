@@ -1,0 +1,15 @@
+{
+  "name": "@faker-js/faker",
+  "version": "10.6.0",
+  "description": "v5-shaped API facade over @faker-js/faker@10.6.0 for postman-collection (GHSA-qxc2-j82w-r537)",
+  "license": "MIT",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./locale/en": "./locale/en.js",
+    "./locale/*": "./locale/en.js"
+  },
+  "dependencies": {
+    "@faker-js/faker-upstream": "npm:@faker-js/faker@10.6.0"
+  }
+}
