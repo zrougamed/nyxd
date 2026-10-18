@@ -147,8 +147,24 @@ func TestNativeBridgeIsolation(t *testing.T) {
 	}
 	// Second ensure is idempotent (existing comments → continue).
 	ensureBridgeIsolation(bridgeConf{Bridge: "nyxbr-a", Subnet: "10.91.0.0/16", Gateway: "10.91.0.1"}, quiet)
-	_ = m.Teardown(ctx, "a", ns1)
-	_ = m.Teardown(ctx, "b", ns2)
+	if err := m.Teardown(ctx, "a", ns1); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Teardown(ctx, "b", ns2); err != nil {
+		t.Fatal(err)
+	}
+	// No host veth / IPAM / bridge bookkeeping left behind.
+	for _, id := range []string{"a", "b"} {
+		if h, _ := vethNames(id); linkExists(h) {
+			t.Errorf("%s: host veth leaked", id)
+		}
+		if _, ok := forgetBridge(id); ok {
+			t.Errorf("%s: containerBridge entry leaked", id)
+		}
+	}
+	if m.IP("a") != "" || m.IP("b") != "" {
+		t.Fatalf("manager still tracks IPs: %v", m.Allocations())
+	}
 }
 
 func TestNativeSetupTeardown(t *testing.T) {

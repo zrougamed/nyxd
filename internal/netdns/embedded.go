@@ -112,6 +112,10 @@ func (e *Embedded) serve(w dns.ResponseWriter, r *dns.Msg) {
 	qname := strings.ToLower(q.Name)
 	e.mu.RLock()
 	ip, local := e.records[qname]
+	if local {
+		ip = append(net.IP(nil), ip...)
+	}
+	upstreams := append([]string(nil), e.upstreams...)
 	e.mu.RUnlock()
 	if local {
 		if q.Qtype != dns.TypeA {
@@ -126,7 +130,7 @@ func (e *Embedded) serve(w dns.ResponseWriter, r *dns.Msg) {
 		_ = w.WriteMsg(m)
 		return
 	}
-	if resp := e.forward(r); resp != nil {
+	if resp := e.forward(r, upstreams); resp != nil {
 		_ = w.WriteMsg(resp)
 		return
 	}
@@ -136,13 +140,13 @@ func (e *Embedded) serve(w dns.ResponseWriter, r *dns.Msg) {
 	_ = w.WriteMsg(m)
 }
 
-func (e *Embedded) forward(r *dns.Msg) *dns.Msg {
-	if len(e.upstreams) == 0 {
+func (e *Embedded) forward(r *dns.Msg, upstreams []string) *dns.Msg {
+	if len(upstreams) == 0 {
 		return nil
 	}
 	c := &dns.Client{Net: "udp", Timeout: 4 * time.Second}
 	req := r.Copy()
-	for _, addr := range e.upstreams {
+	for _, addr := range upstreams {
 		in, _, err := c.Exchange(req, addr)
 		if err != nil {
 			e.log.Debug("embedded dns forward", "upstream", addr, "err", err)

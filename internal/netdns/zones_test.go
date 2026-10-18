@@ -19,7 +19,7 @@ func TestZonesIsolationAndAPI(t *testing.T) {
 	_ = p2
 	z := NewZones(quiet, net.IPv4(127, 0, 0, 1))
 	z.SetUDPPort(strconv.Itoa(p1))
-	z.upstreams = nil
+	z.setUpstreams(nil)
 	defer z.Shutdown()
 
 	if err := z.Register("runner", "10.89.0.2"); err != nil {
@@ -82,17 +82,13 @@ func TestZonesIsolationAndAPI(t *testing.T) {
 	})}
 	go up.ActivateAndServe() //nolint:errcheck
 	defer up.Shutdown()      //nolint:errcheck
-	z.mu.Lock()
-	z.upstreams = []string{"127.0.0.1:1", upPC.LocalAddr().String()}
-	z.mu.Unlock()
+	z.setUpstreams([]string{"127.0.0.1:1", upPC.LocalAddr().String()})
 	if in := queryAt(t, srv1, "example.org", dns.TypeA); len(in.Answer) != 1 {
 		t.Fatalf("forward: %v", in.Answer)
 	}
 
 	// Clear upstreams so an unknown/deregistered name is not answered by forward.
-	z.mu.Lock()
-	z.upstreams = nil
-	z.mu.Unlock()
+	z.setUpstreams(nil)
 	if err := z.Deregister(" runner "); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +125,7 @@ func TestZonesServeFormatErrorAndStartOnce(t *testing.T) {
 	port := freeUDPPort(t)
 	z := NewZones(quiet, net.IPv4(127, 0, 0, 1))
 	z.SetUDPPort(strconv.Itoa(port))
-	z.upstreams = nil
+	z.setUpstreams(nil)
 	defer z.Shutdown()
 	if err := z.Register("a", "10.0.0.2"); err != nil {
 		t.Fatal(err)

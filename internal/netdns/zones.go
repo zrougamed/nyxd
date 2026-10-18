@@ -129,15 +129,23 @@ func (z *Zones) DeregisterOn(gateway, host string) error {
 }
 
 // Shutdown stops every gateway listener.
+// Servers are shut down after releasing z.mu so in-flight serveZone handlers
+// can finish their record lookups without deadlocking against dns.Server.Shutdown.
+// Listening can be started again by a later Register/RegisterOn.
 func (z *Zones) Shutdown() {
 	z.mu.Lock()
-	defer z.mu.Unlock()
+	servers := make([]*dns.Server, 0, len(z.zones))
 	for _, zn := range z.zones {
 		if zn.server != nil {
-			if err := zn.server.Shutdown(); err != nil {
-				z.log.Warn("embedded dns shutdown", "gw", zn.gw, "err", err)
-			}
+			servers = append(servers, zn.server)
 			zn.server = nil
+			zn.started = false
+		}
+	}
+	z.mu.Unlock()
+	for _, srv := range servers {
+		if err := srv.Shutdown(); err != nil {
+			z.log.Warn("embedded dns shutdown", "err", err)
 		}
 	}
 }
@@ -147,6 +155,14 @@ func (z *Zones) ensureZoneLocked(gw net.IP) (*zone, error) {
 	if zn, ok := z.zones[key]; ok {
 		if zn.err != nil {
 			return nil, zn.err
+		}
+		if !zn.started {
+			// Restart after Shutdown (or a prior failed listen that left started=false
+			// without err is not expected; startZone is idempotent when started).
+			zn.err = z.startZone(zn)
+			if zn.err != nil {
+				return nil, zn.err
+			}
 		}
 		return zn, nil
 	}
@@ -181,6 +197,7 @@ func (z *Zones) startZone(zn *zone) error {
 	srv := &dns.Server{PacketConn: pc, Handler: handler}
 	zn.server = srv
 	zn.started = true
+	zn.err = nil
 	go func() {
 		if err := srv.ActivateAndServe(); err != nil {
 			z.log.Error("embedded dns server exited", "addr", addr, "err", err)
@@ -203,6 +220,10 @@ func (z *Zones) serveZone(zn *zone, w dns.ResponseWriter, r *dns.Msg) {
 	qname := strings.ToLower(q.Name)
 	z.mu.Lock()
 	ip, local := zn.records[qname]
+	if local {
+		ip = append(net.IP(nil), ip...)
+	}
+	upstreams := append([]string(nil), z.upstreams...)
 	z.mu.Unlock()
 	if local {
 		if q.Qtype != dns.TypeA {
@@ -217,7 +238,7 @@ func (z *Zones) serveZone(zn *zone, w dns.ResponseWriter, r *dns.Msg) {
 		_ = w.WriteMsg(m)
 		return
 	}
-	if resp := z.forward(r); resp != nil {
+	if resp := z.forward(r, upstreams); resp != nil {
 		_ = w.WriteMsg(resp)
 		return
 	}
@@ -227,13 +248,13 @@ func (z *Zones) serveZone(zn *zone, w dns.ResponseWriter, r *dns.Msg) {
 	_ = w.WriteMsg(m)
 }
 
-func (z *Zones) forward(r *dns.Msg) *dns.Msg {
-	if len(z.upstreams) == 0 {
+func (z *Zones) forward(r *dns.Msg, upstreams []string) *dns.Msg {
+	if len(upstreams) == 0 {
 		return nil
 	}
 	c := &dns.Client{Net: "udp", Timeout: 4 * time.Second}
 	req := r.Copy()
-	for _, addr := range z.upstreams {
+	for _, addr := range upstreams {
 		in, _, err := c.Exchange(req, addr)
 		if err != nil {
 			z.log.Debug("embedded dns forward", "upstream", addr, "err", err)
@@ -244,6 +265,13 @@ func (z *Zones) forward(r *dns.Msg) *dns.Msg {
 		}
 	}
 	return nil
+}
+
+// setUpstreams replaces forwarders (tests only; production sets them in NewZones).
+func (z *Zones) setUpstreams(addrs []string) {
+	z.mu.Lock()
+	z.upstreams = append([]string(nil), addrs...)
+	z.mu.Unlock()
 }
 
 func parseGateway(gateway string) (net.IP, error) {
