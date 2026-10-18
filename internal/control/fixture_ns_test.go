@@ -96,6 +96,7 @@ func TestControlContainerLifecycle(t *testing.T) {
 		"invalid protocol": {"image": "test/app:1", "ports": []map[string]any{{"hostPort": 1, "containerPort": 2, "protocol": "sctp"}}},
 		"invalid port":     {"image": "test/app:1", "ports": []map[string]any{{"hostPort": 0, "containerPort": 2}}},
 		"healthcheck":      {"image": "test/app:1", "healthcheck": map[string]any{"type": "exec"}},
+		"auto_remove":      {"image": "test/app:1", "auto_remove": true, "restart": "always"},
 	} {
 		if code, out := d.Do(t, "POST", "/v1/containers/run", body); code != 400 || !strings.Contains(out, want) {
 			t.Errorf("%s: %d %s", want, code, out)
@@ -194,6 +195,11 @@ func TestControlContainerLifecycle(t *testing.T) {
 	}
 	if code, out := d.Do(t, "POST", "/v1/containers/web-1/exec", map[string]any{"argv": []string{"echo", "tty"}, "tty": true, "rows": 30, "cols": 90}); code != 200 {
 		t.Errorf("exec tty: %d %s", code, out)
+	}
+	// Attached run (nyx run -i): stdin streamed to init, auto_remove on exit.
+	runHdr := `{"image":"test/app:1","id":"run-stdin","args":["cat"],"stdin":true,"auto_remove":true}` + "\nfrom run stdin\n"
+	if code, out := raw(t, d, "POST", "/v1/containers/run", "application/x-nyxd-run+v1", strings.NewReader(runHdr)); code != 200 || !strings.Contains(out, "from run stdin") {
+		t.Errorf("run attach stdin: %d %s", code, out)
 	}
 	for name, c := range map[string]struct{ ctype, body string }{
 		"empty argv":   {"", `{"argv":[]}`},

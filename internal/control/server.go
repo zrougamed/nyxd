@@ -36,6 +36,9 @@ import (
 // crun exec stdin until the client closes the body (nyx exec -i).
 const mimeExecStreamV1 = "application/x-nyxd-exec+v1"
 
+// mimeRunStreamV1: one JSON line (runRequest) then optional stdin bytes (nyx run -i / -it).
+const mimeRunStreamV1 = "application/x-nyxd-run+v1"
+
 // Lister optionally lists supervised container IDs.
 type Lister interface {
 	List() []string
@@ -744,13 +747,56 @@ type runRequest struct {
 	// Optional registry credentials when this run triggers an image pull.
 	RegistryUsername string `json:"registry_username,omitempty"`
 	RegistryPassword string `json:"registry_password,omitempty"`
+	// TTY allocates a PTY for the container init (docker run -t).
+	TTY bool `json:"tty,omitempty"`
+	// Stdin keeps init stdin open; with application/x-nyxd-run+v1 the body after the
+	// JSON header is streamed to stdin (docker run -i).
+	Stdin bool `json:"stdin,omitempty"`
+	// AutoRemove deletes container logs when the workload exits for good (docker run --rm).
+	AutoRemove bool `json:"auto_remove,omitempty"`
+	Rows       uint16 `json:"rows,omitempty"`
+	Cols       uint16 `json:"cols,omitempty"`
+}
+
+func runTTYWinSize(body runRequest) *runtime.TTYSize {
+	if !body.TTY {
+		return nil
+	}
+	if body.Rows == 0 && body.Cols == 0 {
+		return nil
+	}
+	w := &runtime.TTYSize{Rows: 24, Cols: 80}
+	if body.Rows > 0 {
+		w.Rows = body.Rows
+	}
+	if body.Cols > 0 {
+		w.Cols = body.Cols
+	}
+	return w
 }
 
 func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
-	noWriteDeadline(w) // may pull the image first
+	noWriteDeadline(w) // may pull the image first; attach sessions are long-lived
 
 	var body runRequest
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
+	var attachStdin io.Reader
+	ct := strings.TrimSpace(strings.ToLower(r.Header.Get("Content-Type")))
+	attach := ct == mimeRunStreamV1
+	if attach {
+		br := bufio.NewReader(r.Body)
+		hdr, err := readExecJSONLine(br, 1<<20)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := json.Unmarshal(hdr, &body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if body.Stdin {
+			attachStdin = br
+		}
+	} else if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -776,9 +822,15 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "image store not available", http.StatusServiceUnavailable)
 		return
 	}
+	policy := parseRestartPolicy(body.Restart)
+	if body.AutoRemove && (policy == supervisor.RestartAlways || policy == supervisor.RestartUnlessStopped) {
+		http.Error(w, "auto_remove cannot be used with restart always or unless-stopped", http.StatusBadRequest)
+		return
+	}
 	baseCtx := s.baseCtx
 
-	stream := body.Stream
+	// Attached interactive run: pull without NDJSON (client waits), then stream stdio.
+	stream := body.Stream && !attach
 	var streamEnc *json.Encoder
 	var streamFlush http.Flusher
 	streamStarted := false
@@ -875,9 +927,12 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		Env:            body.Env,
 		Args:           body.Args,
 		Hostname:       body.Hostname,
-		RestartPolicy:  parseRestartPolicy(body.Restart),
+		RestartPolicy:  policy,
 		ReadOnly:       false,
 		PortMappings:   portMaps,
+		Terminal:       body.TTY,
+		StdinOpen:      body.Stdin,
+		AutoRemove:     body.AutoRemove,
 	}
 	if hc, err := parseRunHealthcheck(body.Healthcheck); err != nil {
 		http.Error(w, "healthcheck: "+err.Error(), http.StatusBadRequest)
@@ -885,6 +940,30 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 	} else {
 		spec.Healthcheck = hc
 	}
+
+	if attach && (body.TTY || body.Stdin) {
+		rc := http.NewResponseController(w)
+		if err := rc.EnableFullDuplex(); err != nil {
+			http.Error(w, "run stream: full duplex not supported: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("X-Nyxd-Container-Id", id)
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		fw := &flushWriter{ResponseWriter: w}
+		if err := s.sup.RunAttached(baseCtx, spec, attachStdin, fw, runTTYWinSize(body)); err != nil {
+			s.log.Warn("run: attach failed", "id", id, "image", imgRef, "err", err)
+			_, _ = fmt.Fprintf(fw, "\nnyxd: run: %v\n", err)
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+		}
+		return
+	}
+
 	if err := s.sup.Start(baseCtx, spec); err != nil {
 		s.log.Warn("run: start failed", "id", id, "image", imgRef, "err", err)
 		msg := image.TrimUserMessage(err)

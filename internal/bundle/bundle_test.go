@@ -35,6 +35,31 @@ func TestGenerateSeccompDefault(t *testing.T) {
 	}
 }
 
+func TestGenerateTerminal(t *testing.T) {
+	dir := t.TempDir()
+	bundleDir := filepath.Join(dir, "bt")
+	_, err := Generate(bundleDir, Options{
+		ContainerID: "ct",
+		RootFS:      "/tmp/rootfs",
+		Terminal:    true,
+		ImageConfig: &oci.ImageConfig{Config: oci.ContainerConfig{Cmd: []string{"sh"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(bundleDir, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec Spec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if !spec.Process.Terminal {
+		t.Fatal("process.terminal not set")
+	}
+}
+
 func TestGeneratePrivilegedNoSeccomp(t *testing.T) {
 	dir := t.TempDir()
 	bundleDir := filepath.Join(dir, "b2")
