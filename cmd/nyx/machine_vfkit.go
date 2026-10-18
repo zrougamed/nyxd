@@ -356,8 +356,11 @@ func (m vfkitMachine) vfkitArgs(c vmConfig) ([]string, error) {
 		"--device", "virtio-net,nat,mac=" + c.MAC,
 		"--device", "virtio-rng",
 		"--device", "virtio-serial,logFilePath=" + m.path("console.log"),
-		"--device", "virtio-vsock,port=1024,socketURL=" + m.socket() + ",listen",
-		"--device", "virtio-vsock,port=1025,socketURL=" + m.path("shutdown.sock") + ",listen",
+		// connect: host dials the guest. The VM image listens with socat
+		// VSOCK-LISTEN on 1024 (API) and 1025 (shutdown); vfkit's default
+		// listen mode is the opposite polarity (guest dials host).
+		"--device", "virtio-vsock,port=1024,socketURL=" + m.socket() + ",connect",
+		"--device", "virtio-vsock,port=1025,socketURL=" + m.path("shutdown.sock") + ",connect",
 		"--device", "virtio-fs,sharedDir=/Users,mountTag=users",
 		"--restful-uri", "unix://" + m.path("vfkit.sock"),
 	}, nil

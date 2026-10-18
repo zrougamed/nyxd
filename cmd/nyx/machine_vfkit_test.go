@@ -237,8 +237,8 @@ func TestVfkitMachineLifecycle(t *testing.T) {
 	}
 	args, _ := os.ReadFile(argsFile)
 	for _, want := range []string{"--cpus\n3", "--memory\n1024", `cmdline="console=hvc0 root=/dev/vda"`, "virtio-blk,path=" + m.path("data.img"),
-		"virtio-net,nat,mac=" + c.MAC, "socketURL=" + m.socket() + ",listen",
-		"virtio-vsock,port=1025,socketURL=" + m.path("shutdown.sock") + ",listen", "virtio-fs,sharedDir=/Users,mountTag=users"} {
+		"virtio-net,nat,mac=" + c.MAC, "socketURL=" + m.socket() + ",connect",
+		"virtio-vsock,port=1025,socketURL=" + m.path("shutdown.sock") + ",connect", "virtio-fs,sharedDir=/Users,mountTag=users"} {
 		if !strings.Contains(string(args), want) {
 			t.Errorf("vfkit args lack %q:\n%s", want, args)
 		}
