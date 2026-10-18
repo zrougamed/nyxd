@@ -201,6 +201,15 @@ func TestControlContainerLifecycle(t *testing.T) {
 	if code, out := raw(t, d, "POST", "/v1/containers/run", "application/x-nyxd-run+v1", strings.NewReader(runHdr)); code != 200 || !strings.Contains(out, "from run stdin") {
 		t.Errorf("run attach stdin: %d %s", code, out)
 	}
+	// Attached TTY must not double-write the PTY stream to the client.
+	ttyHdr := `{"image":"test/app:1","id":"run-tty","args":["echo","once-only"],"tty":true,"stdin":true,"auto_remove":true,"rows":24,"cols":80}` + "\n"
+	if code, out := raw(t, d, "POST", "/v1/containers/run", "application/x-nyxd-run+v1", strings.NewReader(ttyHdr)); code != 200 {
+		t.Errorf("run attach tty: %d %s", code, out)
+	} else if !strings.Contains(out, "once-only") {
+		t.Errorf("run attach tty missing output: %q", out)
+	} else if strings.Count(out, "once-only") != 1 {
+		t.Errorf("run attach tty doubled output: %q", out)
+	}
 	for name, c := range map[string]struct{ ctype, body string }{
 		"empty argv":   {"", `{"argv":[]}`},
 		"bad json":     {"", `{`},

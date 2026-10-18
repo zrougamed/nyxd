@@ -1044,7 +1044,14 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 	var sz *runtime.TTYSize
 	if e.attachStdout != nil {
 		outW = io.MultiWriter(e.attachStdout, soW)
-		errW = io.MultiWriter(e.attachStdout, seW)
+		if tty {
+			// A PTY is one stream. Distinct MultiWriters that both wrap attachStdout
+			// make runForegroundTTY (which merges stdout+stderr) echo every byte twice
+			// to the client (doubled prompts and typed characters).
+			errW = outW
+		} else {
+			errW = io.MultiWriter(e.attachStdout, seW)
+		}
 		sz = e.attachSize
 	}
 

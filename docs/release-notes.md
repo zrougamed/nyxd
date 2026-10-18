@@ -1,5 +1,13 @@
 # Release notes
 
+## 1.1.5
+
+### Fixed
+
+- `nyx run -it`: stop doubling every PTY byte (prompt, echo, and output) caused by
+  merging distinct stdout/stderr MultiWriters that both wrapped the client stream.
+- `nyx run -it … bash` on images without bash: clearer tip to use `sh` (e.g. alpine).
+
 ## 1.1.4
 
 ### New
