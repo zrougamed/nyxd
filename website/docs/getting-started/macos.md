@@ -108,6 +108,6 @@ answers, that the data disk survives a shutdown and grows with `--disk-size`, an
 |---------|-----|
 | `nyx machine needs vfkit` | `brew install vfkit`. |
 | `this nyx is a development build` | Pass `--image` with an image from `make vm-image`. |
-| `nyxd did not answer within 120s` | `nyx machine logs` shows the VM console. |
+| `nyxd did not answer within 120s` | `nyx machine logs` shows the VM console. If nyxd is ready there but the Mac still times out, upgrade `nyx` to 1.1.1+ (vsock polarity) and `nyx machine stop` then `nyx machine start`. |
 | A bind mount is empty | Only `/Users` is shared; move the files under your home directory. |
 | `machine directory ... is too deep for a Unix socket` | macOS limits socket paths to 104 bytes; use a shorter `--name`. |

@@ -1,5 +1,14 @@
 # Release notes
 
+## 1.1.1
+
+### Fixed
+
+- macOS: `nyx machine start` timed out with `nyxd did not answer within 120s` even when
+  the VM console showed nyxd ready. vfkit was started with vsock `listen` (guest dials
+  host) while the VM image listens on vsock; it now uses `connect` so the Mac can reach
+  the API and shutdown ports. Reinstall or replace `nyx` only — the VM image is unchanged.
+
 ## 1.1.0
 
 Compose and native-network controls for multi-bridge stacks, plus a macOS VM init fix
