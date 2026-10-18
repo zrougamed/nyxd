@@ -73,17 +73,19 @@ func machinesDir() (string, error) {
 	return filepath.Join(base, "nyx", "machines"), nil
 }
 
-// darwinMachineSocket is the default machine's nyxd socket, if it exists.
+// darwinMachineSocket is the default machine's nyxd socket when the VM has
+// been created (config.json). The sock file may be absent while the VM is
+// stopped; callers still prefer this path over the Linux system socket.
 func darwinMachineSocket() string {
 	d, err := machinesDir()
 	if err != nil {
 		return ""
 	}
-	p := filepath.Join(d, "nyx", "nyxd.sock")
-	if _, err := os.Stat(p); err != nil {
+	dir := filepath.Join(d, "nyx")
+	if _, err := os.Stat(filepath.Join(dir, "config.json")); err != nil {
 		return ""
 	}
-	return p
+	return filepath.Join(dir, "nyxd.sock")
 }
 
 func (m vfkitMachine) dir() (string, error) {
@@ -158,15 +160,18 @@ func (m vfkitMachine) init(o machineOpts) error {
 	c, cfgErr := m.loadConfig()
 	fresh := cfgErr != nil
 	wasRunning := !fresh && m.ping()
+	hadSupervisor := !fresh && m.runPID() != 0
 
 	tarPath := filepath.Join(dir, "image.tar")
 	defer os.Remove(tarPath)
 	if err := fetchRootfs(image, tarPath); err != nil {
 		return err
 	}
-	if wasRunning {
+	// Stop even when nyxd is unreachable: a leftover run.pid blocks the next
+	// start (run exits with "already running") so vfkit never picks up new args.
+	if wasRunning || hadSupervisor {
 		fmt.Println("stopping the machine to upgrade it")
-		if err := m.stop(false); err != nil {
+		if err := m.reclaimRun(); err != nil {
 			return err
 		}
 	}
@@ -212,7 +217,7 @@ func (m vfkitMachine) init(o machineOpts) error {
 		return nil
 	}
 	fmt.Printf("upgraded machine %q to %s; images and containers are kept\n", m.name, version)
-	if wasRunning {
+	if wasRunning || hadSupervisor {
 		return m.start()
 	}
 	return nil
@@ -517,15 +522,20 @@ func (m vfkitMachine) start() error {
 	if _, err := m.loadConfig(); err != nil {
 		return err
 	}
-	if m.runPID() == 0 {
-		if m.autostartEnabled() {
-			// launchd owns the process: let it start it.
-			_ = exec.Command(launchctl(), "kickstart", m.launchdTarget()).Run()
+	if m.runPID() != 0 {
+		// Supervisor alive but API dead (failed boot, or upgrade changed vfkit
+		// flags). Replace it; otherwise run exits with "already running".
+		if err := m.reclaimRun(); err != nil {
+			return err
 		}
-		if m.runPID() == 0 {
-			if err := m.spawnRun(); err != nil {
-				return err
-			}
+	}
+	if m.autostartEnabled() {
+		// launchd owns the process: let it start it.
+		_ = exec.Command(launchctl(), "kickstart", "-k", m.launchdTarget()).Run()
+	}
+	if m.runPID() == 0 {
+		if err := m.spawnRun(); err != nil {
+			return err
 		}
 	}
 	for i := 0; i < 240; i++ {
@@ -536,6 +546,32 @@ func (m vfkitMachine) start() error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("nyxd did not answer within 120s; see: nyx machine logs%s", nameFlag(m.name))
+}
+
+// reclaimRun stops a machine supervisor that is not serving nyxd.
+func (m vfkitMachine) reclaimRun() error {
+	if m.runPID() == 0 {
+		return nil
+	}
+	if err := m.stop(false); err == nil && m.runPID() == 0 {
+		return nil
+	}
+	return m.forceKillRun()
+}
+
+func (m vfkitMachine) forceKillRun() error {
+	pid := m.runPID()
+	if pid != 0 {
+		if p, err := os.FindProcess(pid); err == nil {
+			_ = p.Signal(syscall.SIGKILL)
+		}
+	}
+	_ = os.Remove(m.path("run.pid"))
+	for i := 0; i < 20 && m.runPID() != 0; i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	_ = os.Remove(m.path("run.pid"))
+	return nil
 }
 
 // spawnRun starts `nyx machine run` detached, logging to run.log.
