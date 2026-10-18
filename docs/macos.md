@@ -48,7 +48,8 @@ default; `NYXD_SOCKET` or `-socket` still win.
 
 ## How it works
 
-The machine lives in `~/Library/Application Support/nyx/machines/<name>/`:
+The machine lives in `~/Library/nyx/machines/<name>/` (older installs under
+`~/Library/Application Support/nyx/machines` are moved there on first use):
 
 | File | |
 |------|---|

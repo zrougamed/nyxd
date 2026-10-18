@@ -64,13 +64,48 @@ func launchctl() string {
 	return "launchctl"
 }
 
-// machinesDir is ~/Library/Application Support/nyx/machines on macOS.
+// machinesDir is where VM disks and sockets live.
+// On macOS this is ~/Library/nyx/machines (no spaces). vfkit builds unix://
+// URLs for vsock/restful sockets; paths under "Application Support" break
+// url.Parse and vfkit exits before the guest boots.
 func machinesDir() (string, error) {
+	if runtime.GOOS == "darwin" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		dir := filepath.Join(home, "Library", "nyx", "machines")
+		migrateLegacyMachinesDir(dir)
+		return dir, nil
+	}
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(base, "nyx", "machines"), nil
+}
+
+// migrateLegacyMachinesDir moves ~/Library/Application Support/nyx/machines
+// to dir when the new location is empty (one-time upgrade).
+func migrateLegacyMachinesDir(dir string) {
+	cfg, err := os.UserConfigDir()
+	if err != nil {
+		return
+	}
+	legacy := filepath.Join(cfg, "nyx", "machines")
+	if legacy == dir {
+		return
+	}
+	if _, err := os.Stat(dir); err == nil {
+		return
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+		return
+	}
+	_ = os.Rename(legacy, dir)
 }
 
 // darwinMachineSocket is the default machine's nyxd socket when the VM has
@@ -538,10 +573,14 @@ func (m vfkitMachine) start() error {
 			return err
 		}
 	}
+	fmt.Printf("waiting for nyxd in machine %q (VM boot can take up to 2 minutes)...\n", m.name)
 	for i := 0; i < 240; i++ {
 		if m.ping() {
 			fmt.Printf("nyxd is running in machine %q (socket %s)\n", m.name, m.socket())
 			return nil
+		}
+		if i > 0 && i%20 == 0 {
+			fmt.Printf("  still waiting (%ds)...\n", i/2)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -652,7 +691,7 @@ func (m vfkitMachine) status() error {
 }
 
 func (m vfkitMachine) logs() error {
-	for _, f := range []string{"console.log", "run.log"} {
+	for _, f := range []string{"console.log", "run.log", "vfkit.log"} {
 		b, err := os.ReadFile(m.path(f))
 		if err != nil {
 			continue
