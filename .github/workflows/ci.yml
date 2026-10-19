@@ -108,7 +108,7 @@ jobs:
   # per distribution (Ubuntu, Debian, Fedora, Rocky, openSUSE, Alpine, Arch):
   # each must finish within 60 seconds. Throwaway signing keys, local server.
   repos:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event.pull_request.head.repo.fork && 'ubuntu-latest') || fromJSON(vars.GH_RUNS_ON || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
