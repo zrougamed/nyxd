@@ -10,21 +10,7 @@ import (
 	"testing"
 
 	"github.com/zrougamed/nyxd/internal/testutil/nsrun"
-	"golang.org/x/sys/unix"
 )
-
-// readOnly bind-mounts dir onto itself read-only: writes fail with EROFS
-// even for root of the namespace.
-func readOnly(t *testing.T, dir string) {
-	t.Helper()
-	if err := unix.Mount(dir, dir, "", unix.MS_BIND, ""); err != nil {
-		t.Fatal(err)
-	}
-	if err := unix.Mount("", dir, "", unix.MS_BIND|unix.MS_REMOUNT|unix.MS_RDONLY, ""); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = unix.Unmount(dir, unix.MNT_DETACH) })
-}
 
 func TestReadOnlyStore(t *testing.T) {
 	if !nsrun.Run(t) {
@@ -38,7 +24,7 @@ func TestReadOnlyStore(t *testing.T) {
 	}
 	r := newScripted(t)
 	r.publish(t, s, "a/b:1", "1")
-	readOnly(t, s.root)
+	nsrun.ReadOnly(t, s.root)
 	ctx := context.Background()
 	if _, err := s.PutBlob([]byte("new")); err == nil {
 		t.Error("PutBlob")
@@ -74,12 +60,12 @@ func TestReadOnlyStore(t *testing.T) {
 	}
 	// A fresh store whose blob dir is read-only: downloads cannot be written.
 	s2 := newStore(t)
-	readOnly(t, filepath.Join(s2.root, "blobs"))
+	nsrun.ReadOnly(t, filepath.Join(s2.root, "blobs"))
 	if _, err := s2.PullWithProgress(ctx, r.host()+"/app:1", nil, nil); err == nil {
 		t.Error("pull into read-only blobs")
 	}
 	s3 := newStore(t)
-	readOnly(t, filepath.Join(s3.root, "images"))
+	nsrun.ReadOnly(t, filepath.Join(s3.root, "images"))
 	if _, err := s3.PullWithProgress(ctx, r.host()+"/app:1", nil, nil); err == nil {
 		t.Error("pull with read-only image metadata")
 	}

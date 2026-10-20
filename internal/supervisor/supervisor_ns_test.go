@@ -20,7 +20,6 @@ import (
 	"github.com/zrougamed/nyxd/internal/testutil/daemon"
 	"github.com/zrougamed/nyxd/internal/testutil/nsrun"
 	"github.com/zrougamed/nyxd/pkg/oci"
-	"golang.org/x/sys/unix"
 )
 
 // These tests run real containers (crun, overlay) in a private user
@@ -499,13 +498,7 @@ func TestShutdownAndForcedPaths(t *testing.T) {
 func roMount(t *testing.T, dir string) {
 	t.Helper()
 	_ = os.MkdirAll(dir, 0o700)
-	if err := unix.Mount(dir, dir, "", unix.MS_BIND, ""); err != nil {
-		t.Fatal(err)
-	}
-	if err := unix.Mount("", dir, "", unix.MS_BIND|unix.MS_REMOUNT|unix.MS_RDONLY, ""); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = unix.Unmount(dir, unix.MNT_DETACH) })
+	nsrun.ReadOnly(t, dir)
 }
 
 func TestReadOnlyState(t *testing.T) {

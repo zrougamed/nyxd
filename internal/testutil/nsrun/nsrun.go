@@ -76,6 +76,36 @@ func Run(t *testing.T, tmpfs ...string) bool {
 	return false
 }
 
+// ReadOnly bind-mounts dir onto itself read-only until t ends: writes fail
+// with EROFS even for root of the namespace. The remount keeps the nosuid,
+// nodev and noexec flags of the mount dir sits on; the kernel locks those in
+// a user namespace and refuses (EPERM) a remount that would clear them, as on
+// runners where the temp dir is a nosuid,nodev tmpfs.
+func ReadOnly(t *testing.T, dir string) {
+	t.Helper()
+	if err := unix.Mount(dir, dir, "", unix.MS_BIND, ""); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = unix.Unmount(dir, unix.MNT_DETACH) })
+	var st unix.Statfs_t
+	if err := unix.Statfs(dir, &st); err != nil {
+		t.Fatal(err)
+	}
+	flags := uintptr(unix.MS_BIND | unix.MS_REMOUNT | unix.MS_RDONLY)
+	for _, f := range []struct{ st, ms uintptr }{
+		{unix.ST_NOSUID, unix.MS_NOSUID},
+		{unix.ST_NODEV, unix.MS_NODEV},
+		{unix.ST_NOEXEC, unix.MS_NOEXEC},
+	} {
+		if uintptr(st.Flags)&f.st != 0 {
+			flags |= f.ms
+		}
+	}
+	if err := unix.Mount("", dir, "", flags, ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // loopbackUp brings lo up in the new network namespace (127.0.0.1 works).
 func loopbackUp() error {
 	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM|unix.SOCK_CLOEXEC, 0)
