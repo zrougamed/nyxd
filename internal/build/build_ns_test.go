@@ -24,7 +24,6 @@ import (
 	"github.com/zrougamed/nyxd/internal/build"
 	"github.com/zrougamed/nyxd/internal/testutil/daemon"
 	"github.com/zrougamed/nyxd/internal/testutil/nsrun"
-	"golang.org/x/sys/unix"
 )
 
 // Builds run for real (RUN in crun, layers committed) in a private user
@@ -364,13 +363,7 @@ func TestBuildReadOnlyCache(t *testing.T) {
 	e.write("a.txt", "a")
 	cache := filepath.Join(d.Base, "build", "cache")
 	_ = os.MkdirAll(cache, 0o700)
-	if err := unix.Mount(cache, cache, "", unix.MS_BIND, ""); err != nil {
-		t.Fatal(err)
-	}
-	if err := unix.Mount("", cache, "", unix.MS_BIND|unix.MS_REMOUNT|unix.MS_RDONLY, ""); err != nil {
-		t.Fatal(err)
-	}
-	defer unix.Unmount(cache, unix.MNT_DETACH) //nolint:errcheck
+	nsrun.ReadOnly(t, cache)
 	// Cache writes fail; the build still succeeds.
 	if _, err := e.build("FROM test/app:1\nCOPY a.txt /a\nRUN touch /b\n", build.Options{Tags: []string{"test/ro:1"}}); err != nil {
 		t.Fatalf("build with a read-only cache: %v", err)
