@@ -10,16 +10,62 @@
 #   scripts/repo-smoke.sh               # every distribution
 #   scripts/repo-smoke.sh fedora:41     # images whose name contains the argument
 #
-# Needs docker or podman (ENGINE), Go, gpg, openssl and python3.
+# Needs Go, gpg, openssl and a container engine (ENGINE): docker or podman,
+# or nyx, which drives nyxd (NYXD_SOCKET) with an nyx built from this
+# checkout. Unset, it is docker when a Docker daemon answers, else nyx when
+# the nyxd socket exists. nyxd resolves bind mounts on its own host, so the
+# temporary directory (TMPDIR) must have the same path there: gh-runners'
+# RUNNER_NYXD=1 sets that up.
 set -eu
 cd "$(dirname "$0")/.."
-ENGINE=${ENGINE:-docker}
 GORELEASER=${GORELEASER:-go run github.com/goreleaser/goreleaser/v2@v2.18.2}
 LIMIT=${LIMIT:-120}
 ONLY=${1:-}
 W=$(mktemp -d)
-HTTPD=""
-trap '[ -n "$HTTPD" ] && kill "$HTTPD" 2>/dev/null; command rm -rf "$W"' EXIT
+trap 'command rm -rf "$W"' EXIT
+
+if [ -z "${ENGINE:-}" ]; then
+	if docker info >/dev/null 2>&1; then
+		ENGINE=docker
+	elif [ -S "${NYXD_SOCKET:-/run/nyxd/nyxd.sock}" ]; then
+		ENGINE=nyx
+	else
+		echo "repo-smoke: no container engine: start docker or nyxd, or set ENGINE" >&2
+		exit 1
+	fi
+fi
+# The repository is served inside each container (scripts/smokehttpd).
+mkdir "$W/bin"
+CGO_ENABLED=0 go build -o "$W/bin/smokehttpd" ./scripts/smokehttpd
+RESOLV_CONF=""
+if [ "$ENGINE" = nyx ]; then
+	CGO_ENABLED=0 go build -o "$W/bin/nyx" ./cmd/nyx
+	ENGINE=$W/bin/nyx
+	# nyxd's containers resolve names through its bridge, which a firewalled
+	# runner's policy may block; use this machine's resolvers unless they are
+	# local ones the containers cannot reach.
+	case $(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf) in
+	"" | 127.*) ;;
+	*) cp /etc/resolv.conf "$W/resolv.conf" && RESOLV_CONF=$W/resolv.conf ;;
+	esac
+fi
+export RESOLV_CONF
+
+# engine_run ARGS...: a throwaway container.
+engine_run() {
+	if [ -n "$RESOLV_CONF" ]; then
+		$ENGINE run --rm -v "$RESOLV_CONF:/etc/resolv.conf:ro" "$@"
+	else
+		$ENGINE run --rm "$@"
+	fi
+}
+
+mkdir "$W/probe" && echo bind-ok >"$W/probe/ok"
+if [ "$(engine_run -v "$W/probe:/probe:ro" docker.io/library/alpine:3.20 cat /probe/ok 2>&1)" != bind-ok ]; then
+	echo "repo-smoke: $ENGINE cannot bind $W into a container; with nyx, nyxd must be v1.1.6 or later" >&2
+	echo "and see $W at the same path (gh-runners: RUNNER_NYXD=1)" >&2
+	exit 1
+fi
 
 # Throwaway keys: GPG for deb, rpm, pacman and the indexes; RSA for apk.
 export GNUPGHOME="$W/gnupg"
@@ -42,19 +88,17 @@ echo "== repositories"
 ENGINE=$ENGINE APK_KEY_FILE="$W/apk.rsa" scripts/build-repos.sh "$W/pkgs" "$W/repo" >"$W/repos.log" 2>&1 ||
 	{ tail -20 "$W/repos.log"; exit 1; }
 cp scripts/install.sh "$W/repo/install.sh"
-port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
-python3 -m http.server --bind 127.0.0.1 --directory "$W/repo" "$port" >"$W/httpd.log" 2>&1 &
-HTTPD=$!
-URL="http://127.0.0.1:$port"
+URL=http://127.0.0.1:8080
+
+# What a user runs, against the local repository; then the checks. The
+# repository server started before the image's own preparation.
+SCRIPT='
 i=0
 until curl -fs "$URL/nyxd.asc" >/dev/null; do
 	i=$((i + 1))
-	[ $i -lt 50 ] || { echo "repository server did not start" >&2; exit 1; }
+	[ $i -lt 50 ] || { echo "repository server did not start"; exit 1; }
 	sleep 0.1
 done
-
-# What a user runs, against the local repository; then the checks.
-SCRIPT='
 start=$(date +%s)
 curl -fsSL "$URL/install.sh" | NYXD_REPO_URL="$URL" sh -s -- --no-start >/tmp/install.log 2>&1 || { cat /tmp/install.log; echo INSTALL-FAILED; exit 1; }
 echo "seconds=$(( $(date +%s) - start ))"
@@ -80,7 +124,8 @@ docker.io/library/archlinux:latest|true
 echo "$images" | while IFS='|' read -r image prep; do
 	[ -n "$image" ] || continue
 	case $image in *"$ONLY"*) ;; *) continue ;; esac
-	out=$($ENGINE run --rm --network host -e URL="$URL" "$image" sh -c "$prep; $SCRIPT" 2>&1) || true
+	out=$(engine_run -v "$W/repo:/repo:ro" -v "$W/bin/smokehttpd:/usr/local/bin/smokehttpd:ro" -e URL="$URL" \
+		"$image" sh -c "smokehttpd /repo 127.0.0.1:8080 & $prep; $SCRIPT" 2>&1) || true
 	# Take the last seconds= line (docker pull noise can precede the script).
 	secs=$(printf '%s\n' "$out" | sed -n 's/^seconds=//p' | tail -1)
 	missing=""
