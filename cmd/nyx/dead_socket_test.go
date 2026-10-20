@@ -22,6 +22,8 @@ func TestCommandsWithoutDaemon(t *testing.T) {
 		{"image", "ls"}, {"image", "rm", "x"}, {"image", "prune"}, {"tag", "a", "b"}, {"push", "a:1"},
 		{"save", "-o", filepath.Join(ctx, "out.tar"), "a:1"}, {"load", "-i", archive}, {"build", ctx},
 		{"compose", "up", "-f", compose}, {"compose", "stop", "-f", compose}, {"compose", "down", "-f", compose},
+		{"compose", "stats", "--no-stream", "-f", compose},
+		{"stats", "--no-stream"}, {"inspect", "c"}, {"container", "stats", "--no-stream"}, {"container", "inspect", "c"},
 	} {
 		if _, _, err := nyx(t, append([]string{"-socket", sock}, args...)...); err == nil {
 			t.Errorf("nyx %v without a daemon succeeded", args)

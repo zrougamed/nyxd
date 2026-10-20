@@ -150,7 +150,7 @@ paths:
       description: |
         Starts an OCI workload via crun. If the image is not in the local store, the daemon pulls it first.
         When `stream: true`, the response is `application/x-ndjson` (same `PullEvent` lines as `POST /v1/images/pull` if a pull runs, then `phase: run` with `container_id`). Otherwise the response is a single JSON `RunResponse`.
-        With `Content-Type: application/x-nyxd-run+v1` (first line JSON `RunRequest`, then optional stdin), the response is an attached stdio stream for `tty` / `stdin` (`nyx run -it`), and `X-Nyxd-Container-Id` is set.
+        With `Content-Type: application/x-nyxd-run+v1` (first line JSON `RunRequest`, then optional stdin), the response is the container's attached stdio until it exits (`nyx run -it`, and foreground `nyx run --rm`), and `X-Nyxd-Container-Id` is set. nyxd v1.1.5 and older attach only with `tty` or `stdin` and otherwise return a JSON `RunResponse`.
         If `id` is omitted, the server generates one from the image reference.
       operationId: runContainer
       requestBody:
@@ -450,6 +450,72 @@ paths:
           description: No log file for this container
         "500":
           description: Read error
+
+  /v1/containers/{id}/inspect:
+    get:
+      tags: [containers]
+      summary: Low-level container details
+      description: |
+        Returns supervised container metadata (image, status, pid, env, mounts-related fields,
+        resources, network) for `nyx inspect`. Accepts the same id forms as other container routes
+        (canonical id, unambiguous prefix, or 12-char hex short id).
+      operationId: inspectContainer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Inspect payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContainerInspect"
+        "400":
+          description: Ambiguous container id
+        "404":
+          description: Container not found
+        "503":
+          description: Supervisor unavailable
+
+  /v1/containers/stats:
+    get:
+      tags: [containers]
+      summary: Container resource usage snapshot
+      description: |
+        Returns one sample of CPU, memory, network I/O, block I/O and PIDs for supervised
+        containers (cgroup v2 when available, otherwise `/proc`). The handler waits
+        `interval_ms` between two samples so `cpu_percent` is meaningful.
+        Used by `nyx stats` and `nyx compose stats` (the CLI polls this endpoint).
+      operationId: containerStats
+      parameters:
+        - name: ids
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Comma-separated container ids (empty = all supervised).
+        - name: interval_ms
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+          description: Sample gap in milliseconds (default 500, capped at 10000).
+      responses:
+        "200":
+          description: Stats snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContainerStatsResponse"
+        "404":
+          description: One of the requested ids was not found
+        "503":
+          description: Supervisor unavailable
 
   /v1/images:
     get:
@@ -867,6 +933,120 @@ components:
           type: string
           description: crun state status (e.g. running, stopped)
 
+    ContainerInspect:
+      type: object
+      required: [id, short_id, image, status, restarts, intentionally_stopped]
+      properties:
+        id:
+          type: string
+        short_id:
+          type: string
+        image:
+          type: string
+        status:
+          type: string
+        pid:
+          type: integer
+        ip:
+          type: string
+        ports_display:
+          type: string
+        env:
+          type: array
+          items:
+            type: string
+        args:
+          type: array
+          items:
+            type: string
+        workdir:
+          type: string
+        hostname:
+          type: string
+        restart_policy:
+          type: string
+        restarts:
+          type: integer
+        intentionally_stopped:
+          type: boolean
+        auto_remove:
+          type: boolean
+        host_network:
+          type: boolean
+        read_only:
+          type: boolean
+        privileged:
+          type: boolean
+        bundle_dir:
+          type: string
+        rootfs:
+          type: string
+        netns:
+          type: string
+        created_at:
+          type: string
+          description: RFC3339 from supervisor persist file mtime when present.
+        exit_code:
+          type: integer
+          nullable: true
+
+    ContainerStatsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContainerStats"
+
+    ContainerStats:
+      type: object
+      required: [id, short_id, name, status, cpu_percent, mem_usage, mem_limit, mem_percent, net_rx, net_tx, block_read, block_write, pids, read_at]
+      properties:
+        id:
+          type: string
+        short_id:
+          type: string
+        name:
+          type: string
+          description: Canonical id (docker NAME column).
+        status:
+          type: string
+        cpu_percent:
+          type: number
+          description: Percent of one CPU between the two samples.
+        mem_usage:
+          type: integer
+          format: int64
+        mem_limit:
+          type: integer
+          format: int64
+        mem_percent:
+          type: number
+        net_rx:
+          type: integer
+          format: int64
+        net_tx:
+          type: integer
+          format: int64
+        block_read:
+          type: integer
+          format: int64
+        block_write:
+          type: integer
+          format: int64
+        pids:
+          type: integer
+          format: int64
+        source:
+          type: string
+          description: "`cgroup` or `proc` fallback."
+        read_at:
+          type: string
+        error:
+          type: string
+          description: Present when the container is not running or stats could not be read.
+
     RemoveResponse:
       type: object
       required: [ok, id]
@@ -1114,6 +1294,18 @@ components:
           description: |
             Delete container logs when the workload exits and will not restart (`nyx run --rm`).
             Incompatible with restart `always` / `unless-stopped`.
+        volumes:
+          type: array
+          items:
+            type: string
+          description: |
+            Bind mounts, `SRC:DST[:ro|rw]` (`nyx run -v`). SRC is an absolute path on the nyxd
+            host and must exist; DST is absolute.
+        network:
+          type: string
+          description: |
+            `host` shares the host's network namespace (`nyx run --network host`); cannot be
+            combined with published ports. Unset, `bridge` or `default` use the daemon's driver.
         rows:
           type: integer
           description: Initial PTY height when `tty` is true

@@ -1,5 +1,36 @@
 # Release notes
 
+## 1.1.7
+
+### New
+
+- **`nyx stats`** / **`nyx compose stats`**: live CPU, memory, net/block I/O and PIDs
+  (docker/podman-like; `--no-stream` for one sample). API: `GET /v1/containers/stats`.
+- **`nyx inspect`**: low-level container JSON (array, like docker inspect).
+  API: `GET /v1/containers/{id}/inspect`.
+
+## 1.1.6
+
+### New
+
+- **`nyx run -v SRC:DST[:ro]`**: bind mounts (SRC is an absolute path on the nyxd host),
+  and **`nyx run --network host`**: share the host's network. API: `volumes` and `network`
+  on `POST /v1/containers/run`.
+- `scripts/repo-smoke.sh` runs on nyxd as well as Docker (`ENGINE=nyx`), so the `repos`
+  CI job runs on the local runners.
+
+### Fixed
+
+- `nyx run --rm` printed nothing and failed with `no matching container` for a command
+  that exits at once: the logs were removed before nyx could stream them. The output now
+  comes from the run stream, as with `-i` / `-t`.
+- Images that set no `PATH` (e.g. `registry.fedoraproject.org/fedora`) could not run
+  `sh`: containers now get Docker's default `PATH`.
+- No default `RLIMIT_NPROC` (it was 512): the kernel counts it over every process of the
+  uid on the host, so a container running as a uid the host also uses (the rootless
+  `moby/buildkit` image runs as 1000) failed with `exec …: Resource temporarily
+  unavailable`. The cgroup pids limit (`pids_limit`) still caps a container.
+
 ## 1.1.5
 
 ### Fixed
@@ -49,7 +80,7 @@
 
 Compose and native-network controls for multi-bridge stacks, plus a macOS VM init fix
 and docs for what works in each environment. Compatible with 1.0; see
-[Stability and compatibility](/docs/reference/stability).
+[Stability and compatibility](stability.md).
 
 ### New
 
@@ -66,9 +97,9 @@ and docs for what works in each environment. Compatible with 1.0; see
   `nyxbr*` bridge, IPAM, NAT, cross-bridge isolation and embedded DNS zone; services that
   omit `networks` stay on `nyxbr0`.
 - **Platform matrix**: feature availability for Linux rootful/rootless/userns-remap and
-  macOS/Windows machines — [Platform matrix](/docs/getting-started/platform-matrix).
+  macOS/Windows machines — [platform-matrix.md](platform-matrix.md).
 - **Docker socket docs**: mounting a host `docker.sock` or running DinD under nyxd —
-  [Docker sockets](/docs/operations/docker-socket).
+  [docker-socket.md](docker-socket.md).
 
 ### Changed
 
@@ -91,7 +122,7 @@ and docs for what works in each environment. Compatible with 1.0; see
 The first stable release. From here on, nyxd follows [Semantic Versioning](https://semver.org): the
 `/v1` API, the `nyx` CLI and its flags, daemon flags, on-disk data, the log format and the packages
 stay compatible for all of 1.x. What is covered, and what is not, is in
-[Stability and compatibility](/docs/reference/stability).
+[Stability and compatibility](stability.md).
 
 ### New
 
@@ -102,10 +133,10 @@ stay compatible for all of 1.x. What is covered, and what is not, is in
   `nyx rm` deletes the logs of an exited container.
 - **Load and failure testing**: `scripts/stress.sh` (`make test-stress`) and the **Stress** workflow
   run 50 containers at once, 200 short-lived ones, a log flood, an OOM kill and a daemon crash with
-  containers running. See [Load and failure testing](/docs/operations/stress-testing).
+  containers running. See [Load and failure testing](stress-testing.md).
 - **Package repositories**: signed apt, dnf/yum, zypper, apk and pacman repositories at
   `pkgs.nyxd.io`, and one-line installers for Linux, macOS and Windows. See
-  [Get started](/get-started).
+  [Get started](https://nyxd.io/get-started).
 - **`make help`**: `make` with no target lists every target.
 - **`nyx --version`** (`-v`) prints the client version without needing the daemon.
 - **Clearer errors when nyxd can't be reached**: `nyx` says whether the daemon isn't running or

@@ -1,5 +1,11 @@
 package compose
 
+// ContainerID returns the supervised container id for a compose service
+// ("<project>-<service>", or just "<service>" when project is "default").
+func ContainerID(project, service string) string {
+	return composeContainerID(project, service)
+}
+
 // OrderedContainerIDs returns container IDs in dependency-first start order
 // (same order as [BuildContainerSpecs]).
 func OrderedContainerIDs(stack *Stack, project string) []string {

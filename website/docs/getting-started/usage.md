@@ -49,6 +49,16 @@ sudo nyx ps -q
 sudo nyx stop web other-id
 sudo nyx rm web
 
+# Live resource usage (docker/podman-like); --no-stream prints one sample
+sudo nyx stats
+sudo nyx stats --no-stream web
+sudo nyx compose stats --no-stream
+sudo nyx compose stats web
+
+# Low-level details as a JSON array
+sudo nyx inspect web
+sudo nyx container inspect web
+
 # Images (local refs pulled into the store)
 sudo nyx image ls
 sudo nyx image rm nginx:alpine

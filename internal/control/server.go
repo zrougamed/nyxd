@@ -142,6 +142,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /v1/version", s.handleVersion)
 	mux.HandleFunc("GET /v1/network", s.handleNetwork)
 	mux.HandleFunc("GET /v1/containers", s.handleContainers)
+	mux.HandleFunc("GET /v1/containers/stats", s.handleContainerStats)
+	mux.HandleFunc("GET /v1/containers/{id}/inspect", s.handleContainerInspect)
 	mux.HandleFunc("POST /v1/containers/{id}/exec", s.handleExec)
 	mux.HandleFunc("POST /v1/containers/{id}/stop", s.handleContainerStop)
 	mux.HandleFunc("POST /v1/containers/{id}/remove", s.handleContainerRemove)
