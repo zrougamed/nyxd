@@ -150,7 +150,7 @@ paths:
       description: |
         Starts an OCI workload via crun. If the image is not in the local store, the daemon pulls it first.
         When `stream: true`, the response is `application/x-ndjson` (same `PullEvent` lines as `POST /v1/images/pull` if a pull runs, then `phase: run` with `container_id`). Otherwise the response is a single JSON `RunResponse`.
-        With `Content-Type: application/x-nyxd-run+v1` (first line JSON `RunRequest`, then optional stdin), the response is an attached stdio stream for `tty` / `stdin` (`nyx run -it`), and `X-Nyxd-Container-Id` is set.
+        With `Content-Type: application/x-nyxd-run+v1` (first line JSON `RunRequest`, then optional stdin), the response is the container's attached stdio until it exits (`nyx run -it`, and foreground `nyx run --rm`), and `X-Nyxd-Container-Id` is set. nyxd v1.1.5 and older attach only with `tty` or `stdin` and otherwise return a JSON `RunResponse`.
         If `id` is omitted, the server generates one from the image reference.
       operationId: runContainer
       requestBody:

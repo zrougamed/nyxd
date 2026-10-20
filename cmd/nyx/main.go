@@ -335,7 +335,9 @@ func doRun(socket string, args []string) error {
 		}
 	}
 	// Foreground -i/-t: attach stdio to the container init (like docker run -it).
-	if !o.detach && (o.stdin || o.tty) {
+	// Foreground --rm too: its logs go when it exits, which a short command can
+	// do before a log stream attaches.
+	if !o.detach && (o.stdin || o.tty || o.rm) {
 		return doRunAttached(socket, o)
 	}
 
@@ -582,6 +584,20 @@ func doRunAttached(socket string, o runOpts) error {
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("run: %s", formatRunFailure(resp.StatusCode, string(bytes.TrimSpace(b))))
+	}
+	if strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
+		// An older nyxd attaches only for -i/-t and answers with the created
+		// container: follow its logs, as nyx run did before.
+		var created struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&created); err != nil || created.ID == "" {
+			return fmt.Errorf("run: bad response from nyxd")
+		}
+		if o.printID {
+			fmt.Fprintf(os.Stderr, "%s\n", created.ID)
+		}
+		return streamContainerLogs(context.Background(), socket, created.ID, os.Stdout)
 	}
 	if o.printID {
 		if id := resp.Header.Get("X-Nyxd-Container-Id"); id != "" {

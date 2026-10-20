@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -118,6 +119,13 @@ func TestCLIAgainstDaemon(t *testing.T) {
 	if out := ok(t, "run", "--json", "--name", "fgj", "test/app:1", "echo", "json-mode"); !strings.Contains(out, "json-mode") {
 		t.Errorf("attached --json run: %q", out)
 	}
+	// --rm: a command that exits at once still shows its output and exit status.
+	for i := range 5 {
+		if out := ok(t, "run", "--rm", "--name", "rm"+strconv.Itoa(i), "test/app:1", "echo", "rm-out"); out != "rm-out\n" {
+			t.Errorf("run --rm: %q", out)
+		}
+	}
+	fails(t, "exit status 3", "run", "--rm", "test/app:1", "sh", "-c", "exit 3")
 	fails(t, "could not pull", "run", "-d", "registry.invalid/x:1")
 	fails(t, "registry.invalid", "run", "registry.invalid/x:1")
 	fails(t, "already running", "run", "-d", "--name", "a1", "test/app:1", "sleep", "1")

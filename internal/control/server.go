@@ -941,7 +941,9 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		spec.Healthcheck = hc
 	}
 
-	if attach && (body.TTY || body.Stdin) {
+	// A run stream gets the container's output even without -i/-t: nyx run --rm
+	// must not race a separate log stream against the removal of the logs.
+	if attach {
 		rc := http.NewResponseController(w)
 		if err := rc.EnableFullDuplex(); err != nil {
 			http.Error(w, "run stream: full duplex not supported: "+err.Error(), http.StatusInternalServerError)
