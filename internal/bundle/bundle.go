@@ -162,7 +162,7 @@ type Options struct {
 	Privileged      bool
 	// NoNewPrivileges defaults to true when nil; ignored (forced false) when Privileged.
 	NoNewPrivileges *bool
-	// Rlimits, when non-empty, replace the default NOFILE/NPROC process rlimits.
+	// Rlimits, when non-empty, replace the default process rlimits (NOFILE).
 	Rlimits []Rlimit
 	// HostNetwork shares the host network namespace (no network namespace in the spec).
 	HostNetwork bool
@@ -283,10 +283,9 @@ func buildSpec(opts Options, sec *Seccomp) Spec {
 
 	rlimits := opts.Rlimits
 	if len(rlimits) == 0 {
-		rlimits = []Rlimit{
-			{Type: "RLIMIT_NOFILE", Hard: 1024, Soft: 1024},
-			{Type: "RLIMIT_NPROC", Hard: 512, Soft: 512},
-		}
+		// No default RLIMIT_NPROC, as with Docker: it counts every process of
+		// the uid on the host, not the container's (Resources.Pids caps those).
+		rlimits = []Rlimit{{Type: "RLIMIT_NOFILE", Hard: 1024, Soft: 1024}}
 	}
 
 	return Spec{
