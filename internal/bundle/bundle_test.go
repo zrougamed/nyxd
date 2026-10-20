@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/zrougamed/nyxd/pkg/oci"
@@ -202,5 +203,29 @@ func TestWithSwapLimit(t *testing.T) {
 	noLimit := &Resources{Memory: &MemoryRes{Reservation: 16 << 20}}
 	if withSwapLimit(noLimit).Memory.Swap != 0 {
 		t.Fatal("swap set without a memory limit")
+	}
+}
+
+// Images that set no PATH (registry.fedoraproject.org/fedora) get Docker's
+// default, so "sh" resolves; one the image or the caller sets is kept.
+func TestBuildSpecDefaultPath(t *testing.T) {
+	pathOf := func(opts Options) string {
+		for _, e := range buildSpec(opts, nil).Process.Env {
+			if v, ok := strings.CutPrefix(e, "PATH="); ok {
+				return v
+			}
+		}
+		return ""
+	}
+	noPath := &oci.ImageConfig{Config: oci.ContainerConfig{Cmd: []string{"sh"}, Env: []string{"container=oci"}}}
+	if got := pathOf(Options{ImageConfig: noPath}); got != DefaultPath {
+		t.Errorf("image without PATH: %q", got)
+	}
+	withPath := &oci.ImageConfig{Config: oci.ContainerConfig{Env: []string{"PATH=/opt/bin"}}}
+	if got := pathOf(Options{ImageConfig: withPath}); got != "/opt/bin" {
+		t.Errorf("image PATH: %q", got)
+	}
+	if got := pathOf(Options{ImageConfig: noPath, Env: []string{"PATH=/x"}}); got != "/x" {
+		t.Errorf("caller PATH: %q", got)
 	}
 }
