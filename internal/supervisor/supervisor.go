@@ -107,6 +107,9 @@ type ContainerSpec struct {
 	// AutoRemove deletes logs (and remaining state) when the container exits and
 	// will not be restarted (docker run --rm).
 	AutoRemove bool `json:"auto_remove,omitempty"`
+	// HostNetwork shares the host's network namespace whatever the daemon's
+	// driver (docker run --network host).
+	HostNetwork bool `json:"host_network,omitempty"`
 }
 
 // containerEntry tracks runtime state for a supervised container.
@@ -827,6 +830,11 @@ func (s *Supervisor) SetRootless(rootless, cgroups bool) {
 
 func (s *Supervisor) hostNetwork() bool { return s.netDriver == "host" }
 
+// onHostNetwork reports whether spec runs in the host's network namespace.
+func (s *Supervisor) onHostNetwork(spec ContainerSpec) bool {
+	return s.hostNetwork() || spec.HostNetwork
+}
+
 // ─── Internal ──────────────────────────────────────────────────────────────────
 
 // startOnce performs a single container start: overlay → network → bundle → crun.
@@ -862,7 +870,7 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 	// 2. Network namespace + host networking (native or CNI plugins).
 	// The host driver shares the host network: no namespace to create.
 	var nsPath string
-	if !s.hostNetwork() {
+	if !s.onHostNetwork(spec) {
 		nsPath, err = network.CreateNetNS(spec.ID)
 		if err != nil {
 			s.ovl.Remove(spec.ID) //nolint:errcheck
@@ -880,14 +888,20 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 			Gateway:  strings.TrimSpace(spec.NetworkGateway),
 		}
 	}
-	ip, err := s.net.Setup(ctx, spec.ID, nsPath, spec.PortMappings, netOpts)
-	if err != nil {
-		network.DeleteNetNS(spec.ID) //nolint:errcheck
-		s.ovl.Remove(spec.ID)        //nolint:errcheck
-		return false, fmt.Errorf("network setup: %w", err)
+	var ip string
+	if spec.HostNetwork && !s.hostNetwork() {
+		// Nothing to set up: no namespace, and the API refuses published ports.
+		log.Info("network: host")
+	} else {
+		ip, err = s.net.Setup(ctx, spec.ID, nsPath, spec.PortMappings, netOpts)
+		if err != nil {
+			network.DeleteNetNS(spec.ID) //nolint:errcheck
+			s.ovl.Remove(spec.ID)        //nolint:errcheck
+			return false, fmt.Errorf("network setup: %w", err)
+		}
+		log.Info("network assigned", "ip", ip)
 	}
 	e.ip = ip
-	log.Info("network assigned", "ip", ip)
 	if fw := s.hostForwards(spec.ID); len(fw) > 0 {
 		log.Info("host network: forwarding published ports", "forward", fw)
 	}
@@ -943,7 +957,7 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 		Rlimits:         spec.Rlimits,
 		UIDMappings:     spec.UIDMappings,
 		GIDMappings:     spec.GIDMappings,
-		HostNetwork:     s.hostNetwork(),
+		HostNetwork:     s.onHostNetwork(spec),
 		Rootless:        s.rootless,
 		Terminal:        spec.Terminal,
 	})
@@ -1296,6 +1310,9 @@ func (s *Supervisor) teardownNetwork(ctx context.Context, id string) {
 	s.mu.RLock()
 	entry, ok := s.containers[id]
 	s.mu.RUnlock()
+	if ok && entry.spec.HostNetwork {
+		return // never had a namespace or driver setup
+	}
 	if ok {
 		s.dnsDeregisterForSpec(entry.spec)
 	}

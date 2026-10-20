@@ -79,6 +79,29 @@ func fails(t *testing.T, want string, args ...string) {
 	}
 }
 
+// With the native driver a container gets its own namespace (eth0);
+// --network host shares the test's, which has only lo.
+func TestCLIRunHostNetwork(t *testing.T) {
+	if !nsrun.Run(t, "/run") {
+		return
+	}
+	d := daemon.StartWith(t, daemon.Options{NetDriver: "native"})
+	d.Image(t, "test/app:1", nil)
+	t.Setenv("NYXD_SOCKET", d.Socket)
+	if out := ok(t, "run", "--rm", "test/app:1", "cat", "/proc/net/dev"); !strings.Contains(out, "eth0") {
+		t.Errorf("default network: %q", out)
+	}
+	if out := ok(t, "run", "--rm", "--network", "host", "test/app:1", "cat", "/proc/net/dev"); strings.Contains(out, "eth0") || !strings.Contains(out, "lo:") {
+		t.Errorf("run --network host: %q", out)
+	}
+	fails(t, "cannot be used with network host", "run", "--rm", "--network", "host", "-p", "18080:80", "test/app:1", "true")
+	ok(t, "run", "-d", "--name", "hn", "--network", "host", "test/app:1", "sleep", "300")
+	ok(t, "stop", "hn")
+	if out := ok(t, "run", "--rm", "test/app:1", "cat", "/proc/net/dev"); !strings.Contains(out, "eth0") {
+		t.Errorf("default network after a host one: %q", out)
+	}
+}
+
 func TestCLIAgainstDaemon(t *testing.T) {
 	if !nsrun.Run(t) {
 		return
@@ -126,6 +149,15 @@ func TestCLIAgainstDaemon(t *testing.T) {
 		}
 	}
 	fails(t, "exit status 3", "run", "--rm", "test/app:1", "sh", "-c", "exit 3")
+	// -v binds a host directory.
+	vol := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vol, "f"), []byte("from-host"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out := ok(t, "run", "--rm", "-v", vol+":/data:ro", "test/app:1", "cat", "/data/f"); out != "from-host" {
+		t.Errorf("run -v: %q", out)
+	}
+	fails(t, "read-only file system", "run", "--rm", "-v", vol+":/data:ro", "test/app:1", "touch", "/data/g")
 	fails(t, "could not pull", "run", "-d", "registry.invalid/x:1")
 	fails(t, "registry.invalid", "run", "registry.invalid/x:1")
 	fails(t, "already running", "run", "-d", "--name", "a1", "test/app:1", "sleep", "1")

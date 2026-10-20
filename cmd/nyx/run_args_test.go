@@ -53,3 +53,23 @@ func TestParseRunArgsDockerFlags(t *testing.T) {
 		t.Fatalf("-ti: %+v err=%v", o, err)
 	}
 }
+
+func TestParseRunArgsVolumesNetwork(t *testing.T) {
+	o, err := parseRunArgs(strings.Fields("-v /a:/a -v=/b:/b:ro --volume /c:/c --volume=/d:/d --network host alpine true"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(o.volumes, " ") != "/a:/a /b:/b:ro /c:/c /d:/d" || o.network != "host" || o.image != "alpine" {
+		t.Fatalf("got volumes=%q network=%q image=%q", o.volumes, o.network, o.image)
+	}
+	for _, args := range []string{"--net=host alpine", "--network=host alpine", "--net host alpine"} {
+		if o, err := parseRunArgs(strings.Fields(args)); err != nil || o.network != "host" {
+			t.Errorf("%s: network=%q err=%v", args, o.network, err)
+		}
+	}
+	for _, args := range []string{"-v", "--volume", "--network", "--net"} {
+		if _, err := parseRunArgs([]string{args}); err == nil || !strings.Contains(err.Error(), "requires a value") {
+			t.Errorf("%s without value: %v", args, err)
+		}
+	}
+}

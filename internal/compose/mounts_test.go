@@ -89,3 +89,18 @@ func containsOpt(opts []string, want string) bool {
 	}
 	return false
 }
+
+func TestBindMount(t *testing.T) {
+	m, err := BindMount("/srv/data:/data:ro")
+	if err != nil || m.Source != "/srv/data" || m.Destination != "/data" || !containsOpt(m.Options, "ro") {
+		t.Fatalf("ro bind: %+v %v", m, err)
+	}
+	if m, err := BindMount(" /srv/x/../y:/y "); err != nil || m.Source != "/srv/y" || !containsOpt(m.Options, "rw") {
+		t.Fatalf("rw bind: %+v %v", m, err)
+	}
+	for _, line := range []string{"data:/data", "./x:/x", "/x:y", "/x:/x:rx", "/x", ""} {
+		if _, err := BindMount(line); err == nil {
+			t.Errorf("%q accepted", line)
+		}
+	}
+}

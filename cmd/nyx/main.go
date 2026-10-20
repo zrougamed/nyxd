@@ -176,6 +176,8 @@ commands:
         --name <id>                 container id (default: auto-generated)
         -p, --publish HOST:PORT[/tcp|udp]   port mapping (repeatable, e.g. -p 8080:80)
         -e, --env KEY=VAL           environment (repeatable)
+        -v, --volume SRC:DST[:ro]   bind mount; SRC is an absolute path on nyxd's host (repeatable)
+        --network host              share the host's network (no published ports)
         --hostname <h> | -h <h>     hostname in container (-h here is hostname, not help)
         --restart <policy>          always | on-failure | unless-stopped | never (default)
         --rm                        remove container logs/state when it exits (like docker --rm)
@@ -364,6 +366,12 @@ func doRun(socket string, args []string) error {
 	if len(o.publish) > 0 {
 		body["publish"] = o.publish
 	}
+	if len(o.volumes) > 0 {
+		body["volumes"] = o.volumes
+	}
+	if o.network != "" {
+		body["network"] = o.network
+	}
 	if o.rm {
 		body["auto_remove"] = true
 	}
@@ -521,6 +529,12 @@ func doRunAttached(socket string, o runOpts) error {
 	}
 	if len(o.publish) > 0 {
 		body["publish"] = o.publish
+	}
+	if len(o.volumes) > 0 {
+		body["volumes"] = o.volumes
+	}
+	if o.network != "" {
+		body["network"] = o.network
 	}
 	if o.rm {
 		body["auto_remove"] = true

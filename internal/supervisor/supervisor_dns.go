@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Supervisor) shouldRegisterDNS(spec ContainerSpec) bool {
-	if s.hostNetwork() {
+	if s.onHostNetwork(spec) {
 		return false
 	}
 	dm := strings.ToLower(strings.TrimSpace(s.dnsMode))
@@ -119,7 +119,7 @@ func (s *Supervisor) writeBundleResolv(bundleDir string, spec ContainerSpec) (st
 	if mountHasResolvConf(spec.ExtraMounts) {
 		return "", nil
 	}
-	if s.hostNetwork() {
+	if s.onHostNetwork(spec) {
 		// Same network as the host, so the host resolver config applies as is
 		// (including loopback resolvers such as systemd-resolved's 127.0.0.53).
 		if _, err := os.Stat("/etc/resolv.conf"); err == nil {
@@ -155,7 +155,7 @@ func (s *Supervisor) writeBundleResolv(bundleDir string, spec ContainerSpec) (st
 // container's hostname and HostAliases on 127.0.0.1. Other drivers keep the
 // image's /etc/hosts and resolve names through their own addresses.
 func (s *Supervisor) writeBundleHosts(bundleDir string, spec ContainerSpec) (string, error) {
-	if !s.hostNetwork() {
+	if !s.onHostNetwork(spec) {
 		return "", nil
 	}
 	var names []string

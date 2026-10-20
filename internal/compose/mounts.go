@@ -25,6 +25,17 @@ func ServiceExtraMounts(svc *Service, stack *Stack, composeDir, project, dataDir
 	return out, nil
 }
 
+// BindMount parses one `nyx run -v` line, SRC:DST[:ro|rw]. Unlike compose
+// there is no project directory or named volume, so SRC must be absolute.
+func BindMount(line string) (bundle.Mount, error) {
+	line = strings.TrimSpace(line)
+	src, _, _ := strings.Cut(line, ":")
+	if !filepath.IsAbs(src) && !wslpath.HasDrive(line) {
+		return bundle.Mount{}, fmt.Errorf("volume %q: source must be an absolute path", line)
+	}
+	return parseVolumeMount(line, &Stack{}, "", "", "")
+}
+
 func parseVolumeMount(line string, stack *Stack, composeDir, project, dataDir string) (bundle.Mount, error) {
 	if line == "" {
 		return bundle.Mount{}, fmt.Errorf("empty volume line")
