@@ -1,5 +1,23 @@
 # Release notes
 
+## 1.1.6
+
+### New
+
+- **`nyx run -v SRC:DST[:ro]`**: bind mounts (SRC is an absolute path on the nyxd host),
+  and **`nyx run --network host`**: share the host's network. API: `volumes` and `network`
+  on `POST /v1/containers/run`.
+- `scripts/repo-smoke.sh` runs on nyxd as well as Docker (`ENGINE=nyx`), so the `repos`
+  CI job runs on the local runners.
+
+### Fixed
+
+- `nyx run --rm` printed nothing and failed with `no matching container` for a command
+  that exits at once: the logs were removed before nyx could stream them. The output now
+  comes from the run stream, as with `-i` / `-t`.
+- Images that set no `PATH` (e.g. `registry.fedoraproject.org/fedora`) could not run
+  `sh`: containers now get Docker's default `PATH`.
+
 ## 1.1.5
 
 ### Fixed

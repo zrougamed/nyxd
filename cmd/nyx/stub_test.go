@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -335,5 +337,60 @@ func TestRunInterruptedBeforeStart(t *testing.T) {
 		if abort {
 			close(release)
 		}
+	}
+}
+
+// A --rm container can exit, and lose its logs, before a log stream attaches,
+// so a foreground --rm run must get its output from the run stream itself.
+func TestRunRmStreamsOutput(t *testing.T) {
+	var hdr map[string]any
+	sock := stub(t, routes(map[string]http.HandlerFunc{
+		"/run": func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") != mimeRunStreamV1 {
+				http.Error(w, `{"ok":true,"id":"c1"}`, http.StatusOK) // the create-then-follow path
+				return
+			}
+			line, _ := bufio.NewReader(r.Body).ReadBytes('\n')
+			_ = json.Unmarshal(line, &hdr)
+			_, _ = fmt.Fprint(w, "hello\n")
+		},
+		"/logs": func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, `no matching container: "c1"`, http.StatusNotFound)
+		},
+	}))
+	out, errOut, err := capture2(t, func() error { return doRun(sock, []string{"--rm", "img", "echo", "hello"}) })
+	if err != nil || out != "hello\n" {
+		t.Fatalf("out %q err %v stderr %q", out, err, errOut)
+	}
+	if hdr["auto_remove"] != true || hdr["stdin"] == true || hdr["tty"] == true {
+		t.Errorf("run request %v", hdr)
+	}
+}
+
+// An older nyxd answers a run stream without -i/-t with the created container;
+// nyx then follows its logs.
+func TestRunRmOlderDaemon(t *testing.T) {
+	for _, c := range []struct {
+		name, run, want string
+	}{
+		{"follows logs", `{"ok":true,"id":"c1","image":"img"}`, ""},
+		{"no id", `{"ok":true}`, "bad response"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sock := stub(t, routes(map[string]http.HandlerFunc{
+				"/run": func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = fmt.Fprint(w, c.run)
+				},
+				"/logs": reply(200, "old\n"),
+			}))
+			out, errOut, err := capture2(t, func() error { return doRun(sock, []string{"--rm", "--print-id", "img"}) })
+			if c.want == "" && (err != nil || out != "old\n" || !strings.Contains(errOut, "c1")) {
+				t.Fatalf("out %q err %v stderr %q", out, err, errOut)
+			}
+			if c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
+				t.Fatalf("err %v, want %q", err, c.want)
+			}
+		})
 	}
 }

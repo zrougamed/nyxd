@@ -14,7 +14,9 @@
 # Indexes are built in containers (Debian, Fedora, Alpine, Arch); signatures
 # are made here with gpg: GPG_FINGERPRINT selects the key (GPG_PASSPHRASE if
 # it has one). APK_KEY_FILE is the RSA key that signs the Alpine index; without
-# it the Alpine repository is left out. ENGINE=podman to use podman.
+# it the Alpine repository is left out. ENGINE=podman to use podman, ENGINE=nyx
+# for nyxd (which must see PKGDIR and OUTDIR at the same paths); RESOLV_CONF
+# replaces the containers' /etc/resolv.conf.
 set -eu
 PKGDIR=$(cd "${1:?package directory}" && pwd)
 OUT=${2:?output directory}
@@ -22,12 +24,22 @@ OUT=${2:?output directory}
 ENGINE=${ENGINE:-docker}
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
-uid="$(id -u):$(id -g)"
+
+# engine_run ARGS...: a throwaway container.
+engine_run() {
+	if [ -n "${RESOLV_CONF:-}" ]; then
+		$ENGINE run --rm -v "$RESOLV_CONF:/etc/resolv.conf:ro" "$@"
+	else
+		$ENGINE run --rm "$@"
+	fi
+}
 
 # ctr IMAGE SCRIPT: run SCRIPT in IMAGE with the packages at /pkgs and the
-# output at /out, files owned by the caller afterwards.
+# output at /out, files owned by the caller afterwards: by whoever owns /out
+# as the container sees it (the caller, or root of a rootless engine, which
+# is the caller on the host).
 ctr() {
-	$ENGINE run --rm -v "$PKGDIR:/pkgs:ro" -v "$OUT:/out" "$1" sh -euc "$2; chown -R $uid /out"
+	engine_run -v "$PKGDIR:/pkgs:ro" -v "$OUT:/out" "$1" sh -euc "$2; chown -R \$(stat -c %u:%g /out) /out"
 }
 
 gpgsign() { # gpgsign ARGS...: gpg with the release key
@@ -93,7 +105,7 @@ if [ -n "${APK_KEY_FILE:-}" ]; then
 	cp "$APK_KEY_FILE" "$keydir/nyxd.rsa"
 	cp "$OUT/alpine/nyxd.rsa.pub" "$keydir/nyxd.rsa.pub"
 	# apk fetches <pkgname>-<pkgver>.apk: name the files after their .PKGINFO.
-	$ENGINE run --rm -v "$PKGDIR:/pkgs:ro" -v "$OUT:/out" -v "$keydir:/keys:ro" docker.io/library/alpine:3.20 sh -euc "
+	engine_run -v "$PKGDIR:/pkgs:ro" -v "$OUT:/out" -v "$keydir:/keys:ro" docker.io/library/alpine:3.20 sh -euc "
 		apk add -q abuild >/dev/null
 		cp /keys/nyxd.rsa.pub /etc/apk/keys/
 		for a in x86_64 aarch64; do
@@ -106,7 +118,7 @@ if [ -n "${APK_KEY_FILE:-}" ]; then
 			apk index -q --allow-untrusted --rewrite-arch \$a -o APKINDEX.tar.gz -d 'nyxd packages' *.apk
 			abuild-sign -q -k /keys/nyxd.rsa -p nyxd.rsa.pub APKINDEX.tar.gz
 		done
-		chown -R $uid /out"
+		chown -R \$(stat -c %u:%g /out) /out"
 	rm -rf "$keydir"
 else
 	echo "build-repos: APK_KEY_FILE not set: no Alpine repository" >&2

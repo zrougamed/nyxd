@@ -176,6 +176,8 @@ commands:
         --name <id>                 container id (default: auto-generated)
         -p, --publish HOST:PORT[/tcp|udp]   port mapping (repeatable, e.g. -p 8080:80)
         -e, --env KEY=VAL           environment (repeatable)
+        -v, --volume SRC:DST[:ro]   bind mount; SRC is an absolute path on nyxd's host (repeatable)
+        --network host              share the host's network (no published ports)
         --hostname <h> | -h <h>     hostname in container (-h here is hostname, not help)
         --restart <policy>          always | on-failure | unless-stopped | never (default)
         --rm                        remove container logs/state when it exits (like docker --rm)
@@ -335,7 +337,9 @@ func doRun(socket string, args []string) error {
 		}
 	}
 	// Foreground -i/-t: attach stdio to the container init (like docker run -it).
-	if !o.detach && (o.stdin || o.tty) {
+	// Foreground --rm too: its logs go when it exits, which a short command can
+	// do before a log stream attaches.
+	if !o.detach && (o.stdin || o.tty || o.rm) {
 		return doRunAttached(socket, o)
 	}
 
@@ -361,6 +365,12 @@ func doRun(socket string, args []string) error {
 	}
 	if len(o.publish) > 0 {
 		body["publish"] = o.publish
+	}
+	if len(o.volumes) > 0 {
+		body["volumes"] = o.volumes
+	}
+	if o.network != "" {
+		body["network"] = o.network
 	}
 	if o.rm {
 		body["auto_remove"] = true
@@ -520,6 +530,12 @@ func doRunAttached(socket string, o runOpts) error {
 	if len(o.publish) > 0 {
 		body["publish"] = o.publish
 	}
+	if len(o.volumes) > 0 {
+		body["volumes"] = o.volumes
+	}
+	if o.network != "" {
+		body["network"] = o.network
+	}
 	if o.rm {
 		body["auto_remove"] = true
 	}
@@ -582,6 +598,20 @@ func doRunAttached(socket string, o runOpts) error {
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("run: %s", formatRunFailure(resp.StatusCode, string(bytes.TrimSpace(b))))
+	}
+	if strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
+		// An older nyxd attaches only for -i/-t and answers with the created
+		// container: follow its logs, as nyx run did before.
+		var created struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&created); err != nil || created.ID == "" {
+			return fmt.Errorf("run: bad response from nyxd")
+		}
+		if o.printID {
+			fmt.Fprintf(os.Stderr, "%s\n", created.ID)
+		}
+		return streamContainerLogs(context.Background(), socket, created.ID, os.Stdout)
 	}
 	if o.printID {
 		if id := resp.Header.Get("X-Nyxd-Container-Id"); id != "" {

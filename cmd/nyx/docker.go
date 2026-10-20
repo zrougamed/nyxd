@@ -28,6 +28,8 @@ type runOpts struct {
 	rm       bool // --rm: auto-remove logs/state when the container exits
 	stdin    bool // -i: keep stdin open / attach stdin
 	tty      bool // -t: allocate a PTY for the container init
+	volumes  []string // -v host:container[:ro]: bind mounts (host paths on nyxd's host)
+	network  string   // --network: "host" shares the host's network
 }
 
 func parseRunArgs(args []string) (runOpts, error) {
@@ -85,6 +87,30 @@ func parseRunArgs(args []string) (runOpts, error) {
 			i++
 		case strings.HasPrefix(a, "--env="):
 			o.env = append(o.env, strings.TrimPrefix(a, "--env="))
+			i++
+		case a == "-v" || a == "--volume":
+			if i+1 >= len(args) {
+				return o, fmt.Errorf("flag %s requires a value", a)
+			}
+			o.volumes = append(o.volumes, args[i+1])
+			i += 2
+		case strings.HasPrefix(a, "-v="):
+			o.volumes = append(o.volumes, strings.TrimPrefix(a, "-v="))
+			i++
+		case strings.HasPrefix(a, "--volume="):
+			o.volumes = append(o.volumes, strings.TrimPrefix(a, "--volume="))
+			i++
+		case a == "--network" || a == "--net":
+			if i+1 >= len(args) {
+				return o, fmt.Errorf("flag %s requires a value", a)
+			}
+			o.network = args[i+1]
+			i += 2
+		case strings.HasPrefix(a, "--network="):
+			o.network = strings.TrimPrefix(a, "--network=")
+			i++
+		case strings.HasPrefix(a, "--net="):
+			o.network = strings.TrimPrefix(a, "--net=")
 			i++
 		case a == "--name":
 			if i+1 >= len(args) {

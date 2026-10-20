@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/zrougamed/nyxd/internal/build"
+	"github.com/zrougamed/nyxd/internal/bundle"
 	"github.com/zrougamed/nyxd/internal/compose"
 	"github.com/zrougamed/nyxd/internal/health"
 	"github.com/zrougamed/nyxd/internal/image"
@@ -754,6 +755,11 @@ type runRequest struct {
 	Stdin bool `json:"stdin,omitempty"`
 	// AutoRemove deletes container logs when the workload exits for good (docker run --rm).
 	AutoRemove bool `json:"auto_remove,omitempty"`
+	// Volumes are bind mounts, SRC:DST[:ro|rw] with SRC an absolute host path (docker run -v).
+	Volumes []string `json:"volumes,omitempty"`
+	// Network "host" shares the host's network namespace; "", "bridge" or
+	// "default" use the daemon's driver (docker run --network).
+	Network    string `json:"network,omitempty"`
 	Rows       uint16 `json:"rows,omitempty"`
 	Cols       uint16 `json:"cols,omitempty"`
 }
@@ -880,6 +886,33 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	var hostNet bool
+	switch strings.ToLower(strings.TrimSpace(body.Network)) {
+	case "", "bridge", "default":
+	case "host":
+		hostNet = true
+	default:
+		http.Error(w, fmt.Sprintf("network %q: use host, or leave it unset for the default", body.Network), http.StatusBadRequest)
+		return
+	}
+	if hostNet && len(portMaps) > 0 {
+		http.Error(w, "published ports cannot be used with network host: the container binds host ports itself", http.StatusBadRequest)
+		return
+	}
+	var mounts []bundle.Mount
+	for _, v := range body.Volumes {
+		m, err := compose.BindMount(v)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if _, err := os.Stat(m.Source); err != nil {
+			http.Error(w, fmt.Sprintf("volume %q: %s does not exist on the nyxd host", v, m.Source), http.StatusBadRequest)
+			return
+		}
+		mounts = append(mounts, m)
+	}
+
 	m, cfg, paths, err := s.store.ResolvePulledImage(imgRef)
 	if err != nil {
 		s.log.Info("pulling image for run", "ref", imgRef, "err", err)
@@ -933,6 +966,8 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		Terminal:       body.TTY,
 		StdinOpen:      body.Stdin,
 		AutoRemove:     body.AutoRemove,
+		ExtraMounts:    mounts,
+		HostNetwork:    hostNet,
 	}
 	if hc, err := parseRunHealthcheck(body.Healthcheck); err != nil {
 		http.Error(w, "healthcheck: "+err.Error(), http.StatusBadRequest)
@@ -941,7 +976,9 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		spec.Healthcheck = hc
 	}
 
-	if attach && (body.TTY || body.Stdin) {
+	// A run stream gets the container's output even without -i/-t: nyx run --rm
+	// must not race a separate log stream against the removal of the logs.
+	if attach {
 		rc := http.NewResponseController(w)
 		if err := rc.EnableFullDuplex(); err != nil {
 			http.Error(w, "run stream: full duplex not supported: "+err.Error(), http.StatusInternalServerError)

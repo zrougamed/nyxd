@@ -91,12 +91,17 @@ func TestControlContainerLifecycle(t *testing.T) {
 
 	// Run requests that are rejected before anything starts.
 	for want, body := range map[string]map[string]any{
-		"missing image":    {"image": " "},
-		"publish":          {"image": "test/app:1", "publish": []string{"nope"}},
-		"invalid protocol": {"image": "test/app:1", "ports": []map[string]any{{"hostPort": 1, "containerPort": 2, "protocol": "sctp"}}},
-		"invalid port":     {"image": "test/app:1", "ports": []map[string]any{{"hostPort": 0, "containerPort": 2}}},
-		"healthcheck":      {"image": "test/app:1", "healthcheck": map[string]any{"type": "exec"}},
-		"auto_remove":      {"image": "test/app:1", "auto_remove": true, "restart": "always"},
+		"missing image":                    {"image": " "},
+		"publish":                          {"image": "test/app:1", "publish": []string{"nope"}},
+		"invalid protocol":                 {"image": "test/app:1", "ports": []map[string]any{{"hostPort": 1, "containerPort": 2, "protocol": "sctp"}}},
+		"invalid port":                     {"image": "test/app:1", "ports": []map[string]any{{"hostPort": 0, "containerPort": 2}}},
+		"healthcheck":                      {"image": "test/app:1", "healthcheck": map[string]any{"type": "exec"}},
+		"auto_remove":                      {"image": "test/app:1", "auto_remove": true, "restart": "always"},
+		"network \"none\"":                 {"image": "test/app:1", "network": "none"},
+		"cannot be used with network host": {"image": "test/app:1", "network": "host", "ports": []map[string]any{{"hostPort": 18080, "containerPort": 80}}},
+		"absolute path":                    {"image": "test/app:1", "volumes": []string{"rel:/data"}},
+		"does not exist":                   {"image": "test/app:1", "volumes": []string{"/nonexistent-nyxd-test:/data"}},
+		"must be absolute":                 {"image": "test/app:1", "volumes": []string{"/tmp:data"}},
 	} {
 		if code, out := d.Do(t, "POST", "/v1/containers/run", body); code != 400 || !strings.Contains(out, want) {
 			t.Errorf("%s: %d %s", want, code, out)
@@ -200,6 +205,11 @@ func TestControlContainerLifecycle(t *testing.T) {
 	runHdr := `{"image":"test/app:1","id":"run-stdin","args":["cat"],"stdin":true,"auto_remove":true}` + "\nfrom run stdin\n"
 	if code, out := raw(t, d, "POST", "/v1/containers/run", "application/x-nyxd-run+v1", strings.NewReader(runHdr)); code != 200 || !strings.Contains(out, "from run stdin") {
 		t.Errorf("run attach stdin: %d %s", code, out)
+	}
+	// Run stream without -i/-t (nyx run --rm): output of a command that exits at once.
+	plainHdr := `{"image":"test/app:1","id":"run-plain","args":["echo","plain-out"],"auto_remove":true}` + "\n"
+	if code, out := raw(t, d, "POST", "/v1/containers/run", "application/x-nyxd-run+v1", strings.NewReader(plainHdr)); code != 200 || !strings.Contains(out, "plain-out") {
+		t.Errorf("run stream without stdin: %d %s", code, out)
 	}
 	// Attached TTY must not double-write the PTY stream to the client.
 	ttyHdr := `{"image":"test/app:1","id":"run-tty","args":["echo","once-only"],"tty":true,"stdin":true,"auto_remove":true,"rows":24,"cols":80}` + "\n"

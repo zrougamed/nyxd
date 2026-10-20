@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/zrougamed/nyxd/pkg/oci"
@@ -211,6 +212,9 @@ func buildSpec(opts Options, sec *Seccomp) Spec {
 	}
 
 	env := mergeEnv(imgCfg.Config.Env, opts.Env)
+	if !slices.ContainsFunc(env, func(e string) bool { return strings.HasPrefix(e, "PATH=") }) {
+		env = append(env, "PATH="+DefaultPath)
+	}
 
 	cwd := opts.WorkDir
 	if cwd == "" {
@@ -389,6 +393,10 @@ func readonlyPaths() []string {
 		"/proc/bus", "/proc/fs", "/proc/irq", "/proc/sys", "/proc/sysrq-trigger",
 	}
 }
+
+// DefaultPath is the PATH of a container whose image and caller set none,
+// as with Docker: without it the runtime cannot resolve a bare "sh".
+const DefaultPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 func mergeEnv(base, overrides []string) []string {
 	m := make(map[string]string, len(base)+len(overrides))

@@ -104,9 +104,11 @@ repositories and force-pushes them as a single commit to the `gh-pages` branch o
 which GitHub Pages serves at `pkgs.nyxd.io`. Nothing accumulates: each run replaces the whole site.
 
 `scripts/repo-smoke.sh` (`make test-repos`, and the `repos` CI job) builds a snapshot signed with throwaway
-keys, builds the repositories, serves them locally and runs the one-line install in fresh Ubuntu 24.04 and
+keys, builds the repositories, serves them from inside each container and runs the one-line install in fresh Ubuntu 24.04 and
 22.04, Debian 12, Fedora 41, Rocky 9, openSUSE Leap 15.6, Alpine 3.20 and Arch containers: each must finish
-within 60 seconds, leave a working `nyxd`, and uninstall cleanly.
+within 60 seconds, leave a working `nyxd`, and uninstall cleanly. It uses Docker when a Docker daemon answers, otherwise nyxd
+(`ENGINE=nyx`, nyxd v1.1.6 or later, with the temporary directory at the same path on the nyxd host, as on
+the gh-runners local runners).
 
 ### One-time setup (maintainers)
 
