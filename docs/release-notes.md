@@ -17,6 +17,10 @@
   comes from the run stream, as with `-i` / `-t`.
 - Images that set no `PATH` (e.g. `registry.fedoraproject.org/fedora`) could not run
   `sh`: containers now get Docker's default `PATH`.
+- No default `RLIMIT_NPROC` (it was 512): the kernel counts it over every process of the
+  uid on the host, so a container running as a uid the host also uses (the rootless
+  `moby/buildkit` image runs as 1000) failed with `exec …: Resource temporarily
+  unavailable`. The cgroup pids limit (`pids_limit`) still caps a container.
 
 ## 1.1.5
 

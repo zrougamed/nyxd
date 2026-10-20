@@ -229,3 +229,18 @@ func TestBuildSpecDefaultPath(t *testing.T) {
 		t.Errorf("caller PATH: %q", got)
 	}
 }
+
+// RLIMIT_NPROC counts every process of the real uid on the host, so a default
+// one breaks images whose uid the host also uses (moby/buildkit rootless runs
+// as 1000): exec fails with EAGAIN. The cgroup pids limit caps a container.
+func TestBuildSpecDefaultRlimits(t *testing.T) {
+	img := &oci.ImageConfig{Config: oci.ContainerConfig{Cmd: []string{"true"}}}
+	got := buildSpec(Options{ImageConfig: img}, nil).Process.Rlimits
+	if len(got) != 1 || got[0].Type != "RLIMIT_NOFILE" || got[0].Soft != 1024 {
+		t.Errorf("default rlimits: %+v", got)
+	}
+	own := []Rlimit{{Type: "RLIMIT_NPROC", Hard: 64, Soft: 64}}
+	if got := buildSpec(Options{ImageConfig: img, Rlimits: own}, nil).Process.Rlimits; len(got) != 1 || got[0] != own[0] {
+		t.Errorf("caller rlimits: %+v", got)
+	}
+}
