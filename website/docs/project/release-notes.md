@@ -80,7 +80,7 @@
 
 Compose and native-network controls for multi-bridge stacks, plus a macOS VM init fix
 and docs for what works in each environment. Compatible with 1.0; see
-[Stability and compatibility](stability.md).
+[Stability and compatibility](/docs/reference/stability).
 
 ### New
 
@@ -97,9 +97,9 @@ and docs for what works in each environment. Compatible with 1.0; see
   `nyxbr*` bridge, IPAM, NAT, cross-bridge isolation and embedded DNS zone; services that
   omit `networks` stay on `nyxbr0`.
 - **Platform matrix**: feature availability for Linux rootful/rootless/userns-remap and
-  macOS/Windows machines — [platform-matrix.md](platform-matrix.md).
+  macOS/Windows machines — [Platform matrix](/docs/getting-started/platform-matrix).
 - **Docker socket docs**: mounting a host `docker.sock` or running DinD under nyxd —
-  [docker-socket.md](docker-socket.md).
+  [Docker sockets](/docs/operations/docker-socket).
 
 ### Changed
 
@@ -122,7 +122,7 @@ and docs for what works in each environment. Compatible with 1.0; see
 The first stable release. From here on, nyxd follows [Semantic Versioning](https://semver.org): the
 `/v1` API, the `nyx` CLI and its flags, daemon flags, on-disk data, the log format and the packages
 stay compatible for all of 1.x. What is covered, and what is not, is in
-[Stability and compatibility](stability.md).
+[Stability and compatibility](/docs/reference/stability).
 
 ### New
 
@@ -133,10 +133,10 @@ stay compatible for all of 1.x. What is covered, and what is not, is in
   `nyx rm` deletes the logs of an exited container.
 - **Load and failure testing**: `scripts/stress.sh` (`make test-stress`) and the **Stress** workflow
   run 50 containers at once, 200 short-lived ones, a log flood, an OOM kill and a daemon crash with
-  containers running. See [Load and failure testing](stress-testing.md).
+  containers running. See [Load and failure testing](/docs/operations/stress-testing).
 - **Package repositories**: signed apt, dnf/yum, zypper, apk and pacman repositories at
   `pkgs.nyxd.io`, and one-line installers for Linux, macOS and Windows. See
-  [Get started](https://nyxd.io/get-started).
+  [Get started](/get-started).
 - **`make help`**: `make` with no target lists every target.
 - **`nyx --version`** (`-v`) prints the client version without needing the daemon.
 - **Clearer errors when nyxd can't be reached**: `nyx` says whether the daemon isn't running or
