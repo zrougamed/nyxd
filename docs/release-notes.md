@@ -1,5 +1,14 @@
 # Release notes
 
+## 1.1.7
+
+### New
+
+- **`nyx stats`** / **`nyx compose stats`**: live CPU, memory, net/block I/O and PIDs
+  (docker/podman-like; `--no-stream` for one sample). API: `GET /v1/containers/stats`.
+- **`nyx inspect`**: low-level container JSON (array, like docker inspect).
+  API: `GET /v1/containers/{id}/inspect`.
+
 ## 1.1.6
 
 ### New

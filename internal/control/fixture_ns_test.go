@@ -126,6 +126,18 @@ func TestControlContainerLifecycle(t *testing.T) {
 		t.Errorf("list without detail: %s", out)
 	}
 
+	code, out = d.Do(t, "GET", "/v1/containers/web-1/inspect", nil)
+	if code != 200 || !strings.Contains(out, `"id":"web-1"`) || !strings.Contains(out, `"image"`) {
+		t.Fatalf("inspect: %d %s", code, out)
+	}
+	code, out = d.Do(t, "GET", "/v1/containers/stats?ids=web-1&interval_ms=50", nil)
+	if code != 200 || !strings.Contains(out, `"items"`) || !strings.Contains(out, `"web-1"`) {
+		t.Fatalf("stats: %d %s", code, out)
+	}
+	if code, _ = d.Do(t, "GET", "/v1/containers/nosuch/inspect", nil); code != 404 {
+		t.Errorf("inspect missing: %d", code)
+	}
+
 	// ID resolution (through exec, which answers at once): prefix, short id, ambiguity, unknown.
 	short := supervisor.DisplayID("web-1")
 	ids := []string{"web-1", "web-2"}

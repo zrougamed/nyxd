@@ -73,7 +73,7 @@ func resolveComposePathForCLI(flagPath string) (string, error) {
 
 func doCompose(socket string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf(`usage: nyx compose <up|stop|down> [flags]
+		return fmt.Errorf(`usage: nyx compose <up|stop|down|stats> [flags]
 
 flags:
   -f, --file PATH     compose file (default: first match in cwd — nyx-compose.yaml,
@@ -82,13 +82,20 @@ flags:
                       If omitted, defaults to the compose file's parent directory name.
   -v, --volumes       (down only) delete declared named volume host dirs after remove
   --build             (up only) rebuild every service with build: (default: only missing images)
+  --no-stream         (stats only) print one sample and exit
+  --no-trunc          (stats only) do not truncate container ids / names
 
 examples:
   nyx compose up
   nyx compose stop --project myapp
-  nyx compose down -v`)
+  nyx compose down -v
+  nyx compose stats --no-stream
+  nyx compose stats web`)
 	}
 	sub := args[0]
+	if sub == "stats" {
+		return doComposeStats(socket, args[1:])
+	}
 	opts, err := parseComposeArgs(args[1:])
 	if err != nil {
 		return err
@@ -114,8 +121,134 @@ examples:
 		}
 		return doComposeStop(socket, opts)
 	default:
-		return fmt.Errorf("unknown compose subcommand %q (supported: up, stop, down)", sub)
+		return fmt.Errorf("unknown compose subcommand %q (supported: up, stop, down, stats)", sub)
 	}
+}
+
+type composeStatsCLI struct {
+	file     string
+	project  string
+	noStream bool
+	noTrunc  bool
+	services []string
+}
+
+func parseComposeStatsArgs(args []string) (composeStatsCLI, error) {
+	var c composeStatsCLI
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-f" || a == "--file":
+			if i+1 >= len(args) {
+				return c, fmt.Errorf("%s requires a path", a)
+			}
+			i++
+			c.file = args[i]
+		case strings.HasPrefix(a, "-f="):
+			c.file = strings.TrimPrefix(a, "-f=")
+		case strings.HasPrefix(a, "--file="):
+			c.file = strings.TrimPrefix(a, "--file=")
+		case a == "--project":
+			if i+1 >= len(args) {
+				return c, fmt.Errorf("--project requires a value")
+			}
+			i++
+			c.project = args[i]
+		case strings.HasPrefix(a, "--project="):
+			c.project = strings.TrimPrefix(a, "--project=")
+		case a == "--no-stream":
+			c.noStream = true
+		case a == "--no-trunc":
+			c.noTrunc = true
+		case a == "-a" || a == "--all":
+			// reserved
+		case a == "-v" || a == "--volumes" || a == "--build":
+			return c, fmt.Errorf("%s is not valid for compose stats", a)
+		case strings.HasPrefix(a, "-"):
+			return c, fmt.Errorf("unknown flag %q", a)
+		default:
+			c.services = append(c.services, a)
+		}
+	}
+	return c, nil
+}
+
+func doComposeStats(socket string, args []string) error {
+	opts, err := parseComposeStatsArgs(args)
+	if err != nil {
+		return err
+	}
+	abs, err := resolveComposePathForCLI(opts.file)
+	if err != nil {
+		return err
+	}
+	st, err := compose.ParseFile(abs)
+	if err != nil {
+		return fmt.Errorf("compose: %w", err)
+	}
+	project := strings.TrimSpace(opts.project)
+	if project == "" {
+		project = compose.ProjectName(st, abs)
+	}
+	var ids []string
+	if len(opts.services) == 0 {
+		ids = compose.OrderedContainerIDs(st, project)
+	} else {
+		known := make(map[string]struct{}, len(st.Services))
+		for name := range st.Services {
+			known[name] = struct{}{}
+		}
+		for _, svc := range opts.services {
+			if _, ok := known[svc]; !ok {
+				return fmt.Errorf("unknown service %q", svc)
+			}
+			ids = append(ids, compose.ContainerID(project, svc))
+		}
+	}
+	// Only ask the daemon for containers that are actually running; missing
+	// stack members are skipped (docker compose stats does the same).
+	running, err := filterRunningComposeIDs(socket, ids)
+	if err != nil {
+		return err
+	}
+	if len(running) == 0 {
+		printStatsHeader()
+		fmt.Fprintf(os.Stderr, "no containers for project %q\n", project)
+		return nil
+	}
+	return streamStats(socket, running, opts.noStream, opts.noTrunc, project)
+}
+
+func filterRunningComposeIDs(socket string, want []string) ([]string, error) {
+	resp, err := httpClient(socket).Get("http://unix/v1/containers")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("stats: %w", daemonError(resp.StatusCode, body))
+	}
+	var out struct {
+		Containers []string `json:"containers"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("stats: decode: %w", err)
+	}
+	alive := make(map[string]struct{}, len(out.Containers))
+	for _, id := range out.Containers {
+		alive[id] = struct{}{}
+	}
+	var ids []string
+	for _, id := range want {
+		if _, ok := alive[id]; ok {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
 }
 
 func doComposeUp(socket string, opts composeCLI) error {

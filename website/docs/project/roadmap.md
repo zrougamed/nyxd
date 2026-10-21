@@ -141,6 +141,8 @@ major distribution.
       `stop_grace_period`, top-level `name:`, variable substitution and `.env`.
 - [x] **Lifecycle** — `nyx compose up` (builds missing images, `--build`), `stop`, `down`
       (`-v` removes named volumes no longer in use).
+- [x] **`nyx compose stats`** — live CPU/memory/net/block/PIDs for stack services
+      (`--no-stream`, optional service filter).
 - [ ] **Implicit named volumes** — `name:/path` without a top-level `volumes:` entry.
 - [ ] **Volume commands** — `nyx volume ls` / `rm`.
 - [ ] **Unsupported keys** — `expose`, `tmpfs`, `security_opt`, `depends_on.condition` are
@@ -167,6 +169,8 @@ major distribution.
 
 - [x] **HTTP API on a Unix socket** — containers, Compose, images, build, push, save/load; OpenAPI
       in [API reference](/docs/reference/api-reference).
+- [x] **`nyx stats` / `nyx inspect`** — live resource usage (`GET /v1/containers/stats`) and
+      low-level inspect (`GET /v1/containers/{id}/inspect`), docker/podman-like CLI.
 - [x] **Service files** for systemd (system and user), OpenRC, runit and SysV, set up by
       `nyxd-service`, the packages and the installers.
 - [ ] **Metrics** — `internal/telemetry` exists but is not wired to an endpoint.

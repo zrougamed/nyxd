@@ -214,7 +214,8 @@ func TestServerWithoutBackends(t *testing.T) {
 	for _, r := range []struct{ method, path string }{
 		{"POST", "/v1/compose/up"}, {"POST", "/v1/compose/stop"},
 		{"POST", "/v1/compose/down"}, {"POST", "/v1/containers/x/stop"}, {"POST", "/v1/containers/x/remove"},
-		{"POST", "/v1/containers/x/kill"}, {"GET", "/v1/images"}, {"POST", "/v1/images/remove"},
+		{"POST", "/v1/containers/x/kill"}, {"GET", "/v1/containers/x/inspect"}, {"GET", "/v1/containers/stats"},
+		{"GET", "/v1/images"}, {"POST", "/v1/images/remove"},
 		{"POST", "/v1/images/prune"}, {"POST", "/v1/images/pull"}, {"POST", "/v1/images/tag"},
 		{"POST", "/v1/images/push"}, {"GET", "/v1/images/save?ref=x"}, {"POST", "/v1/images/load"},
 		{"POST", "/v1/build"},

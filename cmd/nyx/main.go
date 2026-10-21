@@ -105,6 +105,10 @@ func run(args []string) error {
 		return doRun(socket, args[1:])
 	case "ps":
 		return doPS(socket, args[1:])
+	case "stats":
+		return doStats(socket, args[1:])
+	case "inspect":
+		return doInspect(socket, args[1:])
 	case "rm":
 		return doRM(socket, args[1:])
 	case "logs":
@@ -188,6 +192,10 @@ commands:
         --json                      machine-readable pull/run output
   ps [-q] [--no-trunc]
       list containers
+  stats [--no-stream] [--no-trunc] [CONTAINER...]
+      live resource usage (CPU, memory, net/block I/O, PIDs), like docker stats
+  inspect <id> [<id>...]
+      low-level container details as a JSON array (docker/podman inspect)
   logs [-f] [--tail N|-n N] <id>
       show container logs; -f follows new lines
   stop <id> [<id>...]
@@ -211,18 +219,19 @@ commands:
       remove local image metadata (layers may be pruned if unreferenced)
   image prune [--dry-run|-n]
       delete pulled images not referenced by any running container
-  container <ls|list|rm|logs> ...
-      aliases: same as ps, rm, logs with different word order
+  container <ls|list|rm|logs|stats|inspect> ...
+      aliases: same as ps, rm, logs, stats, inspect with different word order
   exec [-i] [-t|-it] <id> [--] <argv...>
       run a command in a running container; -i streams stdin from this terminal.
       -t allocates a PTY (shell prompt, line editing); combine as -it for an interactive shell.
 
-  compose up|stop|down [-f|--file PATH] [--project NAME] [-v|--volumes] [--build]
+  compose up|stop|down|stats [-f|--file PATH] [--project NAME] [-v|--volumes] [--build]
       compose up: start stack (default file: first of nyx-compose.yaml, docker-compose.yml,
       compose.yaml, podman-compose.yml, plus .yaml/.yml variants, in cwd).
       services with build: are built first when their image is missing (--build: always).
       compose stop: SIGTERM services in reverse dependency order.
       compose down: remove stack containers; -v deletes declared named volume dirs when unreferenced.
+      compose stats [--no-stream] [SERVICE...]: resource usage for the stack (like docker compose stats).
 
 registry logins (first match wins; docker login and podman login work as they are):
   1. --username/--password flags, then NYX_REGISTRY_USERNAME / NYX_REGISTRY_PASSWORD

@@ -206,6 +206,9 @@ func TestMountsAndNames(t *testing.T) {
 	if composeContainerID("default", "web") != "web" || composeContainerID("proj", "web") != "proj-web" {
 		t.Error("composeContainerID")
 	}
+	if ContainerID("proj", "web") != "proj-web" {
+		t.Error("ContainerID")
+	}
 	for in, ok := range map[string]bool{"": true, "1:2": true, "1": false, "x:1": false, "1:y": false} {
 		if _, err := parseComposeUser(in); (err == nil) != ok {
 			t.Errorf("user %q: %v", in, err)

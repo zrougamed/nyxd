@@ -24,10 +24,10 @@ type runOpts struct {
 	hostname string
 	restart  string
 	publish  []string
-	printID  bool // foreground: print container id on stderr (default: off, docker-like)
-	rm       bool // --rm: auto-remove logs/state when the container exits
-	stdin    bool // -i: keep stdin open / attach stdin
-	tty      bool // -t: allocate a PTY for the container init
+	printID  bool     // foreground: print container id on stderr (default: off, docker-like)
+	rm       bool     // --rm: auto-remove logs/state when the container exits
+	stdin    bool     // -i: keep stdin open / attach stdin
+	tty      bool     // -t: allocate a PTY for the container init
 	volumes  []string // -v host:container[:ro]: bind mounts (host paths on nyxd's host)
 	network  string   // --network: "host" shares the host's network
 }
@@ -357,7 +357,7 @@ func doStopMany(socket string, ids []string) error {
 
 func doContainer(socket string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: nyx container <ls|list|rm|logs> ...")
+		return fmt.Errorf("usage: nyx container <ls|list|rm|logs|stats|inspect> ...")
 	}
 	switch args[0] {
 	case "ls", "list":
@@ -369,8 +369,12 @@ func doContainer(socket string, args []string) error {
 			return fmt.Errorf("usage: nyx container logs <id> [flags...]")
 		}
 		return doLogs(socket, args[1:])
+	case "stats":
+		return doStats(socket, args[1:])
+	case "inspect":
+		return doInspect(socket, args[1:])
 	default:
-		return fmt.Errorf("unknown container subcommand %q (try ls, list, rm, logs)", args[0])
+		return fmt.Errorf("unknown container subcommand %q (try ls, list, rm, logs, stats, inspect)", args[0])
 	}
 }
 
