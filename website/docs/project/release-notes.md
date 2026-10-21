@@ -9,6 +9,11 @@
 - **`nyx inspect`**: low-level container JSON (array, like docker inspect).
   API: `GET /v1/containers/{id}/inspect`.
 
+### Security
+
+- Built with Go 1.27.3: fixes GO-2026-6809 in `crypto/x509` (compromised intermediate
+  certificates were trusted), reachable through image pulls over TLS.
+
 ## 1.1.6
 
 ### New
