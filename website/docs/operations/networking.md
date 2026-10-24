@@ -6,6 +6,28 @@ This document describes how the daemon picks a network implementation, how that 
 
 **Only `nyxd` (the daemon)** selects the network backend via CLI flags. The **`nyx` client** does not set `-net-driver`; it talks to the control socket. After you change networking flags, **rebuild and restart `nyxd`** so the new binary and options are in effect.
 
+## Host firewalls (UFW / FORWARD DROP)
+
+Native networking requires `net.bridge.bridge-nf-call-iptables=1`, so bridged container traffic still hits the host **filter FORWARD** hook. Embedded DNS on the bridge gateway hits **INPUT** (UDP/TCP 53).
+
+If the host uses **UFW** (or any firewall) with `DEFAULT_FORWARD_POLICY=DROP` / restrictive INPUT, lookups like `storage.nyxd.local` from a container time out (`read udp …→10.88.0.1:53: i/o timeout`) and east-west service traffic fails — even when `dig @10.88.0.1` works from the host itself.
+
+**nyxd installs ACCEPT rules** (comment prefix `nyxd-fw-`) at the head of `iptables` FORWARD/INPUT for each bridge (`nyxbr0` and compose custom bridges), ahead of UFW’s jumps:
+
+- FORWARD hairpin: `-i BRIDGE -o BRIDGE`
+- FORWARD egress: `-i BRIDGE`
+- FORWARD return: `-o BRIDGE` RELATED,ESTABLISHED
+- INPUT DNS: `-i BRIDGE` UDP/TCP dport 53
+
+Rules are re-asserted on every bridge ensure (container start / `EnsureNetwork`), so a `ufw reload` that wipes them is repaired on the next setup. Verify with:
+
+```bash
+sudo iptables -L FORWARD -n -v --line-numbers | head
+sudo iptables -L INPUT -n -v --line-numbers | head
+```
+
+Workaround if iptables is unavailable: allow the bridge in UFW manually, or run compose services with `network_mode: host` (no bridge DNS).
+
 ## DNS (`-dns`)
 
 nyxd can run a small **embedded DNS** server on the bridge gateway (UDP port 53, default `NYXD_GATEWAY_IP` / `10.88.0.1`) that answers **A** records for container hostnames (`<hostname>` and `<hostname>.nyxd.local`). Containers receive a bind-mounted `/etc/resolv.conf` pointing at that gateway when registration applies.
@@ -19,9 +41,9 @@ nyxd can run a small **embedded DNS** server on the bridge gateway (UDP port 53,
 
 Set **`NYXD_GATEWAY_IP`** (and **`NYXD_CONTAINER_SUBNET`**) to match the bridge your CNI plugin uses if it differs from the native defaults.
 
-**Compose (native):** a service may set `dns:` (IPv4 nameservers) or mount `/etc/resolv.conf`; either replaces the gateway resolv file. A `networks:` entry with both `bridge:` and `subnet:` gets its own host bridge and an embedded DNS zone on that bridge's gateway; services that omit `networks` stay on `nyxbr0`. See [Native network](/docs/operations/native-network).
+**Compose (native):** a service may set `dns:` (IPv4 nameservers) or mount `/etc/resolv.conf`; either replaces the gateway resolv file. A `networks:` entry with both `bridge:` and `subnet:` gets its own host bridge and an embedded DNS zone on that bridge's gateway; services that omit `networks` stay on `nyxbr0`. See [native-network.md](native-network.md).
 
-**AppArmor:** `apparmor_profile` is applied only when the host has AppArmor and the named profile is loaded. On SELinux-only or Alpine hosts the field is ignored (warning logged) so the same compose file does not fail crun. macOS/Windows hosts have no AppArmor (the CLI still runs; the runtime is Linux inside `nyx machine`) — see [Platform matrix](/docs/getting-started/platform-matrix).
+**AppArmor:** `apparmor_profile` is applied only when the host has AppArmor and the named profile is loaded. On SELinux-only or Alpine hosts the field is ignored (warning logged) so the same compose file does not fail crun. macOS/Windows hosts have no AppArmor (the CLI still runs; the runtime is Linux inside `nyx machine`) — see [platform-matrix.md](platform-matrix.md).
 
 **Control API:** `GET /v1/network` returns the active driver, default bridge, gateway, and subnet.
 
@@ -55,7 +77,7 @@ Native networking is implemented under `internal/network/native/` (bridge, veth,
 ## Host network (`-net-driver=host`)
 
 Containers share the host network namespace: no bridge, no NAT, no netns, no extra binaries. It is the
-default (and only) driver for [rootless nyxd](/docs/operations/rootless), and can be selected explicitly when rootful.
+default (and only) driver for [rootless nyxd](rootless.md), and can be selected explicitly when rootful.
 
 - `-p/--publish` is ignored with a warning; services bind host ports directly.
 - The host `/etc/resolv.conf` is bind-mounted read-only; embedded DNS (`-dns`) is off.
@@ -119,7 +141,7 @@ The packaged service (`packaging/linux/nyxd.service`) runs the default **native*
 
 ## Related docs
 
-- [Native network internals](/docs/operations/native-network) — bridge, IPAM, nftables, kernel modules
-- [Docker sockets](/docs/operations/docker-socket) — host `docker.sock` mounts and DinD under nyxd
-- [Kernel requirements](/docs/operations/kernel-requirements) — modules and sysctl
-- [Roadmap](/docs/project/roadmap) — delivery checklist including `-net-driver`
+- [Native network internals](native-network.md) — bridge, IPAM, nftables, kernel modules
+- [Docker sockets](docker-socket.md) — host `docker.sock` mounts and DinD under nyxd
+- [Kernel requirements](kernel-requirements.md) — modules and sysctl
+- [Roadmap](ROADMAP.md) — delivery checklist including `-net-driver`
