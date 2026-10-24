@@ -269,7 +269,7 @@ func doComposePs(socket string, args []string) error {
 	if err != nil {
 		return err
 	}
-	byID := make(map[string]containerDetail, len(detail))
+	byID := make(map[string]psItem, len(detail))
 	for _, it := range detail {
 		byID[it.ID] = it
 	}
@@ -299,11 +299,7 @@ func doComposePs(socket string, args []string) error {
 				status = "unknown"
 			}
 			image = it.Image
-			ports = it.Ports
-			if ports == "" {
-				ports = "-"
-			}
-			ip = it.IP
+			ports, ip = formatPSNet(it)
 			cid = it.ShortID
 			if opts.noTrunc || cid == "" {
 				cid = it.ID
@@ -319,24 +315,12 @@ func doComposePs(socket string, args []string) error {
 		if len(image) > 30 {
 			image = image[:27] + "..."
 		}
-		if len(ports) > 24 {
-			ports = ports[:21] + "..."
-		}
 		fmt.Printf("%-18s %-14s %-30s %-9s %-25s %s\n", svc, cid, image, status, ports, ip)
 	}
 	return nil
 }
 
-type containerDetail struct {
-	ID      string `json:"id"`
-	ShortID string `json:"short_id"`
-	Image   string `json:"image"`
-	IP      string `json:"ip"`
-	Ports   string `json:"ports"`
-	Status  string `json:"status"`
-}
-
-func listContainerDetails(socket string) ([]containerDetail, error) {
+func listContainerDetails(socket string) ([]psItem, error) {
 	resp, err := httpClient(socket).Get("http://unix/v1/containers?detail=1")
 	if err != nil {
 		return nil, err
@@ -350,7 +334,7 @@ func listContainerDetails(socket string) ([]containerDetail, error) {
 		return nil, fmt.Errorf("ps: %w", daemonError(resp.StatusCode, body))
 	}
 	var out struct {
-		Items []containerDetail `json:"items"`
+		Items []psItem `json:"items"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, fmt.Errorf("ps: decode: %w", err)

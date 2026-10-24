@@ -53,7 +53,7 @@ func (d *composeDaemon) handler() http.HandlerFunc {
 		"/compose/stop": reply(200, `{"ok":true,"stopped":["p-app"]}`),
 		"/containers": func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Query().Get("detail") == "1" {
-				io.WriteString(w, `{"items":[{"id":"p-app","short_id":"aaaaaaaaaaaa","image":"p-app:latest","status":"running","ports":"-","ip":""},{"id":"p-web","short_id":"bbbbbbbbbbbb","image":"nginx","status":"running","ports":"80/tcp","ip":"10.88.0.2"}]}`) //nolint:errcheck
+				io.WriteString(w, `{"items":[{"id":"p-app","short_id":"aaaaaaaaaaaa","image":"p-app:latest","status":"running","ports":"","ip":"","host_network":true},{"id":"p-web","short_id":"bbbbbbbbbbbb","image":"nginx","status":"running","ports":"0.0.0.0:80->80/tcp","ip":"10.88.0.2"}]}`) //nolint:errcheck
 				return
 			}
 			io.WriteString(w, `{"containers":["p-app","p-web"]}`) //nolint:errcheck
@@ -91,7 +91,7 @@ services:
 		t.Fatalf("%v\n%s", err, errOut)
 	}
 	if !strings.Contains(out, "SERVICE") || !strings.Contains(out, "app") || !strings.Contains(out, "web") ||
-		!strings.Contains(out, "running") || !strings.Contains(out, "nginx") {
+		!strings.Contains(out, "running") || !strings.Contains(out, "nginx") || !strings.Contains(out, "host") {
 		t.Fatalf("ps table:\n%s", out)
 	}
 	out, _, err = nyx(t, "-socket", sock, "compose", "ps", "-q", "-f", f)

@@ -12,6 +12,8 @@
 - **Security warnings:** `nyx run --network host` / control-socket binds; `compose up` for
   host network, privileged, or host socket mounts; daemon warns when rootful without
   `-userns-remap` or when `-net-driver=host`.
+- **`nyx ps` / `nyx compose ps`:** host-network containers show `host` in the PORTS and IP
+  columns (they have no bridge address or DNAT publish map; processes bind on the host).
 
 ### Fixed
 
