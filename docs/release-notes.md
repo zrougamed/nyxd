@@ -8,6 +8,10 @@
   `driver: host`). Previously the field was ignored and services stayed on the bridge,
   so `127.0.0.1` URLs between services failed. Same rules as `nyx run --network host`
   (no published `ports:`; service names resolve via `/etc/hosts` on loopback).
+- **Image tag / build meta:** concurrent writes of the same image ref (e.g. `nyx compose up
+  --build` while another pull/build finishes) no longer fail with
+  `rename .../ref.tmp .../ref: no such file or directory`. Meta files use unique temp
+  names and image-directory updates are serialised.
 
 ## 1.1.7
 
