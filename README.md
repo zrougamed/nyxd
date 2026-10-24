@@ -10,6 +10,7 @@ Minimal OCI container orchestrator for **Linux** (x86_64, arm64, and similar) �
 Builds images from Dockerfiles with **`nyx build`** (no Docker/BuildKit; see **[docs/build.md](docs/build.md)**) and moves them with **`nyx push` / `save` / `load`** (see **[docs/images.md](docs/images.md)**). Runs as **root** or **rootless** (start `nyxd` as a normal user; see **[docs/rootless.md](docs/rootless.md)**). On **Windows**, `nyx.exe` drives `nyxd` in a minimal WSL2 distro (see **[docs/windows.md](docs/windows.md)**); on **macOS**, in a small Linux VM on vfkit (see **[docs/macos.md](docs/macos.md)**). Uses `crun` as the OCI runtime. **Networking** defaults to in-process **native** mode; optional **CNI** plugins are supported. See **[docs/networking.md](docs/networking.md)** for `-net-driver`, the startup log line, and `nyx run` / stop behavior.
 
 **Docs index:** **[docs/README.md](docs/README.md)** — install, usage, OpenAPI, QEMU Alpine, kernel notes.
+**Security:** **[SECURITY.md](SECURITY.md)** · **[docs/security.md](docs/security.md)** (reporting, threat model, operator guidance).
 
 ## Architecture
 

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### New
+
+- **`nyx compose ps`**: list stack services with container id, image, status, ports, and IP
+  (`-q` / `--no-trunc`; optional service names). Like `docker compose ps`.
+- **SECURITY.md** and **docs/security.md**: vulnerability reporting, threat model, and
+  operator guidance (socket = root-equivalent, rootless preference, known gaps such as
+  unsigned images).
+- **Security warnings:** `nyx run --network host` / control-socket binds; `compose up` for
+  host network, privileged, or host socket mounts; daemon warns when rootful without
+  `-userns-remap` or when `-net-driver=host`.
+
 ### Fixed
 
 - **`nyx compose`**: honour per-service `network_mode: host` (and compose networks with

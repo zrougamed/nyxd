@@ -51,6 +51,13 @@ func (d *composeDaemon) handler() http.HandlerFunc {
 			io.WriteString(w, `{"ok":true,"ids":["p-app","p-web"],"warnings":["network x is internal",7]}`) //nolint:errcheck
 		},
 		"/compose/stop": reply(200, `{"ok":true,"stopped":["p-app"]}`),
+		"/containers": func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Query().Get("detail") == "1" {
+				io.WriteString(w, `{"items":[{"id":"p-app","short_id":"aaaaaaaaaaaa","image":"p-app:latest","status":"running","ports":"-","ip":""},{"id":"p-web","short_id":"bbbbbbbbbbbb","image":"nginx","status":"running","ports":"80/tcp","ip":"10.88.0.2"}]}`) //nolint:errcheck
+				return
+			}
+			io.WriteString(w, `{"containers":["p-app","p-web"]}`) //nolint:errcheck
+		},
 	})
 }
 
@@ -67,6 +74,34 @@ func writeProject(t *testing.T, compose string) string {
 		t.Fatal(err)
 	}
 	return p
+}
+
+func TestComposePs(t *testing.T) {
+	f := writeProject(t, `name: p
+services:
+  app:
+    image: p-app:latest
+  web:
+    image: nginx
+`)
+	d := &composeDaemon{buildReply: buildDone}
+	sock := stub(t, d.handler())
+	out, errOut, err := nyx(t, "-socket", sock, "compose", "ps", "-f", f)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	if !strings.Contains(out, "SERVICE") || !strings.Contains(out, "app") || !strings.Contains(out, "web") ||
+		!strings.Contains(out, "running") || !strings.Contains(out, "nginx") {
+		t.Fatalf("ps table:\n%s", out)
+	}
+	out, _, err = nyx(t, "-socket", sock, "compose", "ps", "-q", "-f", f)
+	if err != nil || !strings.Contains(out, "aaaaaaaaaaaa") || !strings.Contains(out, "bbbbbbbbbbbb") {
+		t.Fatalf("quiet: %q err=%v", out, err)
+	}
+	_, errOut, err = nyx(t, "-socket", sock, "compose", "ps", "-f", f, "nope")
+	if err == nil || !strings.Contains(err.Error()+errOut, "unknown service") {
+		t.Fatalf("unknown service: %v %s", err, errOut)
+	}
 }
 
 func TestComposeUpBuilds(t *testing.T) {
@@ -159,6 +194,7 @@ func TestComposeArgErrors(t *testing.T) {
 		{[]string{"up", "-v", "-f", f}, "does not take -v"},
 		{[]string{"stop", "--build", "-f", f}, "only for compose up"},
 		{[]string{"restart", "-f", f}, "unknown compose subcommand"},
+		{[]string{"ps", "--build", "-f", f}, "not valid for compose ps"},
 		{[]string{"stop"}, "compose"},
 		{[]string{"down"}, "compose"},
 		{[]string{"up"}, "compose"},
@@ -167,6 +203,28 @@ func TestComposeArgErrors(t *testing.T) {
 		_, errOut, err := nyx(t, append([]string{"-socket", sock, "compose"}, c.args...)...)
 		if err == nil || !strings.Contains(err.Error()+errOut, c.want) {
 			t.Errorf("compose %v: err %v, want %q", c.args, err, c.want)
+		}
+	}
+}
+
+func TestComposeUpSecurityWarnings(t *testing.T) {
+	f := writeProject(t, `name: p
+services:
+  web:
+    image: have:1
+    network_mode: host
+    privileged: true
+    volumes: ["/run/nyxd/nyxd.sock:/run/nyxd/nyxd.sock"]
+`)
+	d := &composeDaemon{buildReply: buildDone}
+	sock := stub(t, d.handler())
+	_, errOut, err := nyx(t, "-socket", sock, "compose", "up", "-f", f)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errOut)
+	}
+	for _, want := range []string{"host network", "privileged", "control socket"} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("stderr missing %q:\n%s", want, errOut)
 		}
 	}
 }

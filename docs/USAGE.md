@@ -174,9 +174,13 @@ sudo nyx compose up -f ./prod-compose.yaml --project myapp
 sudo nyx compose up --build        # rebuild services with build: first
 
 sudo nyx compose stop              # SIGTERM / stop path, reverse dependency order
+sudo nyx compose ps                # service / status table (like docker compose ps)
 sudo nyx compose down            # stop + remove containers
 sudo nyx compose down -v         # also remove declared named volume dirs when safe
 ```
+
+Security notes for operators: **[security.md](security.md)**. Compose `network_mode: host`,
+`privileged: true`, and host control-socket binds print warnings on `compose up`.
 
 See **[openapi.yaml](openapi.yaml)** (`ComposeProjectRequest`, `/v1/compose/up|stop|down`) and **[ROADMAP.md](ROADMAP.md)** (compose gaps: no `nyx volume ls`, implicit anonymous named volumes).
 

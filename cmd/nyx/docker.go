@@ -222,6 +222,22 @@ done:
 	return o, nil
 }
 
+// warnRunSecurity prints stderr warnings for run flags that weaken isolation.
+func warnRunSecurity(o runOpts) {
+	if strings.EqualFold(strings.TrimSpace(o.network), "host") {
+		fmt.Fprintln(os.Stderr, "warning: --network host shares the host network namespace (no isolation) — see docs/security.md")
+	}
+	for _, v := range o.volumes {
+		src, _, _ := strings.Cut(v, ":")
+		src = strings.TrimSpace(src)
+		if src == "/var/run/docker.sock" || src == "/run/docker.sock" ||
+			src == "/run/nyxd/nyxd.sock" || strings.HasSuffix(src, "/nyxd.sock") {
+			fmt.Fprintln(os.Stderr, "warning: bind-mounting a host control socket is root-equivalent for that daemon — see docs/security.md")
+			break
+		}
+	}
+}
+
 func doPS(socket string, args []string) error {
 	quiet := false
 	noTrunc := false
