@@ -6,6 +6,28 @@ This document describes how the daemon picks a network implementation, how that 
 
 **Only `nyxd` (the daemon)** selects the network backend via CLI flags. The **`nyx` client** does not set `-net-driver`; it talks to the control socket. After you change networking flags, **rebuild and restart `nyxd`** so the new binary and options are in effect.
 
+## Host firewalls (UFW / FORWARD DROP)
+
+Native networking requires `net.bridge.bridge-nf-call-iptables=1`, so bridged container traffic still hits the host **filter FORWARD** hook. Embedded DNS on the bridge gateway hits **INPUT** (UDP/TCP 53).
+
+If the host uses **UFW** (or any firewall) with `DEFAULT_FORWARD_POLICY=DROP` / restrictive INPUT, lookups like `storage.nyxd.local` from a container time out (`read udp …→10.88.0.1:53: i/o timeout`) and east-west service traffic fails — even when `dig @10.88.0.1` works from the host itself.
+
+**nyxd installs ACCEPT rules** (comment prefix `nyxd-fw-`) at the head of `iptables` FORWARD/INPUT for each bridge (`nyxbr0` and compose custom bridges), ahead of UFW’s jumps:
+
+- FORWARD hairpin: `-i BRIDGE -o BRIDGE`
+- FORWARD egress: `-i BRIDGE`
+- FORWARD return: `-o BRIDGE` RELATED,ESTABLISHED
+- INPUT DNS: `-i BRIDGE` UDP/TCP dport 53
+
+Rules are re-asserted on every bridge ensure (container start / `EnsureNetwork`), so a `ufw reload` that wipes them is repaired on the next setup. Verify with:
+
+```bash
+sudo iptables -L FORWARD -n -v --line-numbers | head
+sudo iptables -L INPUT -n -v --line-numbers | head
+```
+
+Workaround if iptables is unavailable: allow the bridge in UFW manually, or run compose services with `network_mode: host` (no bridge DNS).
+
 ## DNS (`-dns`)
 
 nyxd can run a small **embedded DNS** server on the bridge gateway (UDP port 53, default `NYXD_GATEWAY_IP` / `10.88.0.1`) that answers **A** records for container hostnames (`<hostname>` and `<hostname>.nyxd.local`). Containers receive a bind-mounted `/etc/resolv.conf` pointing at that gateway when registration applies.
