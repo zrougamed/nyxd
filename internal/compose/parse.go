@@ -37,6 +37,9 @@ func validateService(name string, svc *Service, all map[string]Service) error {
 	if err := validateRestart(svc.Restart); err != nil {
 		return fmt.Errorf("service %q: %w", name, err)
 	}
+	if err := validateNetworkMode(svc.NetworkMode); err != nil {
+		return fmt.Errorf("service %q: %w", name, err)
+	}
 	for _, dep := range svc.DependsOn {
 		if _, ok := all[dep]; !ok {
 			return fmt.Errorf("service %q: unknown depends_on %q", name, dep)
@@ -47,6 +50,15 @@ func validateService(name string, svc *Service, all map[string]Service) error {
 		svc.NoNewPrivileges = &t
 	}
 	return nil
+}
+
+func validateNetworkMode(mode string) error {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "host":
+		return nil
+	default:
+		return fmt.Errorf("unsupported network_mode %q (supported: host, or omit for the daemon bridge)", mode)
+	}
 }
 
 func validateRestart(r RestartPolicy) error {

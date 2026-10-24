@@ -1,5 +1,14 @@
 # Release notes
 
+## Unreleased
+
+### Fixed
+
+- **`nyx compose`**: honour per-service `network_mode: host` (and compose networks with
+  `driver: host`). Previously the field was ignored and services stayed on the bridge,
+  so `127.0.0.1` URLs between services failed. Same rules as `nyx run --network host`
+  (no published `ports:`; service names resolve via `/etc/hosts` on loopback).
+
 ## 1.1.7
 
 ### New

@@ -608,7 +608,7 @@ func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var warnings []string
-	if strings.EqualFold(s.netDriver, "host") {
+	if strings.EqualFold(s.netDriver, "host") || compose.StackUsesHostNetwork(st) {
 		warnings = compose.HostNetworkWarnings(st)
 		for _, wmsg := range warnings {
 			s.log.Warn("compose up: host network", "project", project, "warning", wmsg)
@@ -761,9 +761,9 @@ type runRequest struct {
 	Volumes []string `json:"volumes,omitempty"`
 	// Network "host" shares the host's network namespace; "", "bridge" or
 	// "default" use the daemon's driver (docker run --network).
-	Network    string `json:"network,omitempty"`
-	Rows       uint16 `json:"rows,omitempty"`
-	Cols       uint16 `json:"cols,omitempty"`
+	Network string `json:"network,omitempty"`
+	Rows    uint16 `json:"rows,omitempty"`
+	Cols    uint16 `json:"cols,omitempty"`
 }
 
 func runTTYWinSize(body runRequest) *runtime.TTYSize {

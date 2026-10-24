@@ -131,6 +131,8 @@ Details: [images.md](images.md).
 
 **Stop grace:** per-service `stop_grace_period` maps to SIGTERM wait before `nyx stop` / compose stop forces teardown. If omitted, the daemon uses a **10s** default (similar to `docker stop`), not a multi‑minute wait.
 
+**Host network:** per-service `network_mode: host` (or a compose network with `driver: host`) shares the host network namespace, like `nyx run --network host`. Services reach each other on `127.0.0.1` (and by service name via `/etc/hosts`). Published `ports:` are not allowed with host networking — bind inside the process instead (e.g. `0.0.0.0:8080`).
+
 **Resources:** `deploy.resources.limits` (`memory`, `cpus`, `memory_swap`, `pids_limit`, `cpuset_cpus`, …) and `reservations.memory` become cgroup
 limits. A memory limit also caps memory plus swap at twice the limit unless `memory_swap` is set (equal to
 `memory` means no extra swap). Rootless without cgroup delegation, limits are not applied (the daemon
