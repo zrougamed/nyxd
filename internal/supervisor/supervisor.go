@@ -628,12 +628,13 @@ func (s *Supervisor) List() []string {
 
 // ContainerInfo is a stable JSON shape for list/ps APIs.
 type ContainerInfo struct {
-	ID      string `json:"id"`
-	ShortID string `json:"short_id"`
-	Image   string `json:"image"`
-	IP      string `json:"ip,omitempty"`
-	Ports   string `json:"ports,omitempty"`
-	Status  string `json:"status"`
+	ID          string `json:"id"`
+	ShortID     string `json:"short_id"`
+	Image       string `json:"image"`
+	IP          string `json:"ip,omitempty"`
+	Ports       string `json:"ports,omitempty"`
+	Status      string `json:"status"`
+	HostNetwork bool   `json:"host_network,omitempty"`
 }
 
 func formatPortMappings(pm []network.PortMapping) string {
@@ -655,19 +656,23 @@ func formatPortMappings(pm []network.PortMapping) string {
 }
 
 // ListInfo returns supervised containers with runtime status and network IP.
+// Host-network containers have no bridge IP and no DNAT mappings; HostNetwork
+// is set so CLIs can show "host" instead of blank columns.
 func (s *Supervisor) ListInfo(_ context.Context) []ContainerInfo {
 	s.mu.RLock()
 	type snap struct {
 		id, img, ip, ports string
+		hostNet            bool
 	}
 	var snaps []snap
 	for id, e := range s.containers {
 		e.mu.Lock()
 		snaps = append(snaps, snap{
-			id:    id,
-			img:   e.spec.Image,
-			ip:    e.ip,
-			ports: formatPortMappings(e.spec.PortMappings),
+			id:      id,
+			img:     e.spec.Image,
+			ip:      e.ip,
+			ports:   formatPortMappings(e.spec.PortMappings),
+			hostNet: s.onHostNetwork(e.spec),
 		})
 		e.mu.Unlock()
 	}
@@ -683,12 +688,13 @@ func (s *Supervisor) ListInfo(_ context.Context) []ContainerInfo {
 	out := make([]ContainerInfo, 0, len(snaps))
 	for _, sn := range snaps {
 		info := ContainerInfo{
-			ID:      sn.id,
-			ShortID: DisplayID(sn.id),
-			Image:   sn.img,
-			IP:      sn.ip,
-			Ports:   sn.ports,
-			Status:  "unknown",
+			ID:          sn.id,
+			ShortID:     DisplayID(sn.id),
+			Image:       sn.img,
+			IP:          sn.ip,
+			Ports:       sn.ports,
+			Status:      "unknown",
+			HostNetwork: sn.hostNet,
 		}
 		if st, err := s.rt.State(stateCtx, sn.id); err == nil && st != nil {
 			info.Status = st.Status

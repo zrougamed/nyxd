@@ -1,5 +1,31 @@
 # Release notes
 
+## Unreleased
+
+### New
+
+- **`nyx compose ps`**: list stack services with container id, image, status, ports, and IP
+  (`-q` / `--no-trunc`; optional service names). Like `docker compose ps`.
+- **SECURITY.md** and **docs/security.md**: vulnerability reporting, threat model, and
+  operator guidance (socket = root-equivalent, rootless preference, known gaps such as
+  unsigned images).
+- **Security warnings:** `nyx run --network host` / control-socket binds; `compose up` for
+  host network, privileged, or host socket mounts; daemon warns when rootful without
+  `-userns-remap` or when `-net-driver=host`.
+- **`nyx ps` / `nyx compose ps`:** host-network containers show `host` in the PORTS and IP
+  columns (they have no bridge address or DNAT publish map; processes bind on the host).
+
+### Fixed
+
+- **`nyx compose`**: honour per-service `network_mode: host` (and compose networks with
+  `driver: host`). Previously the field was ignored and services stayed on the bridge,
+  so `127.0.0.1` URLs between services failed. Same rules as `nyx run --network host`
+  (no published `ports:`; service names resolve via `/etc/hosts` on loopback).
+- **Image tag / build meta:** concurrent writes of the same image ref (e.g. `nyx compose up
+  --build` while another pull/build finishes) no longer fail with
+  `rename .../ref.tmp .../ref: no such file or directory`. Meta files use unique temp
+  names and image-directory updates are serialised.
+
 ## 1.1.7
 
 ### New

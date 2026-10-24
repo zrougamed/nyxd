@@ -225,12 +225,13 @@ commands:
       run a command in a running container; -i streams stdin from this terminal.
       -t allocates a PTY (shell prompt, line editing); combine as -it for an interactive shell.
 
-  compose up|stop|down|stats [-f|--file PATH] [--project NAME] [-v|--volumes] [--build]
+  compose up|stop|down|ps|stats [-f|--file PATH] [--project NAME] [-v|--volumes] [--build]
       compose up: start stack (default file: first of nyx-compose.yaml, docker-compose.yml,
       compose.yaml, podman-compose.yml, plus .yaml/.yml variants, in cwd).
       services with build: are built first when their image is missing (--build: always).
       compose stop: SIGTERM services in reverse dependency order.
       compose down: remove stack containers; -v deletes declared named volume dirs when unreferenced.
+      compose ps [-q] [SERVICE...]: list stack services and status (like docker compose ps).
       compose stats [--no-stream] [SERVICE...]: resource usage for the stack (like docker compose stats).
 
 registry logins (first match wins; docker login and podman login work as they are):
@@ -345,6 +346,7 @@ func doRun(socket string, args []string) error {
 			return fmt.Errorf("--rm cannot be used with --restart %s", o.restart)
 		}
 	}
+	warnRunSecurity(o)
 	// Foreground -i/-t: attach stdio to the container init (like docker run -it).
 	// Foreground --rm too: its logs go when it exits, which a short command can
 	// do before a log stream attaches.

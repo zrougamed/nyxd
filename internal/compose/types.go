@@ -45,6 +45,11 @@ type Service struct {
 	// Networks this service is attached to.
 	Networks []string `yaml:"networks"`
 
+	// NetworkMode: empty (default bridge) or "host" (share the host network
+	// namespace, like `nyx run --network host`). Compose-spec network_mode.
+	// When "host", published ports are rejected and Networks are ignored.
+	NetworkMode string `yaml:"network_mode,omitempty"`
+
 	// Ports: host:container[/proto]
 	Ports []string `yaml:"ports"`
 

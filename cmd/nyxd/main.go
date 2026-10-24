@@ -108,6 +108,12 @@ func main() {
 	log := newLogger(cfg.LogLevel)
 	log.Info("nyxd starting", "version", version, "baseDir", cfg.BaseDir,
 		"rootless", cfg.Rootless.Rootless, "subids", cfg.Rootless.SubIDs)
+	if !cfg.Rootless.Rootless && os.Geteuid() == 0 {
+		log.Warn("running as root without user-namespace remapping: containers share the host user namespace; prefer rootless nyxd or -userns-remap (docs/security.md)")
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.NetDriver), "host") {
+		log.Warn("net-driver=host: containers share the host network namespace (docs/security.md)")
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

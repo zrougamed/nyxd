@@ -251,6 +251,12 @@ func (s *Store) HasBlob(digest string) bool {
 
 // LoadImageMeta loads a previously pulled image's manifest + config.
 func (s *Store) LoadImageMeta(ref string) (*oci.Manifest, *oci.ImageConfig, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.loadImageMetaUnlocked(ref)
+}
+
+func (s *Store) loadImageMetaUnlocked(ref string) (*oci.Manifest, *oci.ImageConfig, error) {
 	dir := s.imageDir(ref)
 
 	mData, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
@@ -354,10 +360,15 @@ func (s *Store) ListImageRefs() ([]string, error) {
 // RemoveImage deletes local metadata for ref (manifest + config) and prunes layer blobs
 // that are no longer referenced by any remaining image metadata.
 func (s *Store) RemoveImage(ref string) error {
-	if _, _, err := s.LoadImageMeta(ref); err != nil {
+	s.mu.Lock()
+	_, _, err := s.loadImageMetaUnlocked(ref)
+	if err != nil {
+		s.mu.Unlock()
 		return err
 	}
-	if err := os.RemoveAll(s.imageDir(ref)); err != nil {
+	err = os.RemoveAll(s.imageDir(ref))
+	s.mu.Unlock()
+	if err != nil {
 		return fmt.Errorf("remove image dir: %w", err)
 	}
 	if _, err := s.PruneUnreferencedBlobs(); err != nil {
@@ -696,6 +707,12 @@ func (s *Store) fetchBlobToDiskOnce(ctx context.Context, client *registryClient,
 }
 
 func (s *Store) writeImageMeta(ref string, m *oci.Manifest, cfg *oci.ImageConfig) error {
+	// Serialize meta updates for one store: concurrent SaveImage/Tag of the
+	// same ref (compose --build overlapping a pull, or two builds) must not
+	// interleave writes into the same image directory.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	dir := s.imageDir(ref)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -929,10 +946,40 @@ func sanitisePath(s string) string {
 	return strings.NewReplacer("/", "_", ":", "_", "@", "_").Replace(s)
 }
 
+// atomicWrite writes data to path via a uniquely named temp file in the same
+// directory, then renames it into place. A fixed path+".tmp" name is unsafe:
+// two concurrent writers (e.g. compose rebuild + pull of the same tag) race on
+// the same temp file and rename returns ENOENT ("no such file or directory").
 func atomicWrite(path string, data []byte) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	f, err := os.CreateTemp(dir, ".nyxd-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	ok := false
+	defer func() {
+		if !ok {
+			_ = os.Remove(tmp)
+		}
+	}()
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	ok = true
+	return nil
 }

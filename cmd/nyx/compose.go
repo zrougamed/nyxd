@@ -73,28 +73,33 @@ func resolveComposePathForCLI(flagPath string) (string, error) {
 
 func doCompose(socket string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf(`usage: nyx compose <up|stop|down|stats> [flags]
+		return fmt.Errorf(`usage: nyx compose <up|stop|down|ps|stats> [flags]
 
 flags:
   -f, --file PATH     compose file (default: first match in cwd — nyx-compose.yaml,
                       docker-compose.yml, compose.yaml, podman-compose.yml, and .yaml variants)
-  --project NAME      stack prefix for container IDs and volumes (must match across up/stop/down).
+  --project NAME      stack prefix for container IDs and volumes (must match across up/stop/down/ps).
                       If omitted, defaults to the compose file's parent directory name.
   -v, --volumes       (down only) delete declared named volume host dirs after remove
   --build             (up only) rebuild every service with build: (default: only missing images)
+  -q, --quiet         (ps only) print container ids only
   --no-stream         (stats only) print one sample and exit
-  --no-trunc          (stats only) do not truncate container ids / names
+  --no-trunc          (ps/stats) do not truncate container ids / names
 
 examples:
   nyx compose up
+  nyx compose ps
   nyx compose stop --project myapp
   nyx compose down -v
   nyx compose stats --no-stream
   nyx compose stats web`)
 	}
 	sub := args[0]
-	if sub == "stats" {
+	switch sub {
+	case "stats":
 		return doComposeStats(socket, args[1:])
+	case "ps":
+		return doComposePs(socket, args[1:])
 	}
 	opts, err := parseComposeArgs(args[1:])
 	if err != nil {
@@ -121,7 +126,7 @@ examples:
 		}
 		return doComposeStop(socket, opts)
 	default:
-		return fmt.Errorf("unknown compose subcommand %q (supported: up, stop, down, stats)", sub)
+		return fmt.Errorf("unknown compose subcommand %q (supported: up, stop, down, ps, stats)", sub)
 	}
 }
 
@@ -171,6 +176,170 @@ func parseComposeStatsArgs(args []string) (composeStatsCLI, error) {
 		}
 	}
 	return c, nil
+}
+
+type composePsCLI struct {
+	file     string
+	project  string
+	quiet    bool
+	noTrunc  bool
+	services []string
+}
+
+func parseComposePsArgs(args []string) (composePsCLI, error) {
+	var c composePsCLI
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-f" || a == "--file":
+			if i+1 >= len(args) {
+				return c, fmt.Errorf("%s requires a path", a)
+			}
+			i++
+			c.file = args[i]
+		case strings.HasPrefix(a, "-f="):
+			c.file = strings.TrimPrefix(a, "-f=")
+		case strings.HasPrefix(a, "--file="):
+			c.file = strings.TrimPrefix(a, "--file=")
+		case a == "--project":
+			if i+1 >= len(args) {
+				return c, fmt.Errorf("--project requires a value")
+			}
+			i++
+			c.project = args[i]
+		case strings.HasPrefix(a, "--project="):
+			c.project = strings.TrimPrefix(a, "--project=")
+		case a == "-q" || a == "--quiet":
+			c.quiet = true
+		case a == "--no-trunc":
+			c.noTrunc = true
+		case a == "-v" || a == "--volumes" || a == "--build" || a == "--no-stream":
+			return c, fmt.Errorf("%s is not valid for compose ps", a)
+		case strings.HasPrefix(a, "-"):
+			return c, fmt.Errorf("unknown flag %q", a)
+		default:
+			c.services = append(c.services, a)
+		}
+	}
+	return c, nil
+}
+
+// doComposePs lists compose services and their container status (like docker compose ps).
+func doComposePs(socket string, args []string) error {
+	opts, err := parseComposePsArgs(args)
+	if err != nil {
+		return err
+	}
+	abs, err := resolveComposePathForCLI(opts.file)
+	if err != nil {
+		return err
+	}
+	st, err := compose.ParseFile(abs)
+	if err != nil {
+		return fmt.Errorf("compose: %w", err)
+	}
+	project := strings.TrimSpace(opts.project)
+	if project == "" {
+		project = compose.ProjectName(st, abs)
+	}
+
+	type row struct {
+		service string
+		id      string
+	}
+	var rows []row
+	if len(opts.services) == 0 {
+		for _, name := range compose.TopologicalOrder(st) {
+			rows = append(rows, row{service: name, id: compose.ContainerID(project, name)})
+		}
+	} else {
+		known := make(map[string]struct{}, len(st.Services))
+		for name := range st.Services {
+			known[name] = struct{}{}
+		}
+		for _, svc := range opts.services {
+			if _, ok := known[svc]; !ok {
+				return fmt.Errorf("unknown service %q", svc)
+			}
+			rows = append(rows, row{service: svc, id: compose.ContainerID(project, svc)})
+		}
+	}
+
+	detail, err := listContainerDetails(socket)
+	if err != nil {
+		return err
+	}
+	byID := make(map[string]psItem, len(detail))
+	for _, it := range detail {
+		byID[it.ID] = it
+	}
+
+	if opts.quiet {
+		for _, r := range rows {
+			it, ok := byID[r.id]
+			if !ok {
+				continue
+			}
+			if it.ShortID != "" && !opts.noTrunc {
+				fmt.Println(it.ShortID)
+			} else {
+				fmt.Println(it.ID)
+			}
+		}
+		return nil
+	}
+
+	fmt.Println("SERVICE            CONTAINER ID   IMAGE                          STATUS    PORTS                     IP")
+	for _, r := range rows {
+		it, ok := byID[r.id]
+		status, image, ports, ip, cid := "absent", "-", "-", "-", "-"
+		if ok {
+			status = it.Status
+			if status == "" {
+				status = "unknown"
+			}
+			image = it.Image
+			ports, ip = formatPSNet(it)
+			cid = it.ShortID
+			if opts.noTrunc || cid == "" {
+				cid = it.ID
+			}
+			if !opts.noTrunc && cid == it.ID && len(cid) > 12 {
+				cid = cid[:12]
+			}
+		}
+		svc := r.service
+		if len(svc) > 18 {
+			svc = svc[:15] + "..."
+		}
+		if len(image) > 30 {
+			image = image[:27] + "..."
+		}
+		fmt.Printf("%-18s %-14s %-30s %-9s %-25s %s\n", svc, cid, image, status, ports, ip)
+	}
+	return nil
+}
+
+func listContainerDetails(socket string) ([]psItem, error) {
+	resp, err := httpClient(socket).Get("http://unix/v1/containers?detail=1")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ps: %w", daemonError(resp.StatusCode, body))
+	}
+	var out struct {
+		Items []psItem `json:"items"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("ps: decode: %w", err)
+	}
+	return out.Items, nil
 }
 
 func doComposeStats(socket string, args []string) error {
@@ -255,6 +424,9 @@ func doComposeUp(socket string, opts composeCLI) error {
 	abs, err := resolveComposePathForCLI(opts.file)
 	if err != nil {
 		return err
+	}
+	if st, err := compose.ParseFile(abs); err == nil {
+		warnComposeSecurity(st)
 	}
 	var auth image.AuthMap
 	// A path that exists only in the WSL distro (/mnt/c/...) is read by nyxd
@@ -408,6 +580,50 @@ func postComposeJSON(socket, url string, body any, listKey, spinner string) erro
 		}
 	}
 	return nil
+}
+
+// warnComposeSecurity prints stderr warnings for compose fields that weaken
+// isolation (host network, privileged, host sockets / docker.sock binds).
+func warnComposeSecurity(st *compose.Stack) {
+	if st == nil {
+		return
+	}
+	names := make([]string, 0, len(st.Services))
+	for n := range st.Services {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var hostNet, priv, hostSock []string
+	for _, n := range names {
+		svc := st.Services[n]
+		if compose.ServiceUsesHostNetwork(st, svc) {
+			hostNet = append(hostNet, n)
+		}
+		if svc.Privileged {
+			priv = append(priv, n)
+		}
+		for _, v := range svc.Volumes {
+			src, _, _ := strings.Cut(v, ":")
+			src = strings.TrimSpace(src)
+			if src == "/var/run/docker.sock" || src == "/run/docker.sock" ||
+				src == "/run/nyxd/nyxd.sock" || strings.HasSuffix(src, "/nyxd.sock") {
+				hostSock = append(hostSock, n)
+				break
+			}
+		}
+	}
+	if len(hostNet) > 0 {
+		fmt.Fprintf(os.Stderr, "warning: services share the host network (%s): no network namespace isolation — see docs/security.md\n",
+			strings.Join(hostNet, ", "))
+	}
+	if len(priv) > 0 {
+		fmt.Fprintf(os.Stderr, "warning: privileged services (%s): nearly host-equivalent — see docs/security.md\n",
+			strings.Join(priv, ", "))
+	}
+	if len(hostSock) > 0 {
+		fmt.Fprintf(os.Stderr, "warning: services mount a host control socket (%s): that is root-equivalent for the daemon — see docs/security.md\n",
+			strings.Join(hostSock, ", "))
+	}
 }
 
 // composeBuild builds the images of services with build: before the stack

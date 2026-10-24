@@ -222,6 +222,22 @@ done:
 	return o, nil
 }
 
+// warnRunSecurity prints stderr warnings for run flags that weaken isolation.
+func warnRunSecurity(o runOpts) {
+	if strings.EqualFold(strings.TrimSpace(o.network), "host") {
+		fmt.Fprintln(os.Stderr, "warning: --network host shares the host network namespace (no isolation) — see docs/security.md")
+	}
+	for _, v := range o.volumes {
+		src, _, _ := strings.Cut(v, ":")
+		src = strings.TrimSpace(src)
+		if src == "/var/run/docker.sock" || src == "/run/docker.sock" ||
+			src == "/run/nyxd/nyxd.sock" || strings.HasSuffix(src, "/nyxd.sock") {
+			fmt.Fprintln(os.Stderr, "warning: bind-mounting a host control socket is root-equivalent for that daemon — see docs/security.md")
+			break
+		}
+	}
+}
+
 func doPS(socket string, args []string) error {
 	quiet := false
 	noTrunc := false
@@ -257,14 +273,7 @@ func doPS(socket string, args []string) error {
 	}
 
 	var out struct {
-		Items []struct {
-			ID      string `json:"id"`
-			ShortID string `json:"short_id"`
-			Image   string `json:"image"`
-			IP      string `json:"ip"`
-			Ports   string `json:"ports"`
-			Status  string `json:"status"`
-		} `json:"items"`
+		Items []psItem `json:"items"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return fmt.Errorf("ps: decode: %w", err)
@@ -300,16 +309,45 @@ func doPS(socket string, args []string) error {
 		if len(img) > 30 {
 			img = img[:27] + "..."
 		}
-		ports := it.Ports
-		if ports == "" {
-			ports = "-"
-		}
-		if len(ports) > 24 {
-			ports = ports[:21] + "..."
-		}
-		fmt.Printf("%-14s %-30s %-9s %-25s %s\n", cid, img, it.Status, ports, it.IP)
+		ports, ip := formatPSNet(it)
+		fmt.Printf("%-14s %-30s %-9s %-25s %s\n", cid, img, it.Status, ports, ip)
 	}
 	return nil
+}
+
+// psItem is one row from GET /v1/containers?detail=1.
+type psItem struct {
+	ID          string `json:"id"`
+	ShortID     string `json:"short_id"`
+	Image       string `json:"image"`
+	IP          string `json:"ip"`
+	Ports       string `json:"ports"`
+	Status      string `json:"status"`
+	HostNetwork bool   `json:"host_network"`
+}
+
+// formatPSNet shows host-network containers as IP/PORTS "host" (no bridge
+// address and no DNAT mappings — processes bind on the host directly).
+func formatPSNet(it psItem) (ports, ip string) {
+	ports, ip = it.Ports, it.IP
+	if it.HostNetwork {
+		if ports == "" {
+			ports = "host"
+		}
+		if ip == "" {
+			ip = "host"
+		}
+	}
+	if ports == "" {
+		ports = "-"
+	}
+	if ip == "" {
+		ip = "-"
+	}
+	if len(ports) > 24 {
+		ports = ports[:21] + "..."
+	}
+	return ports, ip
 }
 
 func doRM(socket string, args []string) error {

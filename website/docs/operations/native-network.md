@@ -50,6 +50,7 @@ internal/network/native/
 ```
 1. ensureBridge()       → creates nyxbr0 (10.88.0.1/16), brings it up
                            idempotent — sync.Once, safe to call from N goroutines
+                           also installs host firewall ACCEPT rules (see below)
 2. globalIPAM.allocate() → atomically assigns next free IP from 10.88.0.0/16
                             file-backed: /var/lib/nyxd/ipam/<hex-ip> → containerID
                             crash-safe: files survive daemon restart
@@ -63,6 +64,10 @@ internal/network/native/
 6. setLoUp()            → enters netns, RTM_NEWLINK IFF_UP on lo
 7. addPortMappings()    → nft DNAT rules in table ip nyxd-nat
 ```
+
+### Host firewall (UFW)
+
+With `bridge-nf-call-iptables=1`, UFW’s FORWARD DROP blocks container↔container and INPUT can block embedded DNS to `10.88.0.1:53`. `ensureBridgeFirewall` inserts commented `iptables` ACCEPT rules at the head of FORWARD/INPUT for each bridge (same role as Docker’s `docker0` rules). See [networking.md](networking.md#host-firewalls-ufw--forward-drop).
 
 ### On container stop (Teardown)
 

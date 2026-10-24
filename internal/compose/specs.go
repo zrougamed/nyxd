@@ -56,11 +56,16 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 		}
 	}
 
-	// On the host network every service shares the loopback: each one can
-	// reach the others by service or container name (see HostAliases).
-	var aliases []string
+	// On the host network every participating service shares loopback: each
+	// can reach the others by service or container name (see HostAliases).
+	daemonHost := strings.EqualFold(strings.TrimSpace(netDriver), "host")
+	var allAliases, hostAliases []string
 	for _, name := range order {
-		aliases = append(aliases, name, composeContainerID(meta.Project, name))
+		id := composeContainerID(meta.Project, name)
+		allAliases = append(allAliases, name, id)
+		if ServiceUsesHostNetwork(stack, stack.Services[name]) {
+			hostAliases = append(hostAliases, name, id)
+		}
 	}
 
 	out := make([]supervisor.ContainerSpec, 0, len(order))
@@ -77,13 +82,20 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 			return nil, fmt.Errorf("service %q volumes: %w", name, err)
 		}
 
+		hostNet := ServiceUsesHostNetwork(stack, svc)
+		if hostNet && len(svc.Ports) > 0 {
+			return nil, fmt.Errorf("service %q: published ports cannot be used with network host: the container binds host ports itself", name)
+		}
+
 		var portMaps []network.PortMapping
-		for _, p := range svc.Ports {
-			pm, err := network.ParseDockerPublish(p)
-			if err != nil {
-				return nil, fmt.Errorf("service %q ports %q: %w", name, p, err)
+		if !hostNet {
+			for _, p := range svc.Ports {
+				pm, err := network.ParseDockerPublish(p)
+				if err != nil {
+					return nil, fmt.Errorf("service %q ports %q: %w", name, p, err)
+				}
+				portMaps = append(portMaps, pm)
 			}
-			portMaps = append(portMaps, pm)
 		}
 
 		var hc *health.Config
@@ -100,17 +112,25 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 		}
 
 		embedDNS := false
-		internalNet := ServiceUsesOnlyInternalNetworks(stack, svc)
-		nd := strings.ToLower(strings.TrimSpace(netDriver))
-		dm := strings.ToLower(strings.TrimSpace(dnsMode))
-		if dm == "" {
-			dm = "auto"
-		}
-		if nd == "cni" && (dm == "auto" || dm == "embedded") {
-			if dm == "embedded" {
-				embedDNS = true
-			} else {
-				embedDNS = ServiceUsesOnlyInternalNetworks(stack, svc)
+		internalNet := false
+		var bridgeNet ServiceBridgeNet
+		if !hostNet {
+			internalNet = ServiceUsesOnlyInternalNetworks(stack, svc)
+			nd := strings.ToLower(strings.TrimSpace(netDriver))
+			dm := strings.ToLower(strings.TrimSpace(dnsMode))
+			if dm == "" {
+				dm = "auto"
+			}
+			if nd == "cni" && (dm == "auto" || dm == "embedded") {
+				if dm == "embedded" {
+					embedDNS = true
+				} else {
+					embedDNS = ServiceUsesOnlyInternalNetworks(stack, svc)
+				}
+			}
+			bridgeNet, err = ResolveServiceBridge(stack, svc)
+			if err != nil {
+				return nil, fmt.Errorf("service %q networks: %w", name, err)
 			}
 		}
 
@@ -124,11 +144,6 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 			return nil, fmt.Errorf("service %q ulimits: %w", name, err)
 		}
 
-		bridgeNet, err := ResolveServiceBridge(stack, svc)
-		if err != nil {
-			return nil, fmt.Errorf("service %q networks: %w", name, err)
-		}
-
 		dnsServers, err := validateDNSServers(svc.DNS)
 		if err != nil {
 			return nil, fmt.Errorf("service %q dns: %w", name, err)
@@ -137,6 +152,14 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 		env, err := ServiceEnv(&svc, meta.ComposeDir)
 		if err != nil {
 			return nil, fmt.Errorf("service %q: %w", name, err)
+		}
+
+		var aliases []string
+		switch {
+		case daemonHost:
+			aliases = allAliases
+		case hostNet:
+			aliases = hostAliases
 		}
 
 		spec := supervisor.ContainerSpec{
@@ -152,6 +175,7 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 			ReadOnly:           svc.ReadOnly,
 			Hostname:           strings.TrimSpace(name),
 			HostAliases:        aliases,
+			HostNetwork:        hostNet,
 			RestartPolicy:      composeRestartPolicy(svc.Restart),
 			StopTimeout:        time.Duration(svc.StopTimeout.Duration),
 			Healthcheck:        hc,

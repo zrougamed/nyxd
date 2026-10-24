@@ -9,8 +9,13 @@ import (
 )
 
 // HostNetworkWarnings lists what a stack asks for that the host network
-// (rootless nyxd) cannot give it, so compose up can say so instead of
-// silently doing something else.
+// (rootless nyxd, daemon -net-driver=host, or per-service network_mode: host)
+// cannot give it, so compose up can say so instead of silently doing something else.
+//
+// When the stack mixes host and bridge services, only host-network services
+// are considered for port-collision warnings. Internal-network isolation
+// warnings still cover every service that declares an internal network while
+// the daemon (or any service) is on the host network.
 func HostNetworkWarnings(st *Stack) []string {
 	var out []string
 	names := make([]string, 0, len(st.Services))
@@ -23,6 +28,10 @@ func HostNetworkWarnings(st *Stack) []string {
 	var internalSvcs []string
 	for _, n := range names {
 		svc := st.Services[n]
+		if ServiceUsesHostNetwork(st, svc) {
+			// network_mode host ignores Networks; no isolation claim to warn about.
+			continue
+		}
 		for _, net := range svc.Networks {
 			if st.Networks[net].Internal {
 				internalSvcs = append(internalSvcs, n)
@@ -36,9 +45,17 @@ func HostNetworkWarnings(st *Stack) []string {
 	}
 
 	// Two services that listen on the same port collide: they share one network.
+	// Per-service network_mode host rejects ports at spec build; collisions here
+	// matter when the whole daemon uses the host driver (published ports still set).
 	owner := map[string]string{}
 	for _, n := range names {
-		for _, p := range st.Services[n].Ports {
+		svc := st.Services[n]
+		if StackUsesHostNetwork(st) && !ServiceUsesHostNetwork(st, svc) {
+			// Bridge service in a mixed stack: its published ports are DNAT'd,
+			// not a shared bind on the host namespace.
+			continue
+		}
+		for _, p := range svc.Ports {
 			pm, err := network.ParseDockerPublish(p)
 			if err != nil {
 				continue

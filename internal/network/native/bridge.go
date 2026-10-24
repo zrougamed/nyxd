@@ -322,6 +322,8 @@ func ensureBridgeConf(conf bridgeConf, log *slog.Logger) error {
 			log.Warn("container egress nat", "err", err)
 		}
 		ensureBridgeIsolation(conf, log)
+		// Re-assert every call: UFW reload can wipe our ACCEPT rules.
+		ensureBridgeFirewall(conf.Bridge, log)
 		return nil
 	}
 	err = createBridgeConf(conf, log)
@@ -338,6 +340,7 @@ func ensureBridgeConf(conf bridgeConf, log *slog.Logger) error {
 		log.Warn("container egress nat", "err", err)
 	}
 	ensureBridgeIsolation(conf, log)
+	ensureBridgeFirewall(conf.Bridge, log)
 	return nil
 }
 
