@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/zrougamed/nyxd/internal/bundle"
 )
 
 func write(t *testing.T, p, data string) {
@@ -186,6 +188,36 @@ func TestAddArchive(t *testing.T) {
 	gz.Close()
 	f.Close()
 	copyAll(t, ctx, merged, []string{"files.tgz"}, "/opt/", false)
+	if got := read(t, filepath.Join(merged, "opt/pkg/README")); got != "hi" {
+		t.Fatalf("README = %q", got)
+	}
+}
+
+func TestAddArchiveChmodChown(t *testing.T) {
+	ctx, merged := t.TempDir(), t.TempDir()
+	f, _ := os.Create(filepath.Join(ctx, "files.tgz"))
+	gz := gzip.NewWriter(f)
+	tw := tar.NewWriter(gz)
+	_ = tw.WriteHeader(&tar.Header{Name: "pkg/README", Mode: 0o644, Size: 2, Typeflag: tar.TypeReg})
+	_, _ = tw.Write([]byte("hi"))
+	_ = tw.Close()
+	_ = gz.Close()
+	_ = f.Close()
+
+	mode := os.FileMode(0o600)
+	u := bundle.User{UID: uint32(os.Getuid()), GID: uint32(os.Getgid())}
+	sources, err := expandSource(ctx, "files.tgz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sources[0].archive = true
+	if err := copyInto(merged, sources[0], "/opt", true, copyOpts{chown: &u, chmod: &mode}); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(filepath.Join(merged, "opt/pkg/README"))
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("chmod after ADD archive: %v mode=%v", err, fi)
+	}
 	if got := read(t, filepath.Join(merged, "opt/pkg/README")); got != "hi" {
 		t.Fatalf("README = %q", got)
 	}
