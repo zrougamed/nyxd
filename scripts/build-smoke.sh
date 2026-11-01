@@ -65,7 +65,8 @@ echo "$out"
 
 "$BIN/nyx" build -t smoke:1 --build-arg WHO=nyx "$WORK/ctx" >"$WORK/build2.log" 2>&1 || fail "rebuild"
 hits=$(grep -c "Using cache" "$WORK/build2.log" || true)
-[ "$hits" -eq 5 ] || { cat "$WORK/build2.log"; fail "expected 5 cache hits, got $hits"; }
+# gen RUN, final RUN, two COPYs, COPY --from, WORKDIR (WORKDIR now creates a layer).
+[ "$hits" -eq 6 ] || { cat "$WORK/build2.log"; fail "expected 6 cache hits, got $hits"; }
 
 echo b >"$WORK/ctx/conf/b.conf"
 "$BIN/nyx" build -t smoke:2 --build-arg WHO=nyx "$WORK/ctx" >"$WORK/build3.log" 2>&1 || fail "build after change"
