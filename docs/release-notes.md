@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.2.0
+
+Compose host networking and `compose ps`, security process/docs/warnings, UFW-friendly
+bridge firewall rules, and Docker-compatible `WORKDIR` / `VOLUME` / `COPY` behaviour.
+Compatible with 1.x; see [Stability and compatibility](stability.md).
+
 ### New
 
 - **`nyx compose ps`**: list stack services with container id, image, status, ports, and IP
@@ -25,6 +31,13 @@
   --build` while another pull/build finishes) no longer fail with
   `rename .../ref.tmp .../ref: no such file or directory`. Meta files use unique temp
   names and image-directory updates are serialised.
+- **Native bridge + UFW:** with `bridge-nf-call-iptables=1`, UFW's FORWARD DROP no longer
+  black-holes container DNS to the gateway or east-west bridge traffic. nyxd installs
+  idempotent `iptables` ACCEPT rules (comment `nyxd-fw-`) ahead of UFW on each bridge
+  ensure — see [networking.md](networking.md#host-firewalls-ufw--forward-drop).
+- **`nyx build`:** `WORKDIR` and `VOLUME` create their paths; `COPY`/`ADD` destinations of
+  `.` and `/.` are directories (a single file no longer replaces the workdir). `--chmod`
+  and `--checksum` expand like `--chown`; ADD of local archives honours `--chown`/`--chmod`.
 
 ## 1.1.7
 

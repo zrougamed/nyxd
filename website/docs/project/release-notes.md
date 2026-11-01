@@ -1,5 +1,42 @@
 # Release notes
 
+## 1.2.0
+
+Compose host networking and `compose ps`, security process/docs/warnings, UFW-friendly
+bridge firewall rules, and Docker-compatible `WORKDIR` / `VOLUME` / `COPY` behaviour.
+Compatible with 1.x; see [Stability and compatibility](/docs/reference/stability).
+
+### New
+
+- **`nyx compose ps`**: list stack services with container id, image, status, ports, and IP
+  (`-q` / `--no-trunc`; optional service names). Like `docker compose ps`.
+- **SECURITY.md** and **docs/security.md**: vulnerability reporting, threat model, and
+  operator guidance (socket = root-equivalent, rootless preference, known gaps such as
+  unsigned images).
+- **Security warnings:** `nyx run --network host` / control-socket binds; `compose up` for
+  host network, privileged, or host socket mounts; daemon warns when rootful without
+  `-userns-remap` or when `-net-driver=host`.
+- **`nyx ps` / `nyx compose ps`:** host-network containers show `host` in the PORTS and IP
+  columns (they have no bridge address or DNAT publish map; processes bind on the host).
+
+### Fixed
+
+- **`nyx compose`**: honour per-service `network_mode: host` (and compose networks with
+  `driver: host`). Previously the field was ignored and services stayed on the bridge,
+  so `127.0.0.1` URLs between services failed. Same rules as `nyx run --network host`
+  (no published `ports:`; service names resolve via `/etc/hosts` on loopback).
+- **Image tag / build meta:** concurrent writes of the same image ref (e.g. `nyx compose up
+  --build` while another pull/build finishes) no longer fail with
+  `rename .../ref.tmp .../ref: no such file or directory`. Meta files use unique temp
+  names and image-directory updates are serialised.
+- **Native bridge + UFW:** with `bridge-nf-call-iptables=1`, UFW's FORWARD DROP no longer
+  black-holes container DNS to the gateway or east-west bridge traffic. nyxd installs
+  idempotent `iptables` ACCEPT rules (comment `nyxd-fw-`) ahead of UFW on each bridge
+  ensure — see [Networking](/docs/operations/networking#host-firewalls-ufw--forward-drop).
+- **`nyx build`:** `WORKDIR` and `VOLUME` create their paths; `COPY`/`ADD` destinations of
+  `.` and `/.` are directories (a single file no longer replaces the workdir). `--chmod`
+  and `--checksum` expand like `--chown`; ADD of local archives honours `--chown`/`--chmod`.
+
 ## 1.1.7
 
 ### New
