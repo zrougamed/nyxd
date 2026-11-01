@@ -83,6 +83,12 @@ func (bd *build) copy(ctx context.Context, st *stageState, in dockerfile.Instruc
 	if chownSpec, err = dockerfile.Expand(chownSpec, bd.df.Escape, st.lookup); err != nil {
 		return err
 	}
+	if chmodSpec, err = dockerfile.Expand(chmodSpec, bd.df.Escape, st.lookup); err != nil {
+		return err
+	}
+	if checksum, err = dockerfile.Expand(checksum, bd.df.Escape, st.lookup); err != nil {
+		return err
+	}
 
 	b := bd.b
 	// Source root: the build context, or a stage / image for COPY --from.
@@ -155,9 +161,11 @@ func (bd *build) copy(ctx context.Context, st *stageState, in dockerfile.Instruc
 		return errors.New("--checksum is only supported for a single ADD <url>")
 	}
 
-	// Destination: relative to WORKDIR; a directory when it ends with "/",
-	// or with several sources.
-	destDir := strings.HasSuffix(dest, "/") || len(sources) > 1
+	// Destination: relative to WORKDIR. Detect directory destinations before
+	// Join/Clean: "." and "/." collapse onto the workdir path itself, and a
+	// single file would otherwise be written as that path (replacing the
+	// directory).
+	destDir := copyDestIsDir(dest, len(sources))
 	if !path.IsAbs(dest) {
 		wd := st.cfg.Config.WorkingDir
 		if wd == "" {
@@ -329,6 +337,15 @@ func hashFile(h hash.Hash, p string) error {
 	defer f.Close()
 	_, err = io.Copy(h, f)
 	return err
+}
+
+// copyDestIsDir reports whether dest is a directory destination per Docker
+// rules. "." / "/." must be recognized before path.Join and path.Clean.
+func copyDestIsDir(dest string, nSources int) bool {
+	if nSources > 1 || strings.HasSuffix(dest, "/") {
+		return true
+	}
+	return dest == "." || strings.HasSuffix(dest, "/.")
 }
 
 // copyInto copies one source into the merged rootfs at dest.
@@ -566,8 +583,36 @@ func extractArchive(src, target string, o copyOpts) error {
 	if head, _ := br.Peek(3); string(head) == "BZh" {
 		r = bzip2.NewReader(br)
 	}
-	_, err = layer.Apply(r, target, layer.ApplyOptions{Mode: layer.ModeFlatten, Chown: !o.singleID && os.Geteuid() == 0})
-	return err
+	// Tar ownership applies only when --chown is unset; --chown/--chmod then
+	// walk the extracted tree (same as non-archive COPY/ADD).
+	useTarChown := o.chown == nil && !o.singleID && os.Geteuid() == 0
+	if _, err := layer.Apply(r, target, layer.ApplyOptions{Mode: layer.ModeFlatten, Chown: useTarChown}); err != nil {
+		return err
+	}
+	return applyExtractOpts(target, o)
+}
+
+// applyExtractOpts applies --chown/--chmod after ADD extracts an archive.
+// --chmod is limited to regular files so a mode like 0600 cannot remove
+// directory execute bits mid-walk.
+func applyExtractOpts(target string, o copyOpts) error {
+	if o.chown == nil && o.chmod == nil {
+		return nil
+	}
+	return filepath.WalkDir(target, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if o.chown != nil && !o.singleID && os.Geteuid() == 0 {
+			if err := os.Lchown(p, int(o.chown.UID), int(o.chown.GID)); err != nil {
+				return err
+			}
+		}
+		if o.chmod == nil || !d.Type().IsRegular() {
+			return nil
+		}
+		return os.Chmod(p, *o.chmod)
+	})
 }
 
 func urlFileName(raw string) string {

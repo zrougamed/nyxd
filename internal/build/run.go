@@ -65,7 +65,12 @@ func (bd *build) run(ctx context.Context, st *stageState, in dockerfile.Instruct
 		cwd = "/"
 	}
 	if p, err := rootfs.ScopedJoin(merged, cwd); err == nil {
-		_ = os.MkdirAll(p, 0o755)
+		if fi, err := os.Lstat(p); err == nil && !fi.IsDir() {
+			return fmt.Errorf("WORKDIR %s exists and is not a directory", cwd)
+		}
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			return fmt.Errorf("WORKDIR %s: %w", cwd, err)
+		}
 	}
 	user, err := rootfs.ResolveUser(merged, st.cfg.Config.User)
 	if err != nil {

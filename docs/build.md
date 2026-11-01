@@ -76,7 +76,7 @@ Cache records live in `{baseDir}/build/cache/`; layers are ordinary blobs in the
 | `ADD` | ✅ everything `COPY` does (except `--from`), local tar archives (gzip, bzip2, plain) extracted, `http(s)://` URLs with optional `--checksum=sha256:...`. ❌ git URLs, xz archives |
 | `ARG` | ✅ before `FROM` (usable in `FROM` lines) and per stage, defaults, `--build-arg` |
 | `ENV`, `LABEL` | ✅ `k=v` pairs and the legacy `ENV k v` form |
-| `WORKDIR`, `USER`, `EXPOSE`, `VOLUME`, `STOPSIGNAL`, `SHELL` | ✅ |
+| `WORKDIR`, `USER`, `EXPOSE`, `VOLUME`, `STOPSIGNAL`, `SHELL` | ✅ `WORKDIR` and `VOLUME` create their paths; `COPY`/`ADD` destinations of `.` / `/.` are directories |
 | `CMD`, `ENTRYPOINT` | ✅ exec and shell form; a new `ENTRYPOINT` resets an inherited `CMD` |
 | `HEALTHCHECK` | ✅ `CMD` / `NONE`, `--interval`, `--timeout`, `--start-period`, `--retries` (stored in the image config) |
 | `ONBUILD` | stored in the image; triggers from a base image are **not** executed (a warning is printed) |

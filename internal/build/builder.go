@@ -476,7 +476,7 @@ func (bd *build) exec(ctx context.Context, st *stageState, in dockerfile.Instruc
 			w = path.Join("/", st.cfg.Config.WorkingDir, w)
 		}
 		st.cfg.Config.WorkingDir = path.Clean(w)
-		emptyStep(st.cfg.Config.WorkingDir)
+		return bd.ensureWorkdir(st)
 
 	case "user":
 		u, err := dockerfile.Expand(in.Raw, esc, st.lookup)
@@ -510,10 +510,20 @@ func (bd *build) exec(ctx context.Context, st *stageState, in dockerfile.Instruc
 		if st.cfg.Config.Volumes == nil {
 			st.cfg.Config.Volumes = map[string]struct{}{}
 		}
-		for _, v := range ws {
-			st.cfg.Config.Volumes[v] = struct{}{}
+		wd := st.cfg.Config.WorkingDir
+		if wd == "" {
+			wd = "/"
 		}
-		emptyStep(strings.Join(ws, " "))
+		dirs := make([]string, 0, len(ws))
+		for _, v := range ws {
+			if !path.IsAbs(v) {
+				v = path.Join(wd, v)
+			}
+			v = path.Clean(v)
+			st.cfg.Config.Volumes[v] = struct{}{}
+			dirs = append(dirs, v)
+		}
+		return bd.commitMkdirs(st, "volume", "VOLUME "+strings.Join(dirs, " "), dirs...)
 
 	case "stopsignal":
 		s, err := dockerfile.Expand(in.Raw, esc, st.lookup)
@@ -627,6 +637,73 @@ func (b *Builder) blobPaths(layers []oci.Descriptor) []string {
 		out[i] = b.cfg.Store.BlobPath(l.Digest)
 	}
 	return out
+}
+
+// ensureWorkdir creates WorkingDir in the image (Docker: WORKDIR creates the
+// path) and records the step in the cache chain.
+func (bd *build) ensureWorkdir(st *stageState) error {
+	dir := st.cfg.Config.WorkingDir
+	if dir == "" {
+		dir = "/"
+	}
+	return bd.commitMkdirs(st, "workdir", "WORKDIR "+dir, dir)
+}
+
+// commitMkdirs creates dirs in a new layer (Docker: WORKDIR/VOLUME create
+// their paths) and records the step in the cache chain.
+func (bd *build) commitMkdirs(st *stageState, keyKind, createdBy string, dirs ...string) error {
+	st.key = chainKey(st.key, keyKind, strings.Join(dirs, "\n"))
+	b := bd.b
+	if !bd.opts.NoCache {
+		if e, ok := b.cache.get(st.key, b.cfg.Store.HasBlob); ok {
+			fmt.Fprintln(bd.out, "--> Using cache")
+			st.addLayer(e, createdBy)
+			return nil
+		}
+	}
+	need := false
+	for _, dir := range dirs {
+		if dir != "" && dir != "/" {
+			need = true
+			break
+		}
+	}
+	if !need {
+		st.addLayer(cacheEntry{}, createdBy)
+		_ = b.cache.put(st.key, cacheEntry{})
+		return nil
+	}
+	id := randomID("nyxmkdir-")
+	merged, err := b.cfg.Overlay.Prepare(id, b.blobPaths(st.layers), nil)
+	if err != nil {
+		return err
+	}
+	defer b.cfg.Overlay.Remove(id) //nolint:errcheck
+	for _, dir := range dirs {
+		if dir == "" || dir == "/" {
+			continue
+		}
+		p, err := rootfs.ScopedJoin(merged, dir)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			return err
+		}
+	}
+	if err := b.cfg.Overlay.Unmount(id); err != nil {
+		return err
+	}
+	desc, diffID, err := b.commitLayer(id)
+	if err != nil {
+		return err
+	}
+	e := cacheEntry{Layer: desc, DiffID: diffID}
+	if err := b.cache.put(st.key, e); err != nil {
+		b.cfg.Log.Warn("build cache write", "err", err)
+	}
+	st.addLayer(e, createdBy)
+	return nil
 }
 
 // commitLayer turns the upper dir of overlay id into a layer blob. It returns

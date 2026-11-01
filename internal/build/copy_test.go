@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/zrougamed/nyxd/internal/bundle"
 )
 
 func write(t *testing.T, p, data string) {
@@ -50,6 +52,56 @@ func copyAll(t *testing.T, ctx, merged string, srcs []string, dest string, destD
 		if err := copyInto(merged, s, dest, destDir, copyOpts{}); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestCopyDestIsDir(t *testing.T) {
+	cases := []struct {
+		dest string
+		n    int
+		want bool
+	}{
+		{".", 1, true},
+		{"./.", 1, true},
+		{"/app/.", 1, true},
+		{"/app/", 1, true},
+		{"/app", 1, false},
+		{"file", 1, false},
+		{".", 2, true},
+		{"/app", 2, true},
+	}
+	for _, c := range cases {
+		if got := copyDestIsDir(c.dest, c.n); got != c.want {
+			t.Errorf("copyDestIsDir(%q, %d) = %v, want %v", c.dest, c.n, got, c.want)
+		}
+	}
+}
+
+func TestCopyFileIntoDotWorkdir(t *testing.T) {
+	// Mirrors COPY binary . after WORKDIR /app: dest cleans to /app, but must
+	// land as /app/<basename>, not replace /app with a file.
+	ctx, merged := t.TempDir(), t.TempDir()
+	write(t, filepath.Join(ctx, "app"), "binary")
+	if err := os.MkdirAll(filepath.Join(merged, "app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dest := "/app"
+	if !copyDestIsDir(".", 1) {
+		t.Fatal("'.' must be a directory destination")
+	}
+	sources, err := expandSource(ctx, "app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := copyInto(merged, sources[0], dest, true, copyOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(filepath.Join(merged, "app"))
+	if err != nil || !fi.IsDir() {
+		t.Fatalf("/app is not a directory: %v %+v", err, fi)
+	}
+	if got := read(t, filepath.Join(merged, "app/app")); got != "binary" {
+		t.Fatalf("file = %q", got)
 	}
 }
 
@@ -136,6 +188,36 @@ func TestAddArchive(t *testing.T) {
 	gz.Close()
 	f.Close()
 	copyAll(t, ctx, merged, []string{"files.tgz"}, "/opt/", false)
+	if got := read(t, filepath.Join(merged, "opt/pkg/README")); got != "hi" {
+		t.Fatalf("README = %q", got)
+	}
+}
+
+func TestAddArchiveChmodChown(t *testing.T) {
+	ctx, merged := t.TempDir(), t.TempDir()
+	f, _ := os.Create(filepath.Join(ctx, "files.tgz"))
+	gz := gzip.NewWriter(f)
+	tw := tar.NewWriter(gz)
+	_ = tw.WriteHeader(&tar.Header{Name: "pkg/README", Mode: 0o644, Size: 2, Typeflag: tar.TypeReg})
+	_, _ = tw.Write([]byte("hi"))
+	_ = tw.Close()
+	_ = gz.Close()
+	_ = f.Close()
+
+	mode := os.FileMode(0o600)
+	u := bundle.User{UID: uint32(os.Getuid()), GID: uint32(os.Getgid())}
+	sources, err := expandSource(ctx, "files.tgz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sources[0].archive = true
+	if err := copyInto(merged, sources[0], "/opt", true, copyOpts{chown: &u, chmod: &mode}); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(filepath.Join(merged, "opt/pkg/README"))
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("chmod after ADD archive: %v mode=%v", err, fi)
+	}
 	if got := read(t, filepath.Join(merged, "opt/pkg/README")); got != "hi" {
 		t.Fatalf("README = %q", got)
 	}

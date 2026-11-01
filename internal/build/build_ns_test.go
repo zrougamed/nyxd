@@ -369,3 +369,82 @@ func TestBuildReadOnlyCache(t *testing.T) {
 		t.Fatalf("build with a read-only cache: %v", err)
 	}
 }
+
+// COPY/ADD flag values expand like --chown; ADD --chmod applies to archives.
+func TestBuildCopyFlagExpandAndArchiveChmod(t *testing.T) {
+	if !nsrun.Run(t) {
+		return
+	}
+	d := daemon.Start(t)
+	d.Image(t, "test/app:1", nil)
+	e := &env{t: t, d: d, dir: t.TempDir()}
+	e.write("a.txt", "a")
+	// Minimal gzip tar with one file.
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	_ = tw.WriteHeader(&tar.Header{Name: "inside.txt", Mode: 0o644, Size: 3, Typeflag: tar.TypeReg})
+	_, _ = tw.Write([]byte("in\n"))
+	_ = tw.Close()
+	_ = gz.Close()
+	e.write("pkg.tgz", buf.String())
+	sum := sha256.Sum256([]byte("payload"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("payload"))
+	}))
+	t.Cleanup(srv.Close)
+	df := `FROM test/app:1
+ARG MODE=0600
+ARG SUM=sha256:` + hex.EncodeToString(sum[:]) + `
+COPY --chmod=$MODE a.txt /mode.txt
+ADD --chmod=$MODE pkg.tgz /ext/
+ADD --checksum=$SUM ` + srv.URL + `/f /dl.txt
+`
+	if _, err := e.build(df, build.Options{Tags: []string{"test/flags:1"}}); err != nil {
+		t.Fatalf("build: %v\n%s", err, e.out.String())
+	}
+	out := e.runImage("test/flags:1", "cat", "/mode.txt", "/ext/inside.txt", "/dl.txt")
+	for _, want := range []string{"a", "in", "payload"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expanded COPY/ADD missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// WORKDIR must create the path, and COPY file . must land inside it (not
+// replace the workdir with a file). That was the seiri-backend image break.
+func TestBuildWorkdirCopyDot(t *testing.T) {
+	if !nsrun.Run(t) {
+		return
+	}
+	d := daemon.Start(t)
+	d.Image(t, "test/app:1", nil)
+	e := &env{t: t, d: d, dir: t.TempDir()}
+	e.write("bin", "payload")
+	df := `FROM test/app:1
+WORKDIR /app
+COPY bin .
+COPY bin /other/.
+VOLUME /data
+COPY bin /data/bin
+`
+	if _, err := e.build(df, build.Options{Tags: []string{"test/wd:1"}}); err != nil {
+		t.Fatalf("build: %v\n%s", err, e.out.String())
+	}
+	for _, p := range []string{"/app/bin", "/other/bin", "/data/bin"} {
+		out := e.runImage("test/wd:1", "cat", p)
+		if !strings.Contains(out, "payload") {
+			t.Fatalf("%s lacks payload:\n%s", p, out)
+		}
+	}
+	_, cfg, err := d.Store.LoadImageMeta("test/wd:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Config.WorkingDir != "/app" {
+		t.Errorf("WorkingDir = %q", cfg.Config.WorkingDir)
+	}
+	if _, ok := cfg.Config.Volumes["/data"]; !ok {
+		t.Errorf("Volumes = %+v", cfg.Config.Volumes)
+	}
+}
