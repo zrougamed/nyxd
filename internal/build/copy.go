@@ -155,9 +155,11 @@ func (bd *build) copy(ctx context.Context, st *stageState, in dockerfile.Instruc
 		return errors.New("--checksum is only supported for a single ADD <url>")
 	}
 
-	// Destination: relative to WORKDIR; a directory when it ends with "/",
-	// or with several sources.
-	destDir := strings.HasSuffix(dest, "/") || len(sources) > 1
+	// Destination: relative to WORKDIR. Detect directory destinations before
+	// Join/Clean: "." and "/." collapse onto the workdir path itself, and a
+	// single file would otherwise be written as that path (replacing the
+	// directory).
+	destDir := copyDestIsDir(dest, len(sources))
 	if !path.IsAbs(dest) {
 		wd := st.cfg.Config.WorkingDir
 		if wd == "" {
@@ -329,6 +331,15 @@ func hashFile(h hash.Hash, p string) error {
 	defer f.Close()
 	_, err = io.Copy(h, f)
 	return err
+}
+
+// copyDestIsDir reports whether dest is a directory destination per Docker
+// rules. "." / "/." must be recognized before path.Join and path.Clean.
+func copyDestIsDir(dest string, nSources int) bool {
+	if nSources > 1 || strings.HasSuffix(dest, "/") {
+		return true
+	}
+	return dest == "." || strings.HasSuffix(dest, "/.")
 }
 
 // copyInto copies one source into the merged rootfs at dest.

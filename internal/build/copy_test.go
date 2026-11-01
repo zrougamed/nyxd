@@ -53,6 +53,56 @@ func copyAll(t *testing.T, ctx, merged string, srcs []string, dest string, destD
 	}
 }
 
+func TestCopyDestIsDir(t *testing.T) {
+	cases := []struct {
+		dest string
+		n    int
+		want bool
+	}{
+		{".", 1, true},
+		{"./.", 1, true},
+		{"/app/.", 1, true},
+		{"/app/", 1, true},
+		{"/app", 1, false},
+		{"file", 1, false},
+		{".", 2, true},
+		{"/app", 2, true},
+	}
+	for _, c := range cases {
+		if got := copyDestIsDir(c.dest, c.n); got != c.want {
+			t.Errorf("copyDestIsDir(%q, %d) = %v, want %v", c.dest, c.n, got, c.want)
+		}
+	}
+}
+
+func TestCopyFileIntoDotWorkdir(t *testing.T) {
+	// Mirrors COPY binary . after WORKDIR /app: dest cleans to /app, but must
+	// land as /app/<basename>, not replace /app with a file.
+	ctx, merged := t.TempDir(), t.TempDir()
+	write(t, filepath.Join(ctx, "app"), "binary")
+	if err := os.MkdirAll(filepath.Join(merged, "app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dest := "/app"
+	if !copyDestIsDir(".", 1) {
+		t.Fatal("'.' must be a directory destination")
+	}
+	sources, err := expandSource(ctx, "app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := copyInto(merged, sources[0], dest, true, copyOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(filepath.Join(merged, "app"))
+	if err != nil || !fi.IsDir() {
+		t.Fatalf("/app is not a directory: %v %+v", err, fi)
+	}
+	if got := read(t, filepath.Join(merged, "app/app")); got != "binary" {
+		t.Fatalf("file = %q", got)
+	}
+}
+
 func TestCopySemantics(t *testing.T) {
 	ctx, merged := t.TempDir(), t.TempDir()
 	write(t, filepath.Join(ctx, "app/main.go"), "package main")

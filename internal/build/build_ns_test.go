@@ -369,3 +369,41 @@ func TestBuildReadOnlyCache(t *testing.T) {
 		t.Fatalf("build with a read-only cache: %v", err)
 	}
 }
+
+// WORKDIR must create the path, and COPY file . must land inside it (not
+// replace the workdir with a file). That was the seiri-backend image break.
+func TestBuildWorkdirCopyDot(t *testing.T) {
+	if !nsrun.Run(t) {
+		return
+	}
+	d := daemon.Start(t)
+	d.Image(t, "test/app:1", nil)
+	e := &env{t: t, d: d, dir: t.TempDir()}
+	e.write("bin", "payload")
+	df := `FROM test/app:1
+WORKDIR /app
+COPY bin .
+COPY bin /other/.
+VOLUME /data
+COPY bin /data/bin
+`
+	if _, err := e.build(df, build.Options{Tags: []string{"test/wd:1"}}); err != nil {
+		t.Fatalf("build: %v\n%s", err, e.out.String())
+	}
+	for _, p := range []string{"/app/bin", "/other/bin", "/data/bin"} {
+		out := e.runImage("test/wd:1", "cat", p)
+		if !strings.Contains(out, "payload") {
+			t.Fatalf("%s lacks payload:\n%s", p, out)
+		}
+	}
+	_, cfg, err := d.Store.LoadImageMeta("test/wd:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Config.WorkingDir != "/app" {
+		t.Errorf("WorkingDir = %q", cfg.Config.WorkingDir)
+	}
+	if _, ok := cfg.Config.Volumes["/data"]; !ok {
+		t.Errorf("Volumes = %+v", cfg.Config.Volumes)
+	}
+}
