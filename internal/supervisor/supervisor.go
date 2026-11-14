@@ -121,6 +121,7 @@ type containerEntry struct {
 	rootFS    string
 	restarts  int
 	stopped   bool // intentionally stopped - don't restart
+	removed   bool // being removed: leave no exited record
 	logCancel context.CancelFunc
 	checker   *health.Checker
 	// runDone receives the result of the foreground `crun run` that owns the
@@ -135,7 +136,10 @@ type containerEntry struct {
 	attachStdin  io.Reader
 	attachStdout io.Writer
 	attachSize   *runtime.TTYSize
-	mu           sync.Mutex
+	// finished is closed when supervise returns; see finishedChan.
+	finished    chan struct{}
+	monitorDone bool
+	mu          sync.Mutex
 }
 
 // exitedChan returns the channel closed when the current foreground run ends,
@@ -235,21 +239,17 @@ func (s *Supervisor) Start(ctx context.Context, spec ContainerSpec) error {
 		delete(s.containers, spec.ID)
 		s.mu.Unlock()
 		removeBundle(filepath.Join(s.baseDir, "bundles", spec.ID))
+		entry.markFinished()
 		return err
 	}
 	if fastExit {
+		defer entry.markFinished()
 		// Init exited with status 0 before we observed OCI "running" (e.g. default /bin/sh
 		// with no stdin, or a very fast command). No supervisor loop; cleanup is done.
-		s.mu.Lock()
-		delete(s.containers, spec.ID)
-		s.mu.Unlock()
-		s.removePersistedState(spec.ID)
-		removeBundle(entry.bundleDir)
-		if spec.AutoRemove && s.logColl != nil {
-			s.logColl.Remove(spec.ID)
-		}
+		s.dropFinished(entry, 0)
 		return nil
 	}
+	s.forgetExited(spec.ID) // running again: an older exited record is stale
 
 	if spec.Healthcheck != nil {
 		rctx, rcancel := readinessWaitContext(ctx, spec.Healthcheck)
@@ -261,6 +261,7 @@ func (s *Supervisor) Start(ctx context.Context, spec ContainerSpec) error {
 			delete(s.containers, spec.ID)
 			s.mu.Unlock()
 			s.removePersistedState(spec.ID)
+			entry.markFinished()
 			return fmt.Errorf("readiness: %w", err)
 		}
 	}
@@ -305,6 +306,7 @@ func (s *Supervisor) RunAttached(ctx context.Context, spec ContainerSpec, stdin 
 	}
 	s.containers[spec.ID] = entry
 	s.mu.Unlock()
+	defer entry.markFinished() // no monitor goroutine: this call is the monitor
 
 	fastExit, err := s.startOnce(ctx, entry)
 	if err != nil {
@@ -315,16 +317,10 @@ func (s *Supervisor) RunAttached(ctx context.Context, spec ContainerSpec, stdin 
 		return err
 	}
 	if fastExit {
-		s.mu.Lock()
-		delete(s.containers, spec.ID)
-		s.mu.Unlock()
-		s.removePersistedState(spec.ID)
-		removeBundle(entry.bundleDir)
-		if spec.AutoRemove && s.logColl != nil {
-			s.logColl.Remove(spec.ID)
-		}
+		s.dropFinished(entry, 0)
 		return nil
 	}
+	s.forgetExited(spec.ID)
 
 	entry.mu.Lock()
 	runDone := entry.runDone
@@ -359,7 +355,7 @@ func (s *Supervisor) RunAttached(ctx context.Context, spec ContainerSpec, stdin 
 	s.teardownNetwork(context.Background(), spec.ID)
 	s.ovl.Remove(spec.ID) //nolint:errcheck
 	_ = s.rt.Delete(context.Background(), spec.ID, true)
-	s.finishExited(entry)
+	s.finishExited(entry, runtime.ExitCode(runErr))
 	return runErr
 }
 
@@ -381,18 +377,39 @@ func (s *Supervisor) waitStoppedOrForceDelete(waitCtx context.Context, id, op st
 
 // Stop gracefully stops a container.
 func (s *Supervisor) Stop(ctx context.Context, id string) error {
+	return s.stop(ctx, id, 0)
+}
+
+// stop is Stop with a grace period that overrides the spec's when positive.
+// It returns once the monitor has torn the container down, so the id is free
+// for a new run and the container is listed as exited, not "absent".
+func (s *Supervisor) stop(ctx context.Context, id string, grace time.Duration) error {
 	s.mu.RLock()
 	entry, ok := s.containers[id]
 	s.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf("container %s not found", id)
 	}
+	if err := s.stopProcess(ctx, entry, id, grace); err != nil {
+		return err
+	}
+	if !waitClosed(entry.finishedChan(), waitFinishedTimeout) {
+		s.log.Warn("container stopped but teardown still running", "id", id, "waited", waitFinishedTimeout)
+	}
+	return nil
+}
+
+// stopProcess signals the workload and waits for it to exit.
+func (s *Supervisor) stopProcess(_ context.Context, entry *containerEntry, id string, grace time.Duration) error {
 
 	entry.mu.Lock()
 	entry.stopped = true
 	entry.mu.Unlock()
 
 	waitBudget := entry.spec.StopTimeout
+	if grace > 0 {
+		waitBudget = grace
+	}
 	if waitBudget == 0 {
 		waitBudget = defaultStopGrace
 	}
@@ -563,8 +580,19 @@ func (s *Supervisor) Remove(ctx context.Context, id string) error {
 	entry, exists := s.containers[id]
 	s.mu.RUnlock()
 	if !exists {
-		return fmt.Errorf("container %s not found", id)
+		if _, ok := s.readExited(id); !ok {
+			return fmt.Errorf("container %s not found", id)
+		}
+		s.forgetExited(id)
+		if s.logColl != nil {
+			s.logColl.Remove(id)
+		}
+		return nil
 	}
+	entry.mu.Lock()
+	entry.removed = true
+	entry.mu.Unlock()
+	defer s.forgetExited(id)
 
 	if err := s.Stop(ctx, id); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		s.log.Warn("stop before remove", "id", id, "err", err)
@@ -634,6 +662,7 @@ type ContainerInfo struct {
 	IP          string `json:"ip,omitempty"`
 	Ports       string `json:"ports,omitempty"`
 	Status      string `json:"status"`
+	ExitCode    *int   `json:"exit_code,omitempty"` // exited containers only
 	HostNetwork bool   `json:"host_network,omitempty"`
 }
 
@@ -717,6 +746,15 @@ func (s *Supervisor) ImageRefsInUse() map[string]struct{} {
 	for _, e := range s.containers {
 		if r := strings.TrimSpace(e.spec.Image); r != "" {
 			out[r] = struct{}{}
+		}
+	}
+	// Exited containers keep their image until they are removed, so nyx
+	// start still finds it after an image prune.
+	for _, id := range s.ExitedIDs() {
+		if rec, ok := s.readExited(id); ok {
+			if r := strings.TrimSpace(rec.Spec.Image); r != "" {
+				out[r] = struct{}{}
+			}
 		}
 	}
 	return out
@@ -1157,6 +1195,7 @@ func (s *Supervisor) finishForegroundFastExit(ctx context.Context, e *containerE
 // supervise watches a container and applies restart policy.
 func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 	defer s.wg.Done()
+	defer e.markFinished()
 
 	log := s.log.With("id", e.spec.ID)
 
@@ -1205,7 +1244,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 
 		if intentionallyStopped {
 			s.rt.Delete(ctx, e.spec.ID, false) //nolint:errcheck
-			s.finishExited(e)
+			s.finishExited(e, exitCode)
 			return
 		}
 
@@ -1213,7 +1252,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 		if !s.shouldRestart(e, exitCode) {
 			log.Info("not restarting", "policy", e.spec.RestartPolicy, "restarts", e.restarts)
 			s.rt.Delete(ctx, e.spec.ID, false) //nolint:errcheck
-			s.finishExited(e)
+			s.finishExited(e, exitCode)
 			return
 		}
 
@@ -1255,20 +1294,12 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 			e.mu.Unlock()
 			log.Info("container exited", "exitCode", exitCode, "intentional", intentionallyStopped)
 			if intentionallyStopped {
-				s.mu.Lock()
-				delete(s.containers, e.spec.ID)
-				s.mu.Unlock()
-				s.removePersistedState(e.spec.ID)
-				removeBundle(e.bundleDir)
+				s.dropFinished(e, exitCode)
 				return
 			}
 			if !s.shouldRestart(e, exitCode) {
 				log.Info("not restarting", "policy", e.spec.RestartPolicy, "restarts", e.restarts)
-				s.mu.Lock()
-				delete(s.containers, e.spec.ID)
-				s.mu.Unlock()
-				s.removePersistedState(e.spec.ID)
-				removeBundle(e.bundleDir)
+				s.dropFinished(e, exitCode)
 				return
 			}
 			e.restarts++
@@ -1347,12 +1378,27 @@ func (s *Supervisor) cleanup(e *containerEntry) {
 	s.removePersistedState(e.spec.ID)
 }
 
-// finishExited drops supervisor state after a final exit (no restart). With
-// AutoRemove, logs are deleted as well (docker run --rm).
-func (s *Supervisor) finishExited(e *containerEntry) {
+// finishExited drops supervisor state after a final exit (no restart).
+func (s *Supervisor) finishExited(e *containerEntry, exitCode int) {
 	s.closeStdinHold(e)
+	s.dropFinished(e, exitCode)
+}
+
+// dropFinished records the exited container (so nyx start can bring it back)
+// and drops its running state. The record is written before the entry leaves
+// the map: once a container no longer shows as running, its record exists.
+// With AutoRemove, logs are deleted instead (docker run --rm).
+func (s *Supervisor) dropFinished(e *containerEntry, exitCode int) {
+	e.mu.Lock()
+	removed := e.removed
+	e.mu.Unlock()
+	if !removed {
+		s.recordExited(e.spec, exitCode)
+	}
 	s.mu.Lock()
-	delete(s.containers, e.spec.ID)
+	if cur, ok := s.containers[e.spec.ID]; ok && cur == e {
+		delete(s.containers, e.spec.ID)
+	}
 	s.mu.Unlock()
 	s.removePersistedState(e.spec.ID)
 	removeBundle(e.bundleDir)

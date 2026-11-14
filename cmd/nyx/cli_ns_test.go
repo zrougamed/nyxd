@@ -235,6 +235,27 @@ func TestCLIAgainstDaemon(t *testing.T) {
 	// stop / rm.
 	ok(t, "stop", "a1", "a2")
 	fails(t, "no matching container", "stop", "nosuch")
+
+	// start / restart, ps -a.
+	if out := ok(t, "ps", "-a"); !strings.Contains(out, "exited (") {
+		t.Errorf("ps -a after stop: %q", out)
+	}
+	if out := ok(t, "ps"); strings.Contains(out, "exited") {
+		t.Errorf("ps without -a lists exited: %q", out)
+	}
+	if out := ok(t, "start", "a1"); strings.TrimSpace(out) != "a1" {
+		t.Errorf("start: %q", out)
+	}
+	fails(t, "already running", "start", "a1")
+	ok(t, "restart", "-t", "1", "a1")
+	ok(t, "container", "restart", "a1")
+	ok(t, "container", "start", "a2")
+	ok(t, "stop", "a1", "a2")
+	fails(t, "no matching container", "start", "nosuch")
+	fails(t, "no matching container", "restart", "nosuch")
+	fails(t, "usage: nyx start", "start")
+	fails(t, "unknown flag", "start", "--bogus")
+	fails(t, "usage: nyx restart", "restart", "-t", "3")
 	ok(t, "run", "-d", "--name", "r1", "test/app:1", "sleep", "300")
 	ok(t, "run", "-d", "--name", "r2", "test/app:1", "sleep", "300")
 	ok(t, "rm", "r1")
@@ -361,7 +382,15 @@ func TestCLIAgainstDaemon(t *testing.T) {
 		t.Fatal(err)
 	}
 	ok(t, "compose", "up", "-f", cfile)
+	composeLogs(t, cdir)
 	ok(t, "compose", "stop", "--file="+cfile)
+	if out := ok(t, "compose", "start", "--file", cfile); !strings.Contains(out, "proj-s") {
+		t.Errorf("compose start: %q", out)
+	}
+	if out := ok(t, "compose", "restart", "-f", cfile, "s"); !strings.Contains(out, "proj-s") {
+		t.Errorf("compose restart: %q", out)
+	}
+	fails(t, "unknown service", "compose", "restart", "-f", cfile, "nope")
 	ok(t, "compose", "down", "-f="+cfile, "-v")
 	ok(t, "compose", "up", "--file", cfile, "--project", "other")
 	ok(t, "compose", "down", "-f", cfile, "--project=other", "--volumes")
@@ -434,5 +463,50 @@ func TestCLIWithoutDaemon(t *testing.T) {
 		if _, _, err := nyx(t, args...); err == nil {
 			t.Errorf("nyx %s: no error without a daemon", strings.Join(args, " "))
 		}
+	}
+}
+
+// composeLogs runs nyx compose logs against a two-service stack.
+func composeLogs(t *testing.T, dir string) {
+	t.Helper()
+	f := filepath.Join(dir, "logs.yaml")
+	y := "services:\n  a:\n    image: test/app:1\n    command: [trapterm]\n  worker:\n    image: test/app:1\n    command: [trapterm]\n"
+	if err := os.WriteFile(f, []byte(y), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fails(t, "no logs for project", "compose", "logs", "--file", f, "--project", "nolog")
+	ok(t, "compose", "up", "-f", f, "--project", "lg")
+	defer ok(t, "compose", "down", "-f", f, "--project", "lg")
+	daemon.WaitFor(t, 15*time.Second, "both services ready", func() bool {
+		out, _, _ := nyx(t, "compose", "logs", "--file", f, "--project", "lg")
+		return strings.Contains(out, "a      | ready") && strings.Contains(out, "worker | ready")
+	})
+	if out := ok(t, "compose", "logs", "--file", f, "--project", "lg", "--no-prefix", "-t", "worker"); !strings.HasSuffix(out, "Z ready\n") || strings.Contains(out, "|") {
+		t.Errorf("worker only: %q", out)
+	}
+	if out := ok(t, "compose", "logs", "--file", f, "--project", "lg", "--tail", "0"); out != "" {
+		t.Errorf("--tail 0 without -f: %q", out)
+	}
+	fails(t, "unknown service", "compose", "logs", "--file", f, "--project", "lg", "nope")
+
+	// Follow sees the lines written on stop, then ends when the services exit.
+	done := make(chan string, 1)
+	go func() {
+		out, _, _ := nyx(t, "compose", "logs", "-f", "--tail", "0", "--file", f, "--project", "lg")
+		done <- out
+	}()
+	time.Sleep(500 * time.Millisecond)
+	// Not through ok(): the follower holds the stdio capture, so this output
+	// lands in its buffer.
+	if err := run([]string{"compose", "stop", "-f", f, "--project", "lg"}); err != nil {
+		t.Fatalf("compose stop: %v", err)
+	}
+	select {
+	case out := <-done:
+		if !strings.Contains(out, "a      | got TERM") || !strings.Contains(out, "worker | got TERM") || strings.Contains(out, "ready") {
+			t.Errorf("follow: %q", out)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("compose logs -f did not end after compose stop")
 	}
 }

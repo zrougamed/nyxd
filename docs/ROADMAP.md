@@ -46,6 +46,8 @@ major distribution.
       `supervisor/containers/*.json`, or from the bundle metadata when that is missing; the
       service units use `KillMode=process`.
 - [x] **Ordered start** — Compose `depends_on` order, sequential start.
+- [x] **Start / restart** — `nyx start`, `nyx restart [-t N]`, `nyx compose start|restart`;
+      exited containers keep their settings until `nyx rm` and show in `nyx ps -a`.
 - [~] **Shutdown budget** — each parallel stop has its own 45 s timeout; there is no global
       deadline beyond the caller's.
 - [ ] **`restart: on-failure:N`** — surface `MaxRestarts` in `nyx run` and Compose with the
@@ -101,15 +103,17 @@ major distribution.
 - [x] **File format subset** — services, `image`, `build:`, `command` / `entrypoint`,
       `environment` / `env_file`, `ports`, `volumes` (bind and named), `depends_on`,
       `healthcheck`, `restart`, `deploy.resources` (memory, CPU, pids, OOM score), `read_only`,
-      `user`, `cap_add` / `cap_drop`, `privileged`, `seccomp_profile`, `labels`,
+      `tmpfs`, `user`, `cap_add` / `cap_drop`, `privileged`, `seccomp_profile`, `labels`,
       `stop_grace_period`, top-level `name:`, variable substitution and `.env`.
 - [x] **Lifecycle** — `nyx compose up` (builds missing images, `--build`), `stop`, `down`
       (`-v` removes named volumes no longer in use).
+- [x] **`nyx compose logs`** — logs of every service prefixed with its name, merged by time;
+      `-f` follows, `--tail`, `--timestamps`, `--no-prefix`, service filter.
 - [x] **`nyx compose stats`** — live CPU/memory/net/block/PIDs for stack services
       (`--no-stream`, optional service filter).
 - [ ] **Implicit named volumes** — `name:/path` without a top-level `volumes:` entry.
 - [ ] **Volume commands** — `nyx volume ls` / `rm`.
-- [ ] **Unsupported keys** — `expose`, `tmpfs`, `security_opt`, `depends_on.condition` are
+- [ ] **Unsupported keys** — `expose`, `security_opt`, `depends_on.condition` are
       ignored; warn about keys nyxd does not support.
 
 ## Security

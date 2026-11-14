@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -28,7 +29,13 @@ func (s *Server) resolveContainerID(raw string) (string, error) {
 	if s.sup == nil {
 		return raw, nil
 	}
+	// Exited containers resolve too: start, logs and remove act on them.
 	ids := s.sup.List()
+	for _, id := range s.sup.ExitedIDs() {
+		if !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
 
 	for _, id := range ids {
 		if id == raw {

@@ -117,6 +117,7 @@ Under the daemon base directory (default `/var/lib/nyxd`):
 - `overlay/`: extracted layers and merged rootfs trees
 - `bundles/<id>/`: OCI bundle files and run metadata
 - `supervisor/containers/`: persisted per-container supervisor records
+- `supervisor/exited/`: settings of exited containers, kept until `nyx rm`
 - `run/crun/`: runtime state root
 - `logs/<id>.log`: JSONL container logs
 

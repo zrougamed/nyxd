@@ -122,6 +122,10 @@ func run(args []string) error {
 			return fmt.Errorf("usage: nyx stop <id> [<id>...]")
 		}
 		return doStopMany(socket, args[1:])
+	case "start":
+		return doStartMany(socket, args[1:])
+	case "restart":
+		return doRestartMany(socket, args[1:])
 	case "exec":
 		return doExec(socket, args[1:])
 	case "compose":
@@ -182,6 +186,13 @@ commands:
         -e, --env KEY=VAL           environment (repeatable)
         -v, --volume SRC:DST[:ro]   bind mount; SRC is an absolute path on nyxd's host (repeatable)
         --network host              share the host's network (no published ports)
+        -m, --memory <size>         memory limit (e.g. 256m, 1g)
+        --memory-swap <size>        memory plus swap; equal to --memory means no swap
+        --cpus <n>                  CPU limit in cores (e.g. 0.5)
+        --pids-limit <n>            maximum number of processes
+        --oom-score-adj <n>         OOM killer preference, -1000 to 1000
+        --read-only                 mount the root filesystem read-only
+        --tmpfs PATH[:OPTIONS]      tmpfs mount (repeatable; e.g. /tmp:size=64m)
         --hostname <h> | -h <h>     hostname in container (-h here is hostname, not help)
         --restart <policy>          always | on-failure | unless-stopped | never (default)
         --rm                        remove container logs/state when it exits (like docker --rm)
@@ -190,8 +201,8 @@ commands:
         -it                         shorthand for -i -t (interactive shell)
         --print-id                  when attached, also print id on stderr
         --json                      machine-readable pull/run output
-  ps [-q] [--no-trunc]
-      list containers
+  ps [-a] [-q] [--no-trunc]
+      list running containers; -a also lists exited ones (with their exit code)
   stats [--no-stream] [--no-trunc] [CONTAINER...]
       live resource usage (CPU, memory, net/block I/O, PIDs), like docker stats
   inspect <id> [<id>...]
@@ -200,8 +211,12 @@ commands:
       show container logs; -f follows new lines
   stop <id> [<id>...]
       send graceful stop (SIGTERM / image stop signal, then wait)
+  start <id> [<id>...]
+      start an exited container again with the same settings
+  restart [-t SECONDS] <id> [<id>...]
+      stop (SIGKILL after -t seconds, default the container's stop timeout) and start again
   rm <id> [<id>...]
-      remove container(s) and their supervisor state
+      remove container(s), running or exited, with their logs and saved settings
   build [-t TAG]... [-f Dockerfile] [--build-arg K=V]... [--target STAGE] [--no-cache] [-q] <context-dir>
       build an image from a Dockerfile (no Docker/BuildKit; RUN runs in the container sandbox).
       the context honours .dockerignore; -q prints only the image id
@@ -225,13 +240,16 @@ commands:
       run a command in a running container; -i streams stdin from this terminal.
       -t allocates a PTY (shell prompt, line editing); combine as -it for an interactive shell.
 
-  compose up|stop|down|ps|stats [-f|--file PATH] [--project NAME] [-v|--volumes] [--build]
+  compose up|stop|down|ps|logs|stats [-f|--file PATH] [--project NAME] [-v|--volumes] [--build]
       compose up: start stack (default file: first of nyx-compose.yaml, docker-compose.yml,
       compose.yaml, podman-compose.yml, plus .yaml/.yml variants, in cwd).
       services with build: are built first when their image is missing (--build: always).
       compose stop: SIGTERM services in reverse dependency order.
+      compose start|restart [SERVICE...]: start stopped services / restart them, in dependency order.
       compose down: remove stack containers; -v deletes declared named volume dirs when unreferenced.
       compose ps [-q] [SERVICE...]: list stack services and status (like docker compose ps).
+      compose logs [-f] [-n N] [-t] [--no-prefix] [SERVICE...]: logs of the stack's services,
+      prefixed with the service name; -f follows (use --file for the compose file here).
       compose stats [--no-stream] [SERVICE...]: resource usage for the stack (like docker compose stats).
 
 registry logins (first match wins; docker login and podman login work as they are):
@@ -386,6 +404,7 @@ func doRun(socket string, args []string) error {
 	if o.rm {
 		body["auto_remove"] = true
 	}
+	addRunLimitFields(body, o)
 	if o.tty {
 		body["tty"] = true
 	}
@@ -550,6 +569,7 @@ func doRunAttached(socket string, o runOpts) error {
 	if o.rm {
 		body["auto_remove"] = true
 	}
+	addRunLimitFields(body, o)
 	if o.tty && term.IsTerminal(int(os.Stdin.Fd())) {
 		cols, rows, err := term.GetSize(int(os.Stdin.Fd()))
 		if err == nil && cols > 0 && rows > 0 {

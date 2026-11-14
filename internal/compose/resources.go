@@ -14,8 +14,45 @@ func BundleResourcesFromDeploy(d *Deploy) (*bundle.Resources, error) {
 	if d == nil {
 		return nil, nil
 	}
-	lim := d.Resources.Limits
-	res := d.Resources.Reservations
+	return resourcesFrom(d.Resources.Limits, d.Resources.Reservations, func(f string) string {
+		return "deploy.resources." + f
+	})
+}
+
+// RunLimits are the resource flags of `nyx run` (--memory, --cpus, ...).
+type RunLimits struct {
+	Memory      string `json:"memory,omitempty"`
+	MemorySwap  string `json:"memory_swap,omitempty"`
+	CPUs        string `json:"cpus,omitempty"`
+	PidsLimit   int    `json:"pids_limit,omitempty"`
+	OomScoreAdj *int   `json:"oom_score_adj,omitempty"`
+}
+
+// BundleResourcesFromRun maps `nyx run` resource flags into OCI
+// linux.resources, with the same parsing and defaults as compose.
+func BundleResourcesFromRun(l RunLimits) (*bundle.Resources, error) {
+	lim := ResourceSpec{
+		Memory:      l.Memory,
+		MemorySwap:  l.MemorySwap,
+		CPUs:        l.CPUs,
+		OomScoreAdj: l.OomScoreAdj,
+	}
+	if l.PidsLimit != 0 {
+		if l.PidsLimit < 0 {
+			return nil, fmt.Errorf("pids_limit: must be positive, got %d", l.PidsLimit)
+		}
+		lim.PidsLimit = &l.PidsLimit
+	}
+	if l.OomScoreAdj != nil && (*l.OomScoreAdj < -1000 || *l.OomScoreAdj > 1000) {
+		return nil, fmt.Errorf("oom_score_adj: must be between -1000 and 1000, got %d", *l.OomScoreAdj)
+	}
+	return resourcesFrom(lim, ResourceSpec{}, func(f string) string {
+		return strings.TrimPrefix(f, "limits.")
+	})
+}
+
+// resourcesFrom builds linux.resources; field names a setting in errors.
+func resourcesFrom(lim, res ResourceSpec, field func(string) string) (*bundle.Resources, error) {
 
 	var mem *bundle.MemoryRes
 	var cpu *bundle.CPURes
@@ -25,7 +62,7 @@ func BundleResourcesFromDeploy(d *Deploy) (*bundle.Resources, error) {
 	if lim.Memory != "" {
 		b, err := parseByteSize(lim.Memory)
 		if err != nil {
-			return nil, fmt.Errorf("deploy.resources.limits.memory: %w", err)
+			return nil, fmt.Errorf("%s: %w", field("limits.memory"), err)
 		}
 		if b > 0 {
 			mem = &bundle.MemoryRes{Limit: b}
@@ -34,7 +71,7 @@ func BundleResourcesFromDeploy(d *Deploy) (*bundle.Resources, error) {
 	if lim.MemorySwap != "" {
 		b, err := parseByteSize(lim.MemorySwap)
 		if err != nil {
-			return nil, fmt.Errorf("deploy.resources.limits.memory_swap: %w", err)
+			return nil, fmt.Errorf("%s: %w", field("limits.memory_swap"), err)
 		}
 		if b > 0 {
 			if mem == nil {
@@ -48,7 +85,7 @@ func BundleResourcesFromDeploy(d *Deploy) (*bundle.Resources, error) {
 	if res.Memory != "" {
 		b, err := parseByteSize(res.Memory)
 		if err != nil {
-			return nil, fmt.Errorf("deploy.resources.reservations.memory: %w", err)
+			return nil, fmt.Errorf("%s: %w", field("reservations.memory"), err)
 		}
 		if b > 0 {
 			if mem == nil {
@@ -73,7 +110,7 @@ func BundleResourcesFromDeploy(d *Deploy) (*bundle.Resources, error) {
 	if lim.CPUs != "" {
 		q, period, err := parseCPUQuota(lim.CPUs)
 		if err != nil {
-			return nil, fmt.Errorf("deploy.resources.limits.cpus: %w", err)
+			return nil, fmt.Errorf("%s: %w", field("limits.cpus"), err)
 		}
 		if q > 0 && period > 0 {
 			cpu = &bundle.CPURes{Quota: q, Period: period}
