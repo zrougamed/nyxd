@@ -18,6 +18,11 @@
   exit code. API: `POST /v1/containers/{id}/start|restart`, `POST /v1/compose/start|restart`,
   `GET /v1/containers?detail=1&all=1`.
 
+### Security
+
+- Built with Go 1.27.4: fixes GO-2026-6859 in `net/http`, which nyxd reaches through the
+  control API server and registry pulls.
+
 ### Changed
 
 - **Exited containers are kept until `nyx rm`** (their spec under
