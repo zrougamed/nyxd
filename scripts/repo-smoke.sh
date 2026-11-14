@@ -119,7 +119,7 @@ registry.fedoraproject.org/fedora:41|true
 docker.io/rockylinux/rockylinux:9|true
 docker.io/opensuse/leap:15.6|zypper -q --non-interactive install curl gzip >/dev/null
 docker.io/library/alpine:3.20|apk add -q curl
-docker.io/library/archlinux:latest|true
+docker.io/library/archlinux:latest|pacman -Syu --noconfirm >/dev/null
 '
 echo "$images" | while IFS='|' read -r image prep; do
 	[ -n "$image" ] || continue
