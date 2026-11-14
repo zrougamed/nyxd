@@ -12,6 +12,20 @@
   name (coloured on a terminal), merged by time. `-f` follows until the services exit,
   `-n` / `--tail`, `-t` / `--timestamps`, `--no-prefix`, `--no-color`, optional service names.
   As in `docker compose logs`, `-f` means follow here; give the compose file with `--file`.
+- **`nyx start`, `nyx restart [-t SECONDS]`, `nyx compose start|restart [SERVICE...]`**: a
+  container that exits for good now keeps its settings until `nyx rm`, so it can be started
+  again without repeating the `nyx run` flags. `nyx ps -a` lists exited containers with their
+  exit code. API: `POST /v1/containers/{id}/start|restart`, `POST /v1/compose/start|restart`,
+  `GET /v1/containers?detail=1&all=1`.
+
+### Changed
+
+- **Exited containers are kept until `nyx rm`** (their spec under
+  `{base-dir}/supervisor/exited/`; `--rm` containers excepted). `nyx image prune` keeps the
+  images they use, as Docker does. `nyx run --name X` over an exited `X` replaces it, as before.
+- **`nyx stop` returns once the container is torn down**, so `nyx ps` no longer shows it as
+  `absent` for a moment and a `nyx run --name` right after a stop does not fail with
+  "already running".
 
 ## 1.2.0
 

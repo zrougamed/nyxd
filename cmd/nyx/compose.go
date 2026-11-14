@@ -73,7 +73,7 @@ func resolveComposePathForCLI(flagPath string) (string, error) {
 
 func doCompose(socket string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf(`usage: nyx compose <up|stop|down|ps|logs|stats> [flags]
+		return fmt.Errorf(`usage: nyx compose <up|stop|start|restart|down|ps|logs|stats> [flags]
 
 flags:
   -f, --file PATH     compose file (default: first match in cwd — nyx-compose.yaml,
@@ -98,6 +98,7 @@ examples:
   nyx compose ps
   nyx compose logs -f --tail 50 api worker
   nyx compose stop --project myapp
+  nyx compose restart api
   nyx compose down -v
   nyx compose stats --no-stream
   nyx compose stats web`)
@@ -114,6 +115,9 @@ examples:
 	opts, err := parseComposeArgs(args[1:])
 	if err != nil {
 		return err
+	}
+	if sub == "start" || sub == "restart" {
+		return doComposeLifecycle(socket, sub, opts)
 	}
 	if len(opts.positional) > 0 {
 		return fmt.Errorf("unexpected argument %q", opts.positional[0])
@@ -136,7 +140,7 @@ examples:
 		}
 		return doComposeStop(socket, opts)
 	default:
-		return fmt.Errorf("unknown compose subcommand %q (supported: up, stop, down, ps, logs, stats)", sub)
+		return fmt.Errorf("unknown compose subcommand %q (supported: up, stop, start, restart, down, ps, logs, stats)", sub)
 	}
 }
 
@@ -573,7 +577,10 @@ func postComposeJSON(socket, url string, body any, listKey, spinner string) erro
 	}
 	if n := len(rawList); n > 0 && spinner != "" {
 		label := "Stopped"
-		if strings.Contains(spinner, "Starting") {
+		switch {
+		case strings.Contains(spinner, "Restarting"):
+			label = "Restarted"
+		case strings.Contains(spinner, "Starting"):
 			label = "Started"
 		}
 		ids := make([]string, 0, n)

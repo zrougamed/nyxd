@@ -82,6 +82,8 @@ major distribution.
       `supervisor/containers/*.json`, or from the bundle metadata when that is missing; the
       service units use `KillMode=process`.
 - [x] **Ordered start** — Compose `depends_on` order, sequential start.
+- [x] **Start / restart** — `nyx start`, `nyx restart [-t N]`, `nyx compose start|restart`;
+      exited containers keep their settings until `nyx rm` and show in `nyx ps -a`.
 - [~] **Shutdown budget** — each parallel stop has its own 45 s timeout; there is no global
       deadline beyond the caller's.
 - [ ] **`restart: on-failure:N`** — surface `MaxRestarts` in `nyx run` and Compose with the

@@ -97,6 +97,15 @@ paths:
             type: string
             enum: ["1", "true", ""]
           description: When `1` or `true`, include per-container metadata in `items`.
+        - name: all
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["1", "true", ""]
+          description: |
+            With `detail`, also list exited containers that were not removed (status `exited`,
+            with `exit_code`), like `docker ps -a`.
       responses:
         "200":
           description: Container list (with or without detail)
@@ -218,6 +227,55 @@ paths:
         "503":
           description: Supervisor or image store unavailable
 
+  /v1/compose/start:
+    post:
+      tags: [containers]
+      summary: Start stopped compose services
+      description: |
+        Starts the stack's exited services (all, or `services`) in dependency order with the
+        settings they were created with. Running services are left alone. A service that never
+        had a container is an error: `compose up` creates it.
+      operationId: composeStart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComposeProjectRequest"
+      responses:
+        "200":
+          description: "`{\"ok\":true,\"started\":[ids]}`"
+        "400":
+          description: Invalid body, unknown service, or a start failed
+        "404":
+          description: A service has no container
+        "503":
+          description: Supervisor unavailable
+
+  /v1/compose/restart:
+    post:
+      tags: [containers]
+      summary: Restart compose services
+      description: |
+        Restarts the stack's services (all, or `services`) one by one in dependency order; exited
+        ones are started.
+      operationId: composeRestart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComposeProjectRequest"
+      responses:
+        "200":
+          description: "`{\"ok\":true,\"restarted\":[ids]}`"
+        "400":
+          description: Invalid body, unknown service, or a start failed
+        "404":
+          description: A service has no container
+        "503":
+          description: Supervisor unavailable
+
   /v1/compose/stop:
     post:
       tags: [containers]
@@ -297,13 +355,81 @@ paths:
         "503":
           description: Supervisor unavailable
 
+  /v1/containers/{id}/start:
+    post:
+      tags: [containers]
+      summary: Start an exited container
+      description: |
+        Starts a container that exited (or was stopped) again with the settings it was created
+        with, until it is removed. `--rm` containers leave nothing to start. If the image layers
+        were pruned since, the current image for the same reference is used.
+      operationId: startContainer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StopResponse"
+        "400":
+          description: Start failed (e.g. port in use, image missing)
+        "404":
+          description: No such container
+        "409":
+          description: Already running
+        "503":
+          description: Supervisor unavailable
+
+  /v1/containers/{id}/restart:
+    post:
+      tags: [containers]
+      summary: Restart a container
+      description: |
+        Stops a running container (as `stop`, SIGKILL after `t` seconds when given) and starts it
+        again with the same settings. An exited container is just started.
+      operationId: restartContainer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: t
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 3600
+          description: Seconds to wait for the stop before SIGKILL (default the container's stop timeout)
+      responses:
+        "200":
+          description: Restarted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StopResponse"
+        "400":
+          description: Bad `t`, or the start failed
+        "404":
+          description: No such container
+        "503":
+          description: Supervisor unavailable
+
   /v1/containers/{id}/remove:
     post:
       tags: [containers]
       summary: Remove a container
       description: |
         Stops the container if needed, deletes crun state, and tears down
-        network and overlay resources.
+        network and overlay resources. For an exited container, deletes its saved
+        settings and its logs.
       operationId: removeContainer
       parameters:
         - name: id
@@ -931,7 +1057,10 @@ components:
           type: string
         status:
           type: string
-          description: crun state status (e.g. running, stopped)
+          description: crun state status (e.g. running, stopped), or `exited` for a container that is not running
+        exit_code:
+          type: integer
+          description: Exit status of an exited container (128+N for signal N)
 
     ContainerInspect:
       type: object
@@ -1406,6 +1535,11 @@ components:
         remove_volumes:
           type: boolean
           description: When true (compose down only), delete on-disk named volume directories declared in the file after containers are removed
+        services:
+          type: array
+          items:
+            type: string
+          description: compose start / restart only; limit to these services (default all)
         registry_auth:
           type: object
           description: |

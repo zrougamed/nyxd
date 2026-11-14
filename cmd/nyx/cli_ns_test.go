@@ -235,6 +235,27 @@ func TestCLIAgainstDaemon(t *testing.T) {
 	// stop / rm.
 	ok(t, "stop", "a1", "a2")
 	fails(t, "no matching container", "stop", "nosuch")
+
+	// start / restart, ps -a.
+	if out := ok(t, "ps", "-a"); !strings.Contains(out, "exited (") {
+		t.Errorf("ps -a after stop: %q", out)
+	}
+	if out := ok(t, "ps"); strings.Contains(out, "exited") {
+		t.Errorf("ps without -a lists exited: %q", out)
+	}
+	if out := ok(t, "start", "a1"); strings.TrimSpace(out) != "a1" {
+		t.Errorf("start: %q", out)
+	}
+	fails(t, "already running", "start", "a1")
+	ok(t, "restart", "-t", "1", "a1")
+	ok(t, "container", "restart", "a1")
+	ok(t, "container", "start", "a2")
+	ok(t, "stop", "a1", "a2")
+	fails(t, "no matching container", "start", "nosuch")
+	fails(t, "no matching container", "restart", "nosuch")
+	fails(t, "usage: nyx start", "start")
+	fails(t, "unknown flag", "start", "--bogus")
+	fails(t, "usage: nyx restart", "restart", "-t", "3")
 	ok(t, "run", "-d", "--name", "r1", "test/app:1", "sleep", "300")
 	ok(t, "run", "-d", "--name", "r2", "test/app:1", "sleep", "300")
 	ok(t, "rm", "r1")
@@ -363,6 +384,13 @@ func TestCLIAgainstDaemon(t *testing.T) {
 	ok(t, "compose", "up", "-f", cfile)
 	composeLogs(t, cdir)
 	ok(t, "compose", "stop", "--file="+cfile)
+	if out := ok(t, "compose", "start", "--file", cfile); !strings.Contains(out, "proj-s") {
+		t.Errorf("compose start: %q", out)
+	}
+	if out := ok(t, "compose", "restart", "-f", cfile, "s"); !strings.Contains(out, "proj-s") {
+		t.Errorf("compose restart: %q", out)
+	}
+	fails(t, "unknown service", "compose", "restart", "-f", cfile, "nope")
 	ok(t, "compose", "down", "-f="+cfile, "-v")
 	ok(t, "compose", "up", "--file", cfile, "--project", "other")
 	ok(t, "compose", "down", "-f", cfile, "--project=other", "--volumes")

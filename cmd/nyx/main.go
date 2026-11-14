@@ -122,6 +122,10 @@ func run(args []string) error {
 			return fmt.Errorf("usage: nyx stop <id> [<id>...]")
 		}
 		return doStopMany(socket, args[1:])
+	case "start":
+		return doStartMany(socket, args[1:])
+	case "restart":
+		return doRestartMany(socket, args[1:])
 	case "exec":
 		return doExec(socket, args[1:])
 	case "compose":
@@ -197,8 +201,8 @@ commands:
         -it                         shorthand for -i -t (interactive shell)
         --print-id                  when attached, also print id on stderr
         --json                      machine-readable pull/run output
-  ps [-q] [--no-trunc]
-      list containers
+  ps [-a] [-q] [--no-trunc]
+      list running containers; -a also lists exited ones (with their exit code)
   stats [--no-stream] [--no-trunc] [CONTAINER...]
       live resource usage (CPU, memory, net/block I/O, PIDs), like docker stats
   inspect <id> [<id>...]
@@ -207,8 +211,12 @@ commands:
       show container logs; -f follows new lines
   stop <id> [<id>...]
       send graceful stop (SIGTERM / image stop signal, then wait)
+  start <id> [<id>...]
+      start an exited container again with the same settings
+  restart [-t SECONDS] <id> [<id>...]
+      stop (SIGKILL after -t seconds, default the container's stop timeout) and start again
   rm <id> [<id>...]
-      remove container(s) and their supervisor state
+      remove container(s), running or exited, with their logs and saved settings
   build [-t TAG]... [-f Dockerfile] [--build-arg K=V]... [--target STAGE] [--no-cache] [-q] <context-dir>
       build an image from a Dockerfile (no Docker/BuildKit; RUN runs in the container sandbox).
       the context honours .dockerignore; -q prints only the image id
@@ -237,6 +245,7 @@ commands:
       compose.yaml, podman-compose.yml, plus .yaml/.yml variants, in cwd).
       services with build: are built first when their image is missing (--build: always).
       compose stop: SIGTERM services in reverse dependency order.
+      compose start|restart [SERVICE...]: start stopped services / restart them, in dependency order.
       compose down: remove stack containers; -v deletes declared named volume dirs when unreferenced.
       compose ps [-q] [SERVICE...]: list stack services and status (like docker compose ps).
       compose logs [-f] [-n N] [-t] [--no-prefix] [SERVICE...]: logs of the stack's services,

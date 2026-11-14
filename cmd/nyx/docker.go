@@ -309,12 +309,13 @@ func warnRunSecurity(o runOpts) {
 func doPS(socket string, args []string) error {
 	quiet := false
 	noTrunc := false
+	all := false
 	for _, a := range args {
 		switch a {
 		case "-q", "--quiet":
 			quiet = true
 		case "-a", "--all":
-			// reserved: no stopped-container store yet
+			all = true
 		case "--no-trunc":
 			noTrunc = true
 		default:
@@ -327,6 +328,9 @@ func doPS(socket string, args []string) error {
 
 	c := httpClient(socket)
 	u := "http://unix/v1/containers?detail=1"
+	if all {
+		u += "&all=1"
+	}
 	resp, err := c.Get(u)
 	if err != nil {
 		return err
@@ -357,12 +361,12 @@ func doPS(socket string, args []string) error {
 		return nil
 	}
 
-	if len(out.Items) == 0 {
-		fmt.Println("CONTAINER ID   IMAGE                          STATUS    PORTS                     IP")
-		return nil
+	// -a widens STATUS for "exited (137)"; the default table keeps its layout.
+	statusWidth := 9
+	if all {
+		statusWidth = 12
 	}
-
-	fmt.Println("CONTAINER ID   IMAGE                          STATUS    PORTS                     IP")
+	fmt.Printf("%-14s %-30s %-*s %-25s %s\n", "CONTAINER ID", "IMAGE", statusWidth, "STATUS", "PORTS", "IP")
 	for _, it := range out.Items {
 		cid := it.ShortID
 		if noTrunc {
@@ -378,7 +382,7 @@ func doPS(socket string, args []string) error {
 			img = img[:27] + "..."
 		}
 		ports, ip := formatPSNet(it)
-		fmt.Printf("%-14s %-30s %-9s %-25s %s\n", cid, img, it.Status, ports, ip)
+		fmt.Printf("%-14s %-30s %-*s %-25s %s\n", cid, img, statusWidth, formatPSStatus(it), ports, ip)
 	}
 	return nil
 }
@@ -391,6 +395,7 @@ type psItem struct {
 	IP          string `json:"ip"`
 	Ports       string `json:"ports"`
 	Status      string `json:"status"`
+	ExitCode    *int   `json:"exit_code"`
 	HostNetwork bool   `json:"host_network"`
 }
 
@@ -463,13 +468,17 @@ func doStopMany(socket string, ids []string) error {
 
 func doContainer(socket string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: nyx container <ls|list|rm|logs|stats|inspect> ...")
+		return fmt.Errorf("usage: nyx container <ls|list|start|restart|rm|logs|stats|inspect> ...")
 	}
 	switch args[0] {
 	case "ls", "list":
 		return doPS(socket, args[1:])
 	case "rm":
 		return doRM(socket, args[1:])
+	case "start":
+		return doStartMany(socket, args[1:])
+	case "restart":
+		return doRestartMany(socket, args[1:])
 	case "logs":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: nyx container logs <id> [flags...]")
@@ -480,7 +489,7 @@ func doContainer(socket string, args []string) error {
 	case "inspect":
 		return doInspect(socket, args[1:])
 	default:
-		return fmt.Errorf("unknown container subcommand %q (try ls, list, rm, logs, stats, inspect)", args[0])
+		return fmt.Errorf("unknown container subcommand %q (try ls, list, start, restart, rm, logs, stats, inspect)", args[0])
 	}
 }
 

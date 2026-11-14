@@ -146,12 +146,16 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /v1/containers/{id}/inspect", s.handleContainerInspect)
 	mux.HandleFunc("POST /v1/containers/{id}/exec", s.handleExec)
 	mux.HandleFunc("POST /v1/containers/{id}/stop", s.handleContainerStop)
+	mux.HandleFunc("POST /v1/containers/{id}/start", s.handleContainerStart)
+	mux.HandleFunc("POST /v1/containers/{id}/restart", s.handleContainerRestart)
 	mux.HandleFunc("POST /v1/containers/{id}/remove", s.handleContainerRemove)
 	mux.HandleFunc("POST /v1/containers/{id}/kill", s.handleContainerKill)
 	mux.HandleFunc("GET /v1/containers/{id}/logs", s.handleContainerLogs)
 	mux.HandleFunc("POST /v1/containers/run", s.handleContainerRun)
 	mux.HandleFunc("POST /v1/compose/up", s.handleComposeUp)
 	mux.HandleFunc("POST /v1/compose/stop", s.handleComposeStop)
+	mux.HandleFunc("POST /v1/compose/start", s.handleComposeStart)
+	mux.HandleFunc("POST /v1/compose/restart", s.handleComposeRestart)
 	mux.HandleFunc("POST /v1/compose/down", s.handleComposeDown)
 	mux.HandleFunc("POST /v1/images/pull", s.handleImagePull)
 	mux.HandleFunc("GET /v1/images", s.handleImagesList)
@@ -228,6 +232,9 @@ func (s *Server) handleContainers(w http.ResponseWriter, r *http.Request) {
 
 	if detail && s.sup != nil {
 		items := s.sup.ListInfo(r.Context())
+		if a := r.URL.Query().Get("all"); a == "1" || a == "true" {
+			items = append(items, s.sup.ExitedInfo()...)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"containers": ids,
 			"items":      items,
@@ -515,6 +522,8 @@ type composeProjectRequest struct {
 	ContextDir    string `json:"context_dir,omitempty"`
 	Project       string `json:"project,omitempty"`
 	RemoveVolumes bool   `json:"remove_volumes,omitempty"`
+	// Services limits compose start / restart to these services.
+	Services []string `json:"services,omitempty"`
 	// RegistryAuth is credentials by registry host for the pulls of compose up
 	// (nyx fills it from its login files); per-service registry_username wins.
 	RegistryAuth image.AuthMap `json:"registry_auth,omitempty"`

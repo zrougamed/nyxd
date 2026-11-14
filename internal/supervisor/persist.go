@@ -52,15 +52,23 @@ func (s *Supervisor) persistContainerEntry(e *containerEntry) error {
 		BundleDir: e.bundleDir,
 		RootFS:    e.rootFS,
 	}
-	data, err := json.MarshalIndent(rec, "", "  ")
+	if e.spec.ID == "" {
+		return fmt.Errorf("persist: empty container id")
+	}
+	return writeJSONAtomic(dir, s.persistPath(e.spec.ID), rec)
+}
+
+// writeJSONAtomic writes v as indented JSON to final (mode 0600) through a
+// temp file in dir and a rename, so readers never see a partial record.
+func writeJSONAtomic(dir, final string, v any) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
-	id := e.spec.ID
-	if id == "" {
-		return fmt.Errorf("persist: empty container id")
-	}
-	tmp, err := os.CreateTemp(dir, id+".*.json.tmp")
+	tmp, err := os.CreateTemp(dir, filepath.Base(final)+".*.tmp")
 	if err != nil {
 		return err
 	}
@@ -76,11 +84,7 @@ func (s *Supervisor) persistContainerEntry(e *containerEntry) error {
 	if err := os.Chmod(tmpPath, 0o600); err != nil {
 		return err
 	}
-	final := s.persistPath(id)
-	if err := os.Rename(tmpPath, final); err != nil {
-		return err
-	}
-	return nil
+	return os.Rename(tmpPath, final)
 }
 
 func (s *Supervisor) removePersistedState(id string) {

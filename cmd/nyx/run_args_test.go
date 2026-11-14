@@ -106,3 +106,34 @@ func TestParseRunArgsLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRestartArgs(t *testing.T) {
+	cases := map[string]struct{ grace, ids string }{
+		"web":              {"", "web"},
+		"-t 5 web db":      {"5", "web|db"},
+		"--time=0 web":     {"0", "web"},
+		"web --timeout 30": {"30", "web"},
+		"-t=2 a":           {"2", "a"},
+	}
+	for in, want := range cases {
+		g, ids, err := parseRestartArgs(strings.Fields(in))
+		if err != nil || g != want.grace || strings.Join(ids, "|") != want.ids {
+			t.Errorf("%q: %q %v %v", in, g, ids, err)
+		}
+	}
+	for _, bad := range []string{"", "-t", "-t x web", "-t -1 web", "--bogus web", "-t 5"} {
+		if _, _, err := parseRestartArgs(strings.Fields(bad)); err == nil {
+			t.Errorf("%q: expected error", bad)
+		}
+	}
+}
+
+func TestFormatPSStatus(t *testing.T) {
+	code := 137
+	if got := formatPSStatus(psItem{Status: "exited", ExitCode: &code}); got != "exited (137)" {
+		t.Errorf("exited: %q", got)
+	}
+	if got := formatPSStatus(psItem{Status: "running"}); got != "running" {
+		t.Errorf("running: %q", got)
+	}
+}

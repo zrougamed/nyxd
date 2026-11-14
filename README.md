@@ -92,6 +92,8 @@ The supervisor keeps a **hot map in memory** and also writes one **JSON file per
 - **Graceful `nyxd` shutdown** (SIGTERM, etc.): `Shutdown` stops supervised containers; when they exit, those JSON files are **removed**. A clean restart therefore starts with an empty supervisor list unless something is re-adopted.
 - **Unclean stop** (e.g. `SIGKILL` to nyxd while crun keeps the workload running): on the **next** start, **`reconcilePersisted`** reloads `supervisor/containers/*.json` when crun still reports **running**. If that JSON is missing or corrupt, **`reconcileCrunOrphans`** falls back to **`bundles/<id>/nyxd-meta.json`** plus netns/overlay/crun state so **`nyx ps`** can still recover the container (requires the image to still be resolvable in the local store).
 
+A container that exits for good (stopped, or not restarted by its policy) keeps its spec in **`{baseDir}/supervisor/exited/<id>.json`** until **`nyx rm`**, so **`nyx start`** can bring it back and **`nyx ps -a`** lists it. `--rm` containers leave none.
+
 There is **no separate KV database** (Bolt, SQLite, …)—only these JSON records plus crun’s state under `{baseDir}/run/crun`.
 
 Containers started **before** this persistence shipped have **no** JSON record until they are started again at least once while running a build that writes state; until then, re-adoption after a crash cannot find metadata.
