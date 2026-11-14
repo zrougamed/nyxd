@@ -182,6 +182,13 @@ commands:
         -e, --env KEY=VAL           environment (repeatable)
         -v, --volume SRC:DST[:ro]   bind mount; SRC is an absolute path on nyxd's host (repeatable)
         --network host              share the host's network (no published ports)
+        -m, --memory <size>         memory limit (e.g. 256m, 1g)
+        --memory-swap <size>        memory plus swap; equal to --memory means no swap
+        --cpus <n>                  CPU limit in cores (e.g. 0.5)
+        --pids-limit <n>            maximum number of processes
+        --oom-score-adj <n>         OOM killer preference, -1000 to 1000
+        --read-only                 mount the root filesystem read-only
+        --tmpfs PATH[:OPTIONS]      tmpfs mount (repeatable; e.g. /tmp:size=64m)
         --hostname <h> | -h <h>     hostname in container (-h here is hostname, not help)
         --restart <policy>          always | on-failure | unless-stopped | never (default)
         --rm                        remove container logs/state when it exits (like docker --rm)
@@ -386,6 +393,7 @@ func doRun(socket string, args []string) error {
 	if o.rm {
 		body["auto_remove"] = true
 	}
+	addRunLimitFields(body, o)
 	if o.tty {
 		body["tty"] = true
 	}
@@ -550,6 +558,7 @@ func doRunAttached(socket string, o runOpts) error {
 	if o.rm {
 		body["auto_remove"] = true
 	}
+	addRunLimitFields(body, o)
 	if o.tty && term.IsTerminal(int(os.Stdin.Fd())) {
 		cols, rows, err := term.GetSize(int(os.Stdin.Fd()))
 		if err == nil && cols > 0 && rows > 0 {

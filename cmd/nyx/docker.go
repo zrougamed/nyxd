@@ -11,6 +11,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/zrougamed/nyxd/internal/compose"
 )
 
 // runOpts collects `nyx run` flags and the image / command tail.
@@ -30,6 +32,64 @@ type runOpts struct {
 	tty      bool     // -t: allocate a PTY for the container init
 	volumes  []string // -v host:container[:ro]: bind mounts (host paths on nyxd's host)
 	network  string   // --network: "host" shares the host's network
+	readOnly bool     // --read-only: read-only root filesystem
+	tmpfs    []string // --tmpfs PATH[:OPTIONS]
+	limits   compose.RunLimits
+}
+
+// runValueFlag reports whether args[i] is the value flag name (as "--name V"
+// or "--name=V") and returns its value and the index after it.
+func runValueFlag(args []string, i int, name string) (val string, next int, ok bool, err error) {
+	a := args[i]
+	if v, found := strings.CutPrefix(a, name+"="); found {
+		return v, i + 1, true, nil
+	}
+	if a != name {
+		return "", i, false, nil
+	}
+	if i+1 >= len(args) {
+		return "", i, true, fmt.Errorf("flag %s requires a value", name)
+	}
+	return args[i+1], i + 2, true, nil
+}
+
+// parseRunLimitFlag handles the resource and filesystem flags of nyx run.
+func parseRunLimitFlag(o *runOpts, args []string, i int) (next int, ok bool, err error) {
+	if args[i] == "--read-only" {
+		o.readOnly = true
+		return i + 1, true, nil
+	}
+	for _, name := range []string{"--memory", "-m", "--memory-swap", "--cpus", "--pids-limit", "--oom-score-adj", "--tmpfs"} {
+		v, next, ok, err := runValueFlag(args, i, name)
+		if !ok || err != nil {
+			if err != nil {
+				return i, true, err
+			}
+			continue
+		}
+		switch name {
+		case "--memory", "-m":
+			o.limits.Memory = v
+		case "--memory-swap":
+			o.limits.MemorySwap = v
+		case "--cpus":
+			o.limits.CPUs = v
+		case "--tmpfs":
+			o.tmpfs = append(o.tmpfs, v)
+		case "--pids-limit", "--oom-score-adj":
+			n, err := strconv.Atoi(strings.TrimSpace(v))
+			if err != nil {
+				return i, true, fmt.Errorf("flag %s: %q is not a number", name, v)
+			}
+			if name == "--pids-limit" {
+				o.limits.PidsLimit = n
+			} else {
+				o.limits.OomScoreAdj = &n
+			}
+		}
+		return next, true, nil
+	}
+	return i, false, nil
 }
 
 func parseRunArgs(args []string) (runOpts, error) {
@@ -146,6 +206,14 @@ func parseRunArgs(args []string) (runOpts, error) {
 			o.restart = strings.TrimPrefix(a, "--restart=")
 			i++
 		default:
+			next, ok, err := parseRunLimitFlag(&o, args, i)
+			if err != nil {
+				return o, err
+			}
+			if ok {
+				i = next
+				continue
+			}
 			if strings.HasPrefix(a, "-") {
 				return o, fmt.Errorf("unknown flag %q", a)
 			}
@@ -646,4 +714,30 @@ func doImagePrune(socket string, args []string) error {
 		fmt.Println(ref)
 	}
 	return nil
+}
+
+// addRunLimitFields puts the resource and filesystem flags into a run body.
+func addRunLimitFields(body map[string]any, o runOpts) {
+	l := o.limits
+	if l.Memory != "" {
+		body["memory"] = l.Memory
+	}
+	if l.MemorySwap != "" {
+		body["memory_swap"] = l.MemorySwap
+	}
+	if l.CPUs != "" {
+		body["cpus"] = l.CPUs
+	}
+	if l.PidsLimit != 0 {
+		body["pids_limit"] = l.PidsLimit
+	}
+	if l.OomScoreAdj != nil {
+		body["oom_score_adj"] = *l.OomScoreAdj
+	}
+	if o.readOnly {
+		body["read_only"] = true
+	}
+	if len(o.tmpfs) > 0 {
+		body["tmpfs"] = o.tmpfs
+	}
 }

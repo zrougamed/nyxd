@@ -1,5 +1,14 @@
 # Release notes
 
+## Unreleased
+
+### New
+
+- **`nyx run` limits and filesystem flags:** `-m` / `--memory`, `--memory-swap`, `--cpus`,
+  `--pids-limit`, `--oom-score-adj`, `--read-only` and `--tmpfs PATH[:OPTIONS]` (repeatable).
+  Same fields on `POST /v1/containers/run`. Compose services accept `tmpfs:` (one path or a
+  list), which was ignored before. tmpfs mounts default to `nosuid,nodev,noexec`.
+
 ## 1.2.0
 
 Compose host networking and `compose ps`, security process/docs/warnings, UFW-friendly

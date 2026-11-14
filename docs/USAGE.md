@@ -37,6 +37,9 @@ sudo nyx run --name web nginx:alpine
 sudo nyx run -p 8080:80 -e MYVAR=1 --hostname web --restart no nginx:alpine
 # --restart defaults to no, as in Docker; use unless-stopped or always for a long-running service
 sudo nyx run -d --name web --restart unless-stopped nginx:alpine
+# Limits and a read-only root with scratch space (limits need cgroups; rootless without delegation ignores them)
+sudo nyx run -d -m 256m --cpus 0.5 --pids-limit 200 nginx:alpine
+sudo nyx run --rm --read-only --tmpfs /tmp:size=64m alpine:3.20 touch /tmp/ok
 # Bind mounts (absolute paths on the nyxd host) and the host's network
 sudo nyx run --rm -v /srv/data:/data:ro alpine:3.20 ls /data
 sudo nyx run --rm --network host alpine:3.20 ip addr

@@ -71,6 +71,9 @@ type Service struct {
 	// ReadOnly root filesystem.
 	ReadOnly bool `yaml:"read_only"`
 
+	// Tmpfs mounts, PATH[:OPTIONS] each (one string or a list).
+	Tmpfs Tmpfs `yaml:"tmpfs"`
+
 	// User override: "uid:gid"
 	User string `yaml:"user"`
 

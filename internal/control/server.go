@@ -764,6 +764,12 @@ type runRequest struct {
 	Network string `json:"network,omitempty"`
 	Rows    uint16 `json:"rows,omitempty"`
 	Cols    uint16 `json:"cols,omitempty"`
+	// Resource limits (docker run --memory, --cpus, --pids-limit, ...).
+	compose.RunLimits
+	// ReadOnly mounts the root filesystem read-only (docker run --read-only).
+	ReadOnly bool `json:"read_only,omitempty"`
+	// Tmpfs mounts, PATH[:OPTIONS] each (docker run --tmpfs).
+	Tmpfs []string `json:"tmpfs,omitempty"`
 }
 
 func runTTYWinSize(body runRequest) *runtime.TTYSize {
@@ -914,6 +920,17 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		}
 		mounts = append(mounts, m)
 	}
+	tmpfs, err := compose.TmpfsMounts(body.Tmpfs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	mounts = append(mounts, tmpfs...)
+	resources, err := compose.BundleResourcesFromRun(body.RunLimits)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	m, cfg, paths, err := s.store.ResolvePulledImage(imgRef)
 	if err != nil {
@@ -963,7 +980,8 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		Args:           body.Args,
 		Hostname:       body.Hostname,
 		RestartPolicy:  policy,
-		ReadOnly:       false,
+		ReadOnly:       body.ReadOnly,
+		Resources:      resources,
 		PortMappings:   portMaps,
 		Terminal:       body.TTY,
 		StdinOpen:      body.Stdin,

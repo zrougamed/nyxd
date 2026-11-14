@@ -1306,6 +1306,34 @@ components:
           description: |
             `host` shares the host's network namespace (`nyx run --network host`); cannot be
             combined with published ports. Unset, `bridge` or `default` use the daemon's driver.
+        memory:
+          type: string
+          description: Memory limit, e.g. `256m`, `1g` (`nyx run --memory`)
+        memory_swap:
+          type: string
+          description: Memory plus swap; equal to `memory` means no swap (`nyx run --memory-swap`)
+        cpus:
+          type: string
+          description: CPU limit in cores, e.g. `0.5` (`nyx run --cpus`)
+        pids_limit:
+          type: integer
+          minimum: 1
+          description: Maximum number of processes in the container (`nyx run --pids-limit`)
+        oom_score_adj:
+          type: integer
+          minimum: -1000
+          maximum: 1000
+          description: OOM killer preference for the container init (`nyx run --oom-score-adj`)
+        read_only:
+          type: boolean
+          description: Mount the root filesystem read-only (`nyx run --read-only`)
+        tmpfs:
+          type: array
+          items:
+            type: string
+          description: |
+            tmpfs mounts, `PATH[:OPTIONS]` (`nyx run --tmpfs`). Defaults to `nosuid,nodev,noexec`;
+            `suid`, `dev`, `exec`, `ro`, `size=`, `mode=`, `uid=`, `gid=` and `nr_inodes=` are accepted.
         rows:
           type: integer
           description: Initial PTY height when `tty` is true

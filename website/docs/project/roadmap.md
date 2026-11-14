@@ -137,7 +137,7 @@ major distribution.
 - [x] **File format subset** — services, `image`, `build:`, `command` / `entrypoint`,
       `environment` / `env_file`, `ports`, `volumes` (bind and named), `depends_on`,
       `healthcheck`, `restart`, `deploy.resources` (memory, CPU, pids, OOM score), `read_only`,
-      `user`, `cap_add` / `cap_drop`, `privileged`, `seccomp_profile`, `labels`,
+      `tmpfs`, `user`, `cap_add` / `cap_drop`, `privileged`, `seccomp_profile`, `labels`,
       `stop_grace_period`, top-level `name:`, variable substitution and `.env`.
 - [x] **Lifecycle** — `nyx compose up` (builds missing images, `--build`), `stop`, `down`
       (`-v` removes named volumes no longer in use).
@@ -145,7 +145,7 @@ major distribution.
       (`--no-stream`, optional service filter).
 - [ ] **Implicit named volumes** — `name:/path` without a top-level `volumes:` entry.
 - [ ] **Volume commands** — `nyx volume ls` / `rm`.
-- [ ] **Unsupported keys** — `expose`, `tmpfs`, `security_opt`, `depends_on.condition` are
+- [ ] **Unsupported keys** — `expose`, `security_opt`, `depends_on.condition` are
       ignored; warn about keys nyxd does not support.
 
 ## Security

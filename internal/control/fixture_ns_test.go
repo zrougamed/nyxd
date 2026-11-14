@@ -102,6 +102,9 @@ func TestControlContainerLifecycle(t *testing.T) {
 		"absolute path":                    {"image": "test/app:1", "volumes": []string{"rel:/data"}},
 		"does not exist":                   {"image": "test/app:1", "volumes": []string{"/nonexistent-nyxd-test:/data"}},
 		"must be absolute":                 {"image": "test/app:1", "volumes": []string{"/tmp:data"}},
+		"unsupported option":               {"image": "test/app:1", "tmpfs": []string{"/tmp:bind"}},
+		"memory":                           {"image": "test/app:1", "memory": "lots"},
+		"pids_limit":                       {"image": "test/app:1", "pids_limit": -1},
 	} {
 		if code, out := d.Do(t, "POST", "/v1/containers/run", body); code != 400 || !strings.Contains(out, want) {
 			t.Errorf("%s: %d %s", want, code, out)
@@ -307,6 +310,24 @@ func TestControlContainerLifecycle(t *testing.T) {
 	if code != 200 || !strings.Contains(out, `"phase":"run"`) {
 		t.Errorf("streamed run: %d %s", code, out)
 	}
+}
+
+func TestControlRunReadOnlyTmpfs(t *testing.T) {
+	if !nsrun.Run(t) {
+		return
+	}
+	d := start(t)
+	// touch writes the tmpfs file first, then fails on the read-only root; the
+	// container exits while starting, so the error carries its output.
+	body := map[string]any{"id": "ro", "image": "test/app:1", "args": []string{"touch", "/scratch/ok", "/denied"},
+		"restart": "no", "read_only": true, "tmpfs": []string{"/scratch:size=1m"}, "memory": "64m", "pids_limit": 50}
+	code, out := d.Do(t, "POST", "/v1/containers/run", body)
+	if code != 400 || !strings.Contains(out, "/denied: read-only file system") || strings.Contains(out, "/scratch") {
+		t.Fatalf("read-only run: %d %s", code, out)
+	}
+	// Without read_only the same command succeeds.
+	run(t, d, map[string]any{"id": "rw", "args": []string{"touch", "/scratch/ok", "/allowed"}, "restart": "no",
+		"tmpfs": []string{"/scratch"}})
 }
 
 func TestControlRunPullFailures(t *testing.T) {

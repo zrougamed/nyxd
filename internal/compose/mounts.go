@@ -22,7 +22,11 @@ func ServiceExtraMounts(svc *Service, stack *Stack, composeDir, project, dataDir
 		}
 		out = append(out, m)
 	}
-	return out, nil
+	tmpfs, err := TmpfsMounts(svc.Tmpfs)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, tmpfs...), nil
 }
 
 // BindMount parses one `nyx run -v` line, SRC:DST[:ro|rw]. Unlike compose
