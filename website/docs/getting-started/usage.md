@@ -172,6 +172,8 @@ sudo nyx compose up -f ./prod-compose.yaml --project myapp
 sudo nyx compose up --build        # rebuild services with build: first
 
 sudo nyx compose stop              # SIGTERM / stop path, reverse dependency order
+sudo nyx compose logs              # every service, prefixed with its name (last 200 lines each)
+sudo nyx compose logs -f --tail 50 api worker   # -f follows here; the file is --file
 sudo nyx compose down            # stop + remove containers
 sudo nyx compose down -v         # also remove declared named volume dirs when safe
 ```

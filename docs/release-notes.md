@@ -8,6 +8,10 @@
   `--pids-limit`, `--oom-score-adj`, `--read-only` and `--tmpfs PATH[:OPTIONS]` (repeatable).
   Same fields on `POST /v1/containers/run`. Compose services accept `tmpfs:` (one path or a
   list), which was ignored before. tmpfs mounts default to `nosuid,nodev,noexec`.
+- **`nyx compose logs`**: logs of a stack's services, each line prefixed with the service
+  name (coloured on a terminal), merged by time. `-f` follows until the services exit,
+  `-n` / `--tail`, `-t` / `--timestamps`, `--no-prefix`, `--no-color`, optional service names.
+  As in `docker compose logs`, `-f` means follow here; give the compose file with `--file`.
 
 ## 1.2.0
 

@@ -232,13 +232,15 @@ commands:
       run a command in a running container; -i streams stdin from this terminal.
       -t allocates a PTY (shell prompt, line editing); combine as -it for an interactive shell.
 
-  compose up|stop|down|ps|stats [-f|--file PATH] [--project NAME] [-v|--volumes] [--build]
+  compose up|stop|down|ps|logs|stats [-f|--file PATH] [--project NAME] [-v|--volumes] [--build]
       compose up: start stack (default file: first of nyx-compose.yaml, docker-compose.yml,
       compose.yaml, podman-compose.yml, plus .yaml/.yml variants, in cwd).
       services with build: are built first when their image is missing (--build: always).
       compose stop: SIGTERM services in reverse dependency order.
       compose down: remove stack containers; -v deletes declared named volume dirs when unreferenced.
       compose ps [-q] [SERVICE...]: list stack services and status (like docker compose ps).
+      compose logs [-f] [-n N] [-t] [--no-prefix] [SERVICE...]: logs of the stack's services,
+      prefixed with the service name; -f follows (use --file for the compose file here).
       compose stats [--no-stream] [SERVICE...]: resource usage for the stack (like docker compose stats).
 
 registry logins (first match wins; docker login and podman login work as they are):

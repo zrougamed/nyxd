@@ -141,6 +141,8 @@ major distribution.
       `stop_grace_period`, top-level `name:`, variable substitution and `.env`.
 - [x] **Lifecycle** — `nyx compose up` (builds missing images, `--build`), `stop`, `down`
       (`-v` removes named volumes no longer in use).
+- [x] **`nyx compose logs`** — logs of every service prefixed with its name, merged by time;
+      `-f` follows, `--tail`, `--timestamps`, `--no-prefix`, service filter.
 - [x] **`nyx compose stats`** — live CPU/memory/net/block/PIDs for stack services
       (`--no-stream`, optional service filter).
 - [ ] **Implicit named volumes** — `name:/path` without a top-level `volumes:` entry.
