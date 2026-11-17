@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 	"time"
 )
 
@@ -54,27 +55,26 @@ func streamStats(socket string, ids []string, noStream, noTrunc bool, projectHin
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	printHeader := true
+	// Streaming on a terminal redraws each frame from the top of the screen
+	// (as docker stats does). Moving the cursor up by the number of rows
+	// printed miscounts as soon as a row wraps on a narrow terminal or the
+	// container count changes, and leaves old headers behind.
+	redraw := !noStream && isTTY(os.Stdout)
+	hinted := false
 	for {
 		items, err := fetchStats(ctx, socket, ids)
 		if err != nil {
 			return err
 		}
-		if printHeader || !isTTY(os.Stdout) {
-			printStatsHeader()
-			printHeader = false
-		} else {
-			// Clear previous table rows (header + N lines) when streaming on a TTY.
-			clearStatsScreen(len(items))
-			printStatsHeader()
+		var frame strings.Builder
+		if redraw {
+			frame.WriteString(clearScreen)
 		}
-		if len(items) == 0 {
-			if projectHint != "" {
-				fmt.Fprintf(os.Stderr, "no containers for project %q\n", projectHint)
-			}
-		}
-		for _, it := range items {
-			printStatsRow(it, noTrunc)
+		writeStatsTable(&frame, items, noTrunc)
+		fmt.Print(frame.String())
+		if len(items) == 0 && projectHint != "" && !hinted {
+			fmt.Fprintf(os.Stderr, "no containers for project %q\n", projectHint)
+			hinted = true
 		}
 		if noStream {
 			return nil
@@ -140,11 +140,23 @@ func fetchStats(ctx context.Context, socket string, ids []string) ([]statsItem, 
 	return out.Items, nil
 }
 
-func printStatsHeader() {
-	fmt.Println("CONTAINER ID   NAME                     CPU %     MEM USAGE / LIMIT     MEM %     NET I/O           BLOCK I/O         PIDS")
+// clearScreen moves the cursor home and clears the screen.
+const clearScreen = "\033[H\033[2J"
+
+var statsHeader = []string{"CONTAINER ID", "NAME", "CPU %", "MEM USAGE / LIMIT", "MEM %", "NET I/O", "BLOCK I/O", "PIDS"}
+
+// writeStatsTable writes the header and one row per item, aligned in columns
+// at least three spaces apart whatever the values' widths.
+func writeStatsTable(w io.Writer, items []statsItem, noTrunc bool) {
+	tw := tabwriter.NewWriter(w, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(tw, strings.Join(statsHeader, "\t"))
+	for _, it := range items {
+		fmt.Fprintln(tw, strings.Join(statsRow(it, noTrunc), "\t"))
+	}
+	_ = tw.Flush()
 }
 
-func printStatsRow(it statsItem, noTrunc bool) {
+func statsRow(it statsItem, noTrunc bool) []string {
 	cid := it.ShortID
 	if cid == "" {
 		cid = it.ID
@@ -162,29 +174,18 @@ func printStatsRow(it statsItem, noTrunc bool) {
 		name = name[:21] + "..."
 	}
 	if it.Err != "" {
-		fmt.Printf("%-14s %-24s %-9s %-20s %-9s %-17s %-17s %s\n",
-			cid, name, "--", "--", "--", "--", "--", "--")
-		return
+		return []string{cid, name, "--", "--", "--", "--", "--", "--"}
 	}
-	fmt.Printf("%-14s %-24s %-9s %-20s %-9s %-17s %-17s %d\n",
+	return []string{
 		cid,
 		name,
 		fmt.Sprintf("%.2f%%", it.CPUPerc),
-		fmt.Sprintf("%s / %s", humanBytes(it.MemUsage), humanBytes(it.MemLimit)),
+		humanBytes(it.MemUsage) + " / " + humanBytes(it.MemLimit),
 		fmt.Sprintf("%.2f%%", it.MemPerc),
-		fmt.Sprintf("%s / %s", humanBytes(it.NetRx), humanBytes(it.NetTx)),
-		fmt.Sprintf("%s / %s", humanBytes(it.BlockRead), humanBytes(it.BlockWrite)),
-		it.PIDs,
-	)
-}
-
-func clearStatsScreen(nRows int) {
-	// Move cursor up past previous header+rows and clear downward.
-	lines := nRows + 1
-	if lines < 1 {
-		lines = 1
+		humanBytes(it.NetRx) + " / " + humanBytes(it.NetTx),
+		humanBytes(it.BlockRead) + " / " + humanBytes(it.BlockWrite),
+		fmt.Sprintf("%d", it.PIDs),
 	}
-	fmt.Printf("\033[%dA\033[J", lines)
 }
 
 func isTTY(f *os.File) bool {

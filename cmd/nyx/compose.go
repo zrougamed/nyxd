@@ -410,7 +410,7 @@ func doComposeStats(socket string, args []string) error {
 		return err
 	}
 	if len(running) == 0 {
-		printStatsHeader()
+		writeStatsTable(os.Stdout, nil, opts.noTrunc)
 		fmt.Fprintf(os.Stderr, "no containers for project %q\n", project)
 		return nil
 	}
