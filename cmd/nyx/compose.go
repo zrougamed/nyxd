@@ -23,6 +23,8 @@ type composeCLI struct {
 	removeVolumes bool
 	build         bool
 	waitTimeout   string
+	recreate      string // "", "force" or "never" (compose up)
+	includeBuild  bool   // compose pull: also services with build:
 	positional    []string
 }
 
@@ -53,6 +55,14 @@ func parseComposeArgs(args []string) (composeCLI, error) {
 			c.removeVolumes = true
 		case a == "--build":
 			c.build = true
+		case a == "--force-recreate" || a == "--no-recreate":
+			want := map[string]string{"--force-recreate": "force", "--no-recreate": "never"}[a]
+			if c.recreate != "" && c.recreate != want {
+				return composeCLI{}, fmt.Errorf("--force-recreate and --no-recreate exclude each other")
+			}
+			c.recreate = want
+		case a == "--include-build":
+			c.includeBuild = true
 		case a == "--wait-timeout":
 			if i+1 >= len(args) {
 				return composeCLI{}, fmt.Errorf("--wait-timeout requires a duration")
@@ -83,7 +93,7 @@ func resolveComposePathForCLI(flagPath string) (string, error) {
 
 func doCompose(socket string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf(`usage: nyx compose <up|stop|start|restart|down|ps|logs|stats> [flags]
+		return fmt.Errorf(`usage: nyx compose <up|pull|stop|start|restart|down|ps|logs|stats> [flags]
 
 flags:
   -f, --file PATH     compose file (default: first match in cwd — nyx-compose.yaml,
@@ -92,6 +102,9 @@ flags:
                       If omitted, defaults to the compose file's parent directory name.
   -v, --volumes       (down only) delete declared named volume host dirs after remove
   --build             (up only) rebuild every service with build: (default: only missing images)
+  --force-recreate    (up only) recreate running services even if unchanged
+  --no-recreate       (up only) keep running services even if their image or config changed
+  --include-build     (pull only) also pull the image of services with build:
   --wait-timeout D    (up only) how long to wait for depends_on conditions
                       (service_healthy, service_completed_successfully); default 5m
   -q, --quiet         (ps only) print container ids only
@@ -131,7 +144,7 @@ examples:
 	if sub == "start" || sub == "restart" {
 		return doComposeLifecycle(socket, sub, opts)
 	}
-	if len(opts.positional) > 0 {
+	if len(opts.positional) > 0 && sub != "pull" {
 		return fmt.Errorf("unexpected argument %q", opts.positional[0])
 	}
 	switch sub {
@@ -139,13 +152,24 @@ examples:
 		if opts.removeVolumes {
 			return fmt.Errorf("compose up does not take -v/--volumes (use compose down -v)")
 		}
+		if opts.includeBuild {
+			return fmt.Errorf("--include-build is only for compose pull")
+		}
 		return doComposeUp(socket, opts)
+	case "pull":
+		if opts.removeVolumes || opts.build || opts.recreate != "" || opts.waitTimeout != "" {
+			return fmt.Errorf("compose pull takes only [SERVICE...] and --include-build")
+		}
+		return doComposePull(socket, opts)
 	case "stop", "down":
 		if opts.build {
 			return fmt.Errorf("--build is only for compose up")
 		}
-		if opts.waitTimeout != "" {
-			return fmt.Errorf("--wait-timeout is only for compose up")
+		if opts.waitTimeout != "" || opts.recreate != "" {
+			return fmt.Errorf("--wait-timeout, --force-recreate and --no-recreate are only for compose up")
+		}
+		if opts.includeBuild {
+			return fmt.Errorf("--include-build is only for compose pull")
 		}
 		if sub == "down" {
 			return doComposeDown(socket, opts)
@@ -155,7 +179,7 @@ examples:
 		}
 		return doComposeStop(socket, opts)
 	default:
-		return fmt.Errorf("unknown compose subcommand %q (supported: up, stop, start, restart, down, ps, logs, stats)", sub)
+		return fmt.Errorf("unknown compose subcommand %q (supported: up, pull, stop, start, restart, down, ps, logs, stats)", sub)
 	}
 }
 
@@ -475,6 +499,9 @@ func doComposeUp(socket string, opts composeCLI) error {
 	if len(auth) > 0 {
 		body["registry_auth"] = auth
 	}
+	if opts.recreate != "" {
+		body["recreate"] = opts.recreate
+	}
 	if opts.waitTimeout != "" {
 		if d, err := time.ParseDuration(opts.waitTimeout); err != nil || d <= 0 {
 			return fmt.Errorf("--wait-timeout %q: want a positive duration such as 2m", opts.waitTimeout)
@@ -592,6 +619,11 @@ func postComposeJSON(socket, url string, body any, listKey, spinner string) erro
 	rawList, ok := out[listKey].([]any)
 	if !ok {
 		return nil
+	}
+	// compose up says what it did with each service.
+	if svcs, ok := out["services"].([]any); ok && len(svcs) > 0 {
+		printComposeResults(os.Stderr, svcs)
+		spinner = ""
 	}
 	if n := len(rawList); n > 0 && spinner != "" {
 		label := "Stopped"

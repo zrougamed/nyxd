@@ -539,6 +539,9 @@ type composeProjectRequest struct {
 	// WaitTimeout bounds the depends_on condition waits of compose up
 	// (Go duration, e.g. "2m"); empty means the daemon default (5m).
 	WaitTimeout string `json:"wait_timeout,omitempty"`
+	// Recreate is compose up's policy for running containers: "" recreates
+	// those whose service changed, "force" all of them, "never" none.
+	Recreate string `json:"recreate,omitempty"`
 }
 
 // loadComposeProject parses the compose document from body (file path or inline yaml)
@@ -613,6 +616,12 @@ func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, image.TrimUserMessage(err), http.StatusBadRequest)
 		return
 	}
+	switch body.Recreate {
+	case supervisor.RecreateChanged, supervisor.RecreateForce, supervisor.RecreateNever:
+	default:
+		http.Error(w, fmt.Sprintf("invalid recreate %q (want force or never)", body.Recreate), http.StatusBadRequest)
+		return
+	}
 	var waitTimeout time.Duration
 	if v := strings.TrimSpace(body.WaitTimeout); v != "" {
 		d, err := time.ParseDuration(v)
@@ -648,10 +657,12 @@ func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("compose up: depends_on", "project", project, "warning", wmsg)
 		warnings = append(warnings, wmsg)
 	}
-	if err := s.sup.StartComposeUpWith(baseCtx, specs, supervisor.ComposeUpOptions{
+	results, err := s.sup.StartComposeUpWith(baseCtx, specs, supervisor.ComposeUpOptions{
 		Deps:        compose.DependencyWaits(st, project),
 		WaitTimeout: waitTimeout,
-	}); err != nil {
+		Recreate:    body.Recreate,
+	})
+	if err != nil {
 		s.log.Warn("compose up", "err", err)
 		msg := image.TrimUserMessage(err)
 		for _, wmsg := range warnings {
@@ -664,7 +675,7 @@ func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
 	for i := range specs {
 		ids[i] = specs[i].ID
 	}
-	resp := map[string]any{"ok": true, "ids": ids}
+	resp := map[string]any{"ok": true, "ids": ids, "services": results}
 	if len(warnings) > 0 {
 		resp["warnings"] = warnings
 	}

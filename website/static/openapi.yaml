@@ -1738,6 +1738,12 @@ components:
             basename of the compose file's parent directory if `file` is set (Docker Compose style),
             or the basename of `context_dir` if `yaml` is set. Use the same value for `up`, `stop`,
             and `down`.
+        recreate:
+          type: string
+          enum: ["", force, never]
+          description: |
+            Compose up only: running services whose image or configuration changed are recreated
+            (default); `force` recreates all of them, `never` keeps them as they are.
         wait_timeout:
           type: string
           description: |
@@ -1771,6 +1777,20 @@ components:
       type: object
       required: [ok, ids]
       properties:
+        services:
+          type: array
+          description: What compose up did with each service, in start order
+          items:
+            type: object
+            properties:
+              id: {type: string}
+              service: {type: string}
+              action:
+                type: string
+                enum: [started, recreated, up to date, kept]
+              reason:
+                type: string
+                description: "image changed, config changed, --force-recreate, or ...--no-recreate"
         ok:
           type: boolean
         ids:

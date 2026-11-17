@@ -12,6 +12,7 @@ import (
 
 	"github.com/zrougamed/nyxd/internal/health"
 	"github.com/zrougamed/nyxd/internal/runtime"
+	"github.com/zrougamed/nyxd/pkg/oci"
 )
 
 func dependsOnSupervisor(t *testing.T) *Supervisor {
@@ -55,7 +56,7 @@ func TestComposeUpWaitsForCompletedDependency(t *testing.T) {
 	s.recordExited(ContainerSpec{ID: "p-migrate"}, 3)
 	// The failing dependency stops the stack before p-app is started (the spec
 	// is not startable here, so reaching ensureComposeContainer would fail differently).
-	err := s.StartComposeUpWith(context.Background(), []ContainerSpec{{ID: "p-app"}}, ComposeUpOptions{Deps: deps})
+	_, err := s.StartComposeUpWith(context.Background(), []ContainerSpec{{ID: "p-app"}}, ComposeUpOptions{Deps: deps})
 	if err == nil || !strings.Contains(err.Error(), "dependency p-migrate: exited with code 3") {
 		t.Fatalf("non-zero exit: %v", err)
 	}
@@ -64,7 +65,7 @@ func TestComposeUpWaitsForCompletedDependency(t *testing.T) {
 func TestComposeUpCompletedDependencyStillRunningTimesOut(t *testing.T) {
 	s := dependsOnSupervisor(t)
 	s.containers["p-migrate"] = &containerEntry{spec: ContainerSpec{ID: "p-migrate"}}
-	err := s.StartComposeUpWith(context.Background(), []ContainerSpec{{ID: "p-app"}}, ComposeUpOptions{
+	_, err := s.StartComposeUpWith(context.Background(), []ContainerSpec{{ID: "p-app"}}, ComposeUpOptions{
 		Deps:        map[string][]ComposeDependency{"p-app": {{ID: "p-migrate", Condition: DependsOnCompleted}}},
 		WaitTimeout: 50 * time.Millisecond,
 	})
@@ -110,7 +111,7 @@ func TestComposeUpWaitsForHealthyDependency(t *testing.T) {
 func TestComposeUpDependencyNeverHealthy(t *testing.T) {
 	s := dependsOnSupervisor(t)
 	s.containers["p-db"] = &containerEntry{spec: ContainerSpec{ID: "p-db", Healthcheck: httpCheck(closedURL(t))}}
-	err := s.StartComposeUpWith(context.Background(), []ContainerSpec{{ID: "p-app"}}, ComposeUpOptions{
+	_, err := s.StartComposeUpWith(context.Background(), []ContainerSpec{{ID: "p-app"}}, ComposeUpOptions{
 		Deps:        map[string][]ComposeDependency{"p-app": {{ID: "p-db", Condition: DependsOnHealthy}}},
 		WaitTimeout: 100 * time.Millisecond,
 	})
@@ -162,5 +163,24 @@ func TestDependencyHealthyUsesCheckerStatus(t *testing.T) {
 	healthy, err := s.dependencyHealthy(context.Background(), "p-db")
 	if err != nil || !healthy {
 		t.Fatalf("healthy checker: ok=%v err=%v", healthy, err)
+	}
+}
+
+func TestChangeReason(t *testing.T) {
+	a := ContainerSpec{Image: "app:1", ManifestLayers: []oci.Descriptor{{Digest: "sha256:a"}}, Env: []string{"X=1"}}
+	b := a
+	b.Env = []string{"X=2"}
+	if r := changeReason(a, b); r != "config changed" {
+		t.Errorf("env: %s", r)
+	}
+	c := a
+	c.ManifestLayers = []oci.Descriptor{{Digest: "sha256:b"}}
+	if r := changeReason(a, c); r != "image changed" {
+		t.Errorf("layers: %s", r)
+	}
+	d := a
+	d.Image = "app:2"
+	if r := changeReason(a, d); r != "image changed" {
+		t.Errorf("ref: %s", r)
 	}
 }

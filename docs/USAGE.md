@@ -232,6 +232,18 @@ Details: [images.md](images.md).
 
 **Project name:** container IDs are `{project}-{service}` (sanitized). If you omit **`--project`**, the default is the top-level **`name:`** of the compose file, else the **directory** that contains it (same idea as Docker Compose), not the filename — so two different folders that both use `docker-compose.yml` do not collide. Use the same **`--project`** for `up`, `stop`, and `down` when you override it.
 
+**Updating a stack:** `nyx compose pull [SERVICE...]` pulls every service image in parallel (services with `build:` only with `--include-build`) and says per service whether it was up to date. `nyx compose up` on a running stack then recreates only the services whose image or configuration changed, in dependency order, and leaves the rest running:
+
+```
+$ nyx compose pull && nyx compose up
+db (postgres:17): up to date
+api (ghcr.io/me/api:latest): pulled, 2 new layer(s)
+db: up to date
+api: recreated (image changed)
+```
+
+`--force-recreate` recreates every running service, `--no-recreate` keeps running services as they are (changed ones are reported as `kept`).
+
 **Depends on:** both `depends_on: [svc]` and the Compose **map** form `depends_on: { svc: { condition: ... } }` set the start order (dependencies first). `nyx compose up` then honours the condition before starting each service:
 
 - `service_started` (also the list form): the dependency has been started.
