@@ -6,7 +6,9 @@ import (
 	"bufio"
 	"errors"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -60,5 +62,33 @@ func TestEnterRemapErrors(t *testing.T) {
 	}
 	if Current().Rootless {
 		t.Error("not inside nyxd's namespace")
+	}
+}
+
+// The subgid entry is under the user (name or uid), not the primary group:
+// the gh-runners runner is uid 1001 with gid 986.
+func TestSubordinateIDsKeyedByUser(t *testing.T) {
+	dir := t.TempDir()
+	uidFile, gidFile := filepath.Join(dir, "subuid"), filepath.Join(dir, "subgid")
+	uid := os.Getuid()
+	key := strconv.Itoa(uid)
+	if u, err := user.LookupId(key); err == nil {
+		key = u.Username // the form usermod writes
+	}
+	for _, f := range []string{uidFile, gidFile} {
+		if err := os.WriteFile(f, []byte("someone:100000:65536\n"+key+":231072:65536\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	su, sg, errU, errG := subordinateIDs(uidFile, gidFile, uid)
+	if errU != nil || errG != nil || su.start != 231072 || sg.start != 231072 || sg.count != 65536 {
+		t.Fatalf("got %+v %+v %v %v", su, sg, errU, errG)
+	}
+	// An entry for a group id that happens to be in the file is not the user's.
+	if err := os.WriteFile(gidFile, []byte(strconv.Itoa(uid+12345)+":300000:65536\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, errG := subordinateIDs(uidFile, gidFile, uid); errG == nil {
+		t.Fatal("matched an entry that is not the user's")
 	}
 }
