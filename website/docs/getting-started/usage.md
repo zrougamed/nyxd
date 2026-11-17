@@ -174,6 +174,32 @@ curl -s http://127.0.0.1:9323/metrics | grep nyxd_container_memory
   [example/metrics](https://github.com/zrougamed/nyxd/tree/main/example/metrics).
 - Keep the listener on loopback or a trusted network: it shows container names and images.
 
+## Disk use (`nyx system df`, `nyx system prune`)
+
+```bash
+$ nyx system df
+TYPE          COUNT   ACTIVE   SIZE      RECLAIMABLE
+Images        12      5        1.8GiB    940MiB
+Build cache   31      -        620MiB    620MiB
+Containers    7       5        48MiB     12MiB
+Logs          7       5        210MiB    30MiB
+Volumes       4       3        3.1GiB    0B
+
+nyx system df -v                 # per image, container, log and volume
+nyx system prune --dry-run       # what would go
+nyx system prune [--images] [--volumes]
+```
+
+- Sizes are space on disk; layers shared between images count once. Images include the extracted
+  layers containers run on. A container's size is its writable layer.
+- `prune` removes only what nothing references: exited containers and their logs, logs and overlay
+  directories left by containers that no longer exist, the build cache, and layers no image uses.
+  `--images` also removes images no container uses; `--volumes` also named volumes no container mounts.
+  Running containers and everything they use are never touched; an exited container's image and
+  volumes count as in use until the container is removed.
+- Build directories and unreferenced layers younger than an hour are kept: a build or pull may be using them.
+- API: `GET /v1/system/df`, `POST /v1/system/prune` (`images`, `volumes`, `dry_run`).
+
 ## Building images (`nyx build`)
 
 ```bash

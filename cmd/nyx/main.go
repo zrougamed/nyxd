@@ -103,6 +103,8 @@ func run(args []string) error {
 		return doVersion(socket)
 	case "info":
 		return doInfo(socket, args[1:])
+	case "system":
+		return doSystem(socket, args[1:])
 	case "pull":
 		ref, jsonOut, u, p, err := parsePullArgs(args[1:])
 		if err != nil {
@@ -183,6 +185,9 @@ commands:
       the nyx VM (vfkit) on macOS. No admin rights needed. nyx machine (no args) for details
   version
       print daemon version / build info
+  system df [-v] [--json] | system prune [--images] [--volumes] [--dry-run]
+      disk use by images, build cache, containers, logs and volumes; remove what
+      nothing references (nyx system for details)
   info [--json]
       how the daemon runs and on what: mode, storage, kernel, cgroups, crun, counts
       (attach nyx info --json to bug reports)

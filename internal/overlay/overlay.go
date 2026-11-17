@@ -64,6 +64,34 @@ const (
 	legacyCacheDir = "_cache"
 )
 
+// reserved reports whether name is one of the manager's own directories
+// under base (the shared layer store, the legacy cache), not a container's.
+func reserved(name string) bool { return name == layersDirName || name == legacyCacheDir }
+
+// ContainerIDs lists the containers that have an overlay directory; the
+// shared layer store and other internal directories are left out.
+func (m *Manager) ContainerIDs() []string {
+	ents, err := os.ReadDir(m.base)
+	if err != nil {
+		return nil
+	}
+	var ids []string
+	for _, e := range ents {
+		if e.IsDir() && !reserved(e.Name()) {
+			ids = append(ids, e.Name())
+		}
+	}
+	return ids
+}
+
+// LayerStoreDir is the shared store of extracted image layers (lowerdirs of
+// every container's overlay).
+func (m *Manager) LayerStoreDir() string { return filepath.Join(m.base, layersDirName) }
+
+// IsReserved reports whether id names an internal directory rather than a
+// container's overlay.
+func (m *Manager) IsReserved(id string) bool { return reserved(id) }
+
 // removeLegacyCache deletes the pre-_layers cache unless a live overlay mount
 // still uses it as a lowerdir (containers adopted across a daemon upgrade).
 func removeLegacyCache(base string) {

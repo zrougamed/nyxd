@@ -96,6 +96,81 @@ paths:
               schema:
                 type: string
 
+  /v1/system/df:
+    get:
+      tags: [system]
+      summary: Disk use (nyx system df)
+      description: |
+        Count, in use, size and reclaimable bytes for images (shared layers counted once, extracted
+        layers included), build cache, containers (writable layers), logs and volumes, plus per-item
+        details. Sizes are allocated bytes on disk.
+      operationId: systemDF
+      responses:
+        "200":
+          description: Disk use
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type: {type: string, enum: [images, build_cache, containers, logs, volumes]}
+                        count: {type: integer}
+                        active: {type: integer}
+                        size: {type: integer}
+                        reclaimable: {type: integer}
+                  items:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          name: {type: string}
+                          size: {type: integer}
+                          unique: {type: integer}
+                          active: {type: boolean}
+                          detail: {type: string}
+
+  /v1/system/prune:
+    post:
+      tags: [system]
+      summary: Remove what nothing references (nyx system prune)
+      description: |
+        Exited containers and their logs, logs and overlays of containers that no longer exist, the
+        build cache and layers no image uses (both kept for an hour after they were written).
+        `images` also removes images no container uses, `volumes` named volumes no container mounts.
+        Running containers and what they use are never touched.
+      operationId: systemPrune
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                images: {type: boolean}
+                volumes: {type: boolean}
+                dry_run: {type: boolean}
+      responses:
+        "200":
+          description: What was (or would be) removed, and the bytes reclaimed (an estimate with dry_run)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {type: boolean}
+                  dry_run: {type: boolean}
+                  removed:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items: {type: string}
+                  reclaimed: {type: integer}
   /v1/containers/{id}/archive:
     parameters:
       - name: id
