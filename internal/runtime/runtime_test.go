@@ -205,3 +205,29 @@ func TestIsCrunAbsent(t *testing.T) {
 type errorString string
 
 func (e errorString) Error() string { return string(e) }
+
+func TestRunForegroundNoNewKeyring(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "args")
+	bin := filepath.Join(dir, "crun")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho \"$@\" >>"+log+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r, err := New(bin, filepath.Join(dir, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := r.RunForeground(ctx, "c1", "/b", nil, nil, nil, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	r.SetNoNewKeyring(true)
+	if err := r.RunForeground(ctx, "c2", "/b", nil, nil, nil, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(log)
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) != 2 || strings.Contains(lines[0], "--no-new-keyring") || !strings.Contains(lines[1], " run --no-new-keyring --bundle /b ") {
+		t.Fatalf("crun args:\n%s", b)
+	}
+}

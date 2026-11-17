@@ -43,6 +43,9 @@ type Runtime struct {
 	globals []string // global options placed before every subcommand
 	rootDir string   // --root: crun state directory (only OCI layout; no extra files here)
 	pidDir  string   // --pid-file targets; must not live under rootDir or crun list breaks on *.pid names
+	// noNewKeyring passes --no-new-keyring to crun run: containers keep the
+	// daemon's session keyring instead of creating one.
+	noNewKeyring bool
 }
 
 // New creates a Runtime using the given binary (e.g. "/usr/bin/crun").
@@ -75,6 +78,12 @@ func (r *Runtime) SetCgroupManager(m string) {
 		r.globals = []string{"--cgroup-manager=" + m}
 	}
 }
+
+// SetNoNewKeyring makes containers share the daemon's session keyring (crun
+// run --no-new-keyring) instead of getting their own. Needed where creating
+// a keyring is not allowed, e.g. nyxd inside a container whose seccomp
+// profile blocks keyctl.
+func (r *Runtime) SetNoNewKeyring(on bool) { r.noNewKeyring = on }
 
 // GlobalArgs returns the global crun options used for every call.
 func (r *Runtime) GlobalArgs() []string { return append([]string(nil), r.globals...) }
@@ -126,13 +135,11 @@ func (r *Runtime) RunForeground(ctx context.Context, containerID, bundleDir stri
 		stderr = io.Discard
 	}
 	pidFile := r.pidFilePath(containerID)
-	args := r.args(
-		"--root", r.rootDir,
-		"run",
-		"--bundle", bundleDir,
-		"--pid-file", pidFile,
-		containerID,
-	)
+	runArgs := []string{"--root", r.rootDir, "run"}
+	if r.noNewKeyring {
+		runArgs = append(runArgs, "--no-new-keyring")
+	}
+	args := r.args(append(runArgs, "--bundle", bundleDir, "--pid-file", pidFile, containerID)...)
 	if tty {
 		return r.runForegroundTTY(ctx, args, stdin, stdout, stderr, sz)
 	}

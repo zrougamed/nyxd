@@ -55,6 +55,7 @@ type Config struct {
 	LogMaxSize   string // container log size that triggers rotation, e.g. 10m; 0 = never rotate
 	LogMaxFiles  int    // container log files kept, the current one included
 	LogDir       string // container logs; empty means BaseDir/logs
+	NoNewKeyring bool   // crun run --no-new-keyring
 
 	Rootless    rootless.Info // set when running in nyxd's own user namespace
 	UsernsRemap string        // "START:COUNT" or "default": root runs the daemon in a remapped user namespace
@@ -214,6 +215,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("runtime: %w", err)
 	}
+	rt.SetNoNewKeyring(cfg.NoNewKeyring)
 	cgroups := !cfg.Rootless.Rootless
 	if cfg.Rootless.Rootless {
 		// The daemon's user namespace does not own any cgroup; without
@@ -301,6 +303,7 @@ func parseFlags() Config {
 	flag.StringVar(&cfg.LogMaxSize, "log-max-size", "10m", "Rotate a container's log file when it reaches this size (k, m, g suffixes); 0 never rotates")
 	flag.IntVar(&cfg.LogMaxFiles, "log-max-files", logs.DefaultMaxFiles, "Log files kept per container, the current one included")
 	flag.StringVar(&cfg.LogDir, "log-dir", "", "Directory for container logs (default <base-dir>/logs); a tmpfs such as /run/nyxd/logs keeps log writes off an SD card, and the logs are lost on reboot")
+	flag.BoolVar(&cfg.NoNewKeyring, "no-new-keyring", false, "Containers share the daemon's session keyring instead of creating their own (crun --no-new-keyring); for nyxd inside a container whose seccomp profile blocks keyctl")
 	flag.BoolVar(&cfg.Version, "version", false, "Print version and exit")
 	flag.Parse()
 

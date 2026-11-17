@@ -70,10 +70,12 @@ jobs:
           u=$(id -un)
           grep -q "^$u:" /etc/subuid 2>/dev/null || sudo usermod --add-subuids 100000-165535 "$u"
           grep -q "^$u:" /etc/subgid 2>/dev/null || sudo usermod --add-subgids 100000-165535 "$u"
+          echo "== $(id)"; grep -H "^$u:" /etc/subuid /etc/subgid || true
           d="${TMPDIR:-$RUNNER_TEMP}/nyxd-smoke"
           mkdir -p "$d"
           go build -o "$d/nyxd" ./cmd/nyxd
-          "$d/nyxd" -base-dir "$d/data" -socket "$d/nyxd.sock" -net-driver host >"$d/nyxd.log" 2>&1 &
+          # -no-new-keyring: the runner container's seccomp profile blocks keyctl.
+          "$d/nyxd" -base-dir "$d/data" -socket "$d/nyxd.sock" -net-driver host -no-new-keyring >"$d/nyxd.log" 2>&1 &
           echo $! >"$d/pid"
           for _ in $(seq 1 100); do [ -S "$d/nyxd.sock" ] && break; sleep 0.2; done
           [ -S "$d/nyxd.sock" ] || { cat "$d/nyxd.log"; exit 1; }
