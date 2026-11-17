@@ -61,6 +61,24 @@ paths:
               schema:
                 $ref: "#/components/schemas/VersionResponse"
 
+  /v1/info:
+    get:
+      tags: [system]
+      summary: How the daemon runs and on what host
+      description: |
+        Plain facts for `nyx info` and bug reports: version and build, mode (`rootful`, `rootless`,
+        `userns-remap`), network driver, storage and log directories with free space, kernel, cgroup v2
+        and whether resource limits apply, AppArmor, the crun binary and version, and container and
+        image counts. Fields that could not be read are empty.
+      operationId: getInfo
+      responses:
+        "200":
+          description: Daemon and host facts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InfoResponse"
+
   /v1/network:
     get:
       tags: [system]
@@ -981,6 +999,46 @@ components:
         ok:
           type: boolean
           example: true
+
+    InfoResponse:
+      type: object
+      properties:
+        server_version: {type: string}
+        commit: {type: string}
+        build_date: {type: string}
+        go_version: {type: string}
+        mode:
+          type: string
+          enum: [rootful, rootless, userns-remap]
+        host_uid:
+          type: integer
+          description: Host user running a rootless daemon (rootless only)
+        subordinate_ids:
+          type: boolean
+          description: A subordinate ID range is mapped (false in single-ID rootless mode)
+        network_driver: {type: string}
+        dns: {type: string}
+        socket: {type: string}
+        base_dir: {type: string}
+        log_dir: {type: string}
+        storage_driver: {type: string}
+        overlay_userxattr: {type: boolean}
+        free_bytes:
+          type: integer
+          description: Space available on the base directory's filesystem
+        os: {type: string}
+        arch: {type: string}
+        kernel: {type: string}
+        cgroup_v2: {type: boolean}
+        resource_limits:
+          type: boolean
+          description: Container CPU and memory limits are applied (false in rootless mode)
+        apparmor: {type: boolean}
+        crun_path: {type: string}
+        crun_version: {type: string}
+        containers_running: {type: integer}
+        containers_stopped: {type: integer}
+        images: {type: integer}
 
     VersionResponse:
       type: object

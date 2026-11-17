@@ -95,6 +95,8 @@ func run(args []string) error {
 		return doPing(socket)
 	case "version":
 		return doVersion(socket)
+	case "info":
+		return doInfo(socket, args[1:])
 	case "pull":
 		ref, jsonOut, u, p, err := parsePullArgs(args[1:])
 		if err != nil {
@@ -170,6 +172,9 @@ commands:
       the nyx VM (vfkit) on macOS. No admin rights needed. nyx machine (no args) for details
   version
       print daemon version / build info
+  info [--json]
+      how the daemon runs and on what: mode, storage, kernel, cgroups, crun, counts
+      (attach nyx info --json to bug reports)
   login [-u USER] [-p PASS | --password-stdin] [--authfile PATH] [REGISTRY]
       check credentials against a registry (default docker.io) and save them for nyx
   logout [--authfile PATH] [REGISTRY]

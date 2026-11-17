@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -245,6 +246,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 	ctl := control.New(logger, rt, imgStore, sup, ctx, nil, version, gitCommit, buildDate, cfg.BaseDir, cfg.Socket, cfg.SocketGroup, driver, cfg.DNS)
 	ctl.SetLogDir(logDir)
+	ctl.SetDaemonInfo(daemonInfo(cfg.Rootless, cgroups, logDir, os.Getenv(rootless.EnvHostUID)))
 	builder, err := build.New(build.Config{
 		Store:    imgStore,
 		Overlay:  ovl,
@@ -395,4 +397,19 @@ func containerLogDir(cfg Config) string {
 		return filepath.Clean(cfg.LogDir)
 	}
 	return filepath.Join(cfg.BaseDir, "logs")
+}
+
+// daemonInfo is what GET /v1/info (nyx info) reports about how nyxd runs.
+func daemonInfo(r rootless.Info, cgroups bool, logDir, hostUID string) control.DaemonInfo {
+	info := control.DaemonInfo{Mode: "rootful", HostUID: -1, SubIDs: r.SubIDs, Cgroups: cgroups, LogDir: logDir}
+	switch {
+	case r.Remap:
+		info.Mode = "userns-remap"
+	case r.Rootless:
+		info.Mode = "rootless"
+		if uid, err := strconv.Atoi(hostUID); err == nil {
+			info.HostUID = uid
+		}
+	}
+	return info
 }

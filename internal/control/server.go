@@ -62,6 +62,7 @@ type Server struct {
 	gitCommit   string
 	buildDate   string
 	logDir      string // container logs; empty means dataDir/logs
+	info        DaemonInfo
 	socket      string
 	socketGroup string // optional: chgrp socket for non-root nyx clients (0660)
 
@@ -141,6 +142,7 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/ping", s.handlePing)
 	mux.HandleFunc("GET /v1/version", s.handleVersion)
+	mux.HandleFunc("GET /v1/info", s.handleInfo)
 	mux.HandleFunc("GET /v1/network", s.handleNetwork)
 	mux.HandleFunc("GET /v1/containers", s.handleContainers)
 	mux.HandleFunc("GET /v1/containers/stats", s.handleContainerStats)

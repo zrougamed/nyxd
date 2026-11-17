@@ -7,6 +7,7 @@ Install **`nyx`** next to **`nyxd`** (`make build-nyx`). It talks to the daemon 
 ```bash
 nyx ping
 nyx version
+nyx info          # mode, storage, kernel, cgroups, crun, counts (--json for bug reports)
 
 # Pull (progress UI on stderr; add --json for a single JSON blob on stdout)
 sudo nyx pull nginx:alpine
