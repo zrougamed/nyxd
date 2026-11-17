@@ -189,8 +189,7 @@ func runHost() int {
 			}
 		}
 	}
-	subUID, errU := lookupSubID("/etc/subuid", uid)
-	subGID, errG := lookupSubID("/etc/subgid", gid)
+	subUID, subGID, errU, errG := subordinateIDs("/etc/subuid", "/etc/subgid", uid)
 	newuidmap, errNU := exec.LookPath("newuidmap")
 	newgidmap, errNG := exec.LookPath("newgidmap")
 	useSubIDs := errU == nil && errG == nil && errNU == nil && errNG == nil
@@ -295,6 +294,16 @@ func idmap(tool, pid string, id int, r subRange) error {
 }
 
 // lookupSubID finds the first subordinate range for id (by name or number).
+// subordinateIDs returns the user's ranges from the subuid and subgid files.
+// Both are keyed by login name or uid, never by group (subgid(5); newgidmap
+// checks the calling user the same way): a user whose primary gid differs
+// from the uid still has their subgid entry under their name.
+func subordinateIDs(subuidFile, subgidFile string, uid int) (subUID, subGID subRange, errU, errG error) {
+	subUID, errU = lookupSubID(subuidFile, uid)
+	subGID, errG = lookupSubID(subgidFile, uid)
+	return
+}
+
 func lookupSubID(file string, id int) (subRange, error) {
 	f, err := os.Open(file)
 	if err != nil {
