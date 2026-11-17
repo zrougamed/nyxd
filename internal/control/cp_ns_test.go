@@ -88,5 +88,24 @@ func TestControlCopyArchive(t *testing.T) {
 	if code, _ := d.Do(t, "GET", "/v1/containers/nosuch/archive?path=/", nil); code != 404 {
 		t.Errorf("unknown container: %d", code)
 	}
+	if code, _ := d.Do(t, "GET", "/v1/containers/cp1/archive", nil); code != 400 {
+		t.Errorf("no path: %d", code)
+	}
+	// A whole directory, and the container root under the container's name.
+	if code, b := archive("GET", "/tmp", "", nil); code != 200 || !strings.Contains(string(b), "tmp/hello.txt") {
+		t.Errorf("dir: %d", code)
+	}
+	if code, b := archive("GET", "/", "", nil); code != 200 || !strings.Contains(string(b), "cp1/tmp/hello.txt") {
+		t.Errorf("root: %d", code)
+	}
+	if code, _ := archive("PUT", "/no/such/dir/file", "", tarOf([2]string{"a", "b"})); code != 404 {
+		t.Errorf("missing parent: %d", code)
+	}
+	if code, _ := archive("PUT", "/tmp", "", strings.NewReader("this is not a tar archive at all......")); code != 400 {
+		t.Errorf("garbage archive: %d", code)
+	}
 	d.Do(t, "POST", "/v1/containers/cp1/stop", nil)
+	if code, out := archive("GET", "/tmp", "", nil); code != 409 || !strings.Contains(string(out), "not running") {
+		t.Errorf("stopped: %d %s", code, out)
+	}
 }

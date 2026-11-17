@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -134,5 +135,35 @@ func TestRenameTopHardlinkAndBadInput(t *testing.T) {
 	}
 	if _, err := io.ReadAll(RenameTop(strings.NewReader("not a tar archive at all, really"), "x")); err == nil {
 		t.Fatal("garbage accepted")
+	}
+}
+
+func TestWriteTreeSpecialEntries(t *testing.T) {
+	dir := t.TempDir()
+	if err := mkfifoForTest(filepath.Join(dir, "pipe")); err != nil {
+		t.Skip(err)
+	}
+	if l, err := net.Listen("unix", filepath.Join(dir, "sock")); err == nil {
+		defer l.Close()
+	}
+	if err := os.WriteFile(filepath.Join(dir, "f"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	var buf bytes.Buffer
+	// The root itself ("" or "."), named "all": sockets are skipped, a fifo
+	// is stored as a header only.
+	if err := WriteTree(&buf, root, "", "all", nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(names(t, buf.Bytes()), " "); got != "all/ all/f all/pipe" {
+		t.Fatalf("entries: %s", got)
+	}
+	if err := WriteTree(io.Discard, root, "missing", "m", nil); err == nil {
+		t.Fatal("missing path accepted")
 	}
 }
