@@ -19,11 +19,11 @@ func TestDependsOnForms(t *testing.T) {
 		D DependsOn `yaml:"depends_on"`
 	}
 	for src, want := range map[string]string{
-		"depends_on: [a, b]":                        "a,b",
-		"depends_on:\n  a: {condition: x}\n  b: {}": "a,b",
-		"depends_on: null":                          "",
-		"depends_on: ~":                             "",
-		"depends_on: ''":                            "",
+		"depends_on: [a, b]": "a,b",
+		"depends_on:\n  a: {condition: service_healthy}\n  b: {}": "a,b",
+		"depends_on: null": "",
+		"depends_on: ~":    "",
+		"depends_on: ''":   "",
 	} {
 		var w wrap
 		if err := yaml.Unmarshal([]byte(src), &w); err != nil {
@@ -32,13 +32,13 @@ func TestDependsOnForms(t *testing.T) {
 		}
 		var names []string
 		for _, n := range w.D {
-			names = append(names, n)
+			names = append(names, n.Service)
 		}
 		if got := strings.Join(names, ","); got != want && !(want == "a,b" && got == "b,a") {
 			t.Errorf("%q: %q", src, got)
 		}
 	}
-	for _, src := range []string{"depends_on: x", "depends_on: [[x]]", "depends_on:\n  - {a: 1}", "depends_on:\n  [a]: 1", "depends_on: !!binary aGk="} {
+	for _, src := range []string{"depends_on: x", "depends_on: [[x]]", "depends_on:\n  - {a: 1}", "depends_on:\n  [a]: 1", "depends_on: !!binary aGk=", "depends_on:\n  a: {condition: x}"} {
 		var w wrap
 		if err := yaml.Unmarshal([]byte(src), &w); err == nil {
 			t.Errorf("%q accepted", src)

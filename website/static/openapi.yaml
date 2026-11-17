@@ -207,7 +207,10 @@ paths:
         YAML on disk), merges `.env` from the compose directory with the process environment, substitutes
         `${VAR}` in the raw YAML, pulls missing images, maps services to container specs (including compose
         healthchecks and volume bind mounts), then starts containers in `depends_on` order via ordered
-        sequential start.
+        sequential start. Before a service starts, its `depends_on` conditions are met:
+        `service_healthy` waits for the dependency's health check to pass (refused with 400 when the
+        dependency has no `healthcheck`), `service_completed_successfully` waits for it to exit 0 (a
+        non-zero exit fails the request and the remaining services are not started).
       operationId: composeUp
       requestBody:
         required: true
@@ -1532,6 +1535,12 @@ components:
             basename of the compose file's parent directory if `file` is set (Docker Compose style),
             or the basename of `context_dir` if `yaml` is set. Use the same value for `up`, `stop`,
             and `down`.
+        wait_timeout:
+          type: string
+          description: |
+            Compose up only: how long to wait, in total, for `depends_on` conditions
+            (`service_healthy`, `service_completed_successfully`) before failing (Go duration,
+            e.g. `2m`). Default `5m`.
         remove_volumes:
           type: boolean
           description: When true (compose down only), delete on-disk named volume directories declared in the file after containers are removed

@@ -527,6 +527,9 @@ type composeProjectRequest struct {
 	// RegistryAuth is credentials by registry host for the pulls of compose up
 	// (nyx fills it from its login files); per-service registry_username wins.
 	RegistryAuth image.AuthMap `json:"registry_auth,omitempty"`
+	// WaitTimeout bounds the depends_on condition waits of compose up
+	// (Go duration, e.g. "2m"); empty means the daemon default (5m).
+	WaitTimeout string `json:"wait_timeout,omitempty"`
 }
 
 // loadComposeProject parses the compose document from body (file path or inline yaml)
@@ -601,6 +604,15 @@ func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, image.TrimUserMessage(err), http.StatusBadRequest)
 		return
 	}
+	var waitTimeout time.Duration
+	if v := strings.TrimSpace(body.WaitTimeout); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			http.Error(w, fmt.Sprintf("invalid wait_timeout %q: want a positive duration such as 2m", v), http.StatusBadRequest)
+			return
+		}
+		waitTimeout = d
+	}
 	st, composeDir, project, err := s.loadComposeProject(body)
 	if err != nil {
 		http.Error(w, image.HumanizeComposeBuildError(err), http.StatusBadRequest)
@@ -623,7 +635,14 @@ func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
 			s.log.Warn("compose up: host network", "project", project, "warning", wmsg)
 		}
 	}
-	if err := s.sup.StartComposeUp(baseCtx, specs); err != nil {
+	for _, wmsg := range compose.DependsOnWarnings(st) {
+		s.log.Warn("compose up: depends_on", "project", project, "warning", wmsg)
+		warnings = append(warnings, wmsg)
+	}
+	if err := s.sup.StartComposeUpWith(baseCtx, specs, supervisor.ComposeUpOptions{
+		Deps:        compose.DependencyWaits(st, project),
+		WaitTimeout: waitTimeout,
+	}); err != nil {
 		s.log.Warn("compose up", "err", err)
 		msg := image.TrimUserMessage(err)
 		for _, wmsg := range warnings {

@@ -103,14 +103,16 @@ services:
         condition: service_healthy
   rabbitmq:
     image: rabbitmq:3-management
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
 `
 	stack, err := compose.Parse([]byte(y))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	sub := stack.Services["subscriber"]
-	if len(sub.DependsOn) != 1 || sub.DependsOn[0] != "rabbitmq" {
-		t.Fatalf("depends_on: got %#v", []string(sub.DependsOn))
+	if len(sub.DependsOn) != 1 || sub.DependsOn[0].Service != "rabbitmq" || sub.DependsOn[0].Condition != compose.ConditionHealthy {
+		t.Fatalf("depends_on: got %#v", sub.DependsOn)
 	}
 }
 

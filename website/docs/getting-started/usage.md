@@ -130,7 +130,13 @@ Details: [Sharing images](/docs/getting-started/images).
 
 **Project name:** container IDs are `{project}-{service}` (sanitized). If you omit **`--project`**, the default is the top-level **`name:`** of the compose file, else the **directory** that contains it (same idea as Docker Compose), not the filename — so two different folders that both use `docker-compose.yml` do not collide. Use the same **`--project`** for `up`, `stop`, and `down` when you override it.
 
-**Depends on:** both `depends_on: [svc]` and the Compose **map** form `depends_on: { svc: { condition: service_healthy } }` are accepted; only service **names** are used for start order (`condition` is ignored — readiness comes from **healthcheck** + sequential start).
+**Depends on:** both `depends_on: [svc]` and the Compose **map** form `depends_on: { svc: { condition: ... } }` set the start order (dependencies first). `nyx compose up` then honours the condition before starting each service:
+
+- `service_started` (also the list form): the dependency has been started.
+- `service_healthy`: the dependency's `healthcheck` passes. The dependency must define a `healthcheck` in the compose file, otherwise `compose up` refuses the file instead of waiting forever.
+- `service_completed_successfully`: the dependency has exited 0 (migrations, init jobs). A non-zero exit stops the rest of the stack from starting.
+
+All waits of one `compose up` share a deadline, `--wait-timeout` (default `5m`). `restart: true` under `depends_on` is accepted with a warning and not acted on yet.
 
 **Stop grace:** per-service `stop_grace_period` maps to SIGTERM wait before `nyx stop` / compose stop forces teardown. If omitted, the daemon uses a **10s** default (similar to `docker stop`), not a multi‑minute wait.
 

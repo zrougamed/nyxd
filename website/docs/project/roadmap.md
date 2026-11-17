@@ -149,8 +149,10 @@ major distribution.
       (`--no-stream`, optional service filter).
 - [ ] **Implicit named volumes** — `name:/path` without a top-level `volumes:` entry.
 - [ ] **Volume commands** — `nyx volume ls` / `rm`.
-- [ ] **Unsupported keys** — `expose`, `security_opt`, `depends_on.condition` are
-      ignored; warn about keys nyxd does not support.
+- [x] **`depends_on` conditions** — `service_started`, `service_healthy`,
+      `service_completed_successfully`, with `compose up --wait-timeout`.
+- [ ] **Unsupported keys** — `expose`, `security_opt` are ignored; warn about keys
+      nyxd does not support.
 
 ## Security
 

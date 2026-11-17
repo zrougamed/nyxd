@@ -1,5 +1,7 @@
 package compose
 
+import "github.com/zrougamed/nyxd/internal/supervisor"
+
 // ContainerID returns the supervised container id for a compose service
 // ("<project>-<service>", or just "<service>" when project is "default").
 func ContainerID(project, service string) string {
@@ -25,4 +27,30 @@ func ReverseOrderedContainerIDs(stack *Stack, project string) []string {
 		ids[i], ids[j] = ids[j], ids[i]
 	}
 	return ids
+}
+
+// DependencyWaits returns, by container id, the depends_on conditions compose
+// up must wait for before starting each service. service_started entries are
+// left out: start order already covers them.
+func DependencyWaits(stack *Stack, project string) map[string][]supervisor.ComposeDependency {
+	out := make(map[string][]supervisor.ComposeDependency)
+	for name, svc := range stack.Services {
+		for _, dep := range svc.DependsOn {
+			var cond string
+			switch dep.Condition {
+			case ConditionHealthy:
+				cond = supervisor.DependsOnHealthy
+			case ConditionCompleted:
+				cond = supervisor.DependsOnCompleted
+			default:
+				continue
+			}
+			id := composeContainerID(project, name)
+			out[id] = append(out[id], supervisor.ComposeDependency{
+				ID:        composeContainerID(project, dep.Service),
+				Condition: cond,
+			})
+		}
+	}
+	return out
 }
