@@ -42,3 +42,12 @@ func TestFillFromBuildInfo(t *testing.T) {
 		})
 	}
 }
+
+func TestContainerLogDir(t *testing.T) {
+	if got := containerLogDir(Config{BaseDir: "/var/lib/nyxd"}); got != "/var/lib/nyxd/logs" {
+		t.Fatalf("default: %s", got)
+	}
+	if got := containerLogDir(Config{BaseDir: "/var/lib/nyxd", LogDir: "/run/nyxd/logs/"}); got != "/run/nyxd/logs" {
+		t.Fatalf("-log-dir: %s", got)
+	}
+}

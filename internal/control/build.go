@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -33,6 +34,17 @@ func decodeRegistryConfig(h string) (image.AuthMap, error) {
 
 // SetBuilder enables POST /v1/build.
 func (s *Server) SetBuilder(b *build.Builder) { s.builder = b }
+
+// SetLogDir sets where container logs live (nyxd -log-dir); the default is
+// <data dir>/logs.
+func (s *Server) SetLogDir(dir string) { s.logDir = dir }
+
+func (s *Server) containerLogDir() string {
+	if s.logDir != "" {
+		return s.logDir
+	}
+	return filepath.Join(s.dataDir, "logs")
+}
 
 // buildEvent is one NDJSON line of a build response.
 type buildEvent struct {

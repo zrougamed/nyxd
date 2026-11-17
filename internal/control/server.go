@@ -61,6 +61,7 @@ type Server struct {
 	version     string
 	gitCommit   string
 	buildDate   string
+	logDir      string // container logs; empty means dataDir/logs
 	socket      string
 	socketGroup string // optional: chgrp socket for non-root nyx clients (0660)
 
@@ -413,7 +414,7 @@ func (s *Server) handleContainerRemove(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// An exited container leaves only its logs: removing it deletes them.
 		if errors.Is(err, errNoSuchContainerID) && safeLogContainerID(id) &&
-			logs.Remove(filepath.Join(s.dataDir, "logs"), id) {
+			logs.Remove(s.containerLogDir(), id) {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "id": id})
 			return

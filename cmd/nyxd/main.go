@@ -53,6 +53,7 @@ type Config struct {
 	DNS          string // auto (default), embedded, cni, off — see docs/networking.md
 	LogMaxSize   string // container log size that triggers rotation, e.g. 10m; 0 = never rotate
 	LogMaxFiles  int    // container log files kept, the current one included
+	LogDir       string // container logs; empty means BaseDir/logs
 
 	Rootless    rootless.Info // set when running in nyxd's own user namespace
 	UsernsRemap string        // "START:COUNT" or "default": root runs the daemon in a remapped user namespace
@@ -88,7 +89,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, "nyxd:", err)
 			os.Exit(1)
 		}
-		info, err := rootless.EnterRemap(start, count, []string{cfg.BaseDir, filepath.Dir(cfg.Socket)})
+		own := []string{cfg.BaseDir, filepath.Dir(cfg.Socket)}
+		if cfg.LogDir != "" {
+			own = append(own, cfg.LogDir)
+		}
+		info, err := rootless.EnterRemap(start, count, own)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "nyxd:", err)
 			os.Exit(1)
@@ -216,7 +221,8 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		logger.Warn("rootless: cgroups disabled, container resource limits are not applied")
 	}
 
-	logColl, err := logs.NewCollector(cfg.BaseDir+"/logs", logger)
+	logDir := containerLogDir(cfg)
+	logColl, err := logs.NewCollector(logDir, logger)
 	if err != nil {
 		return fmt.Errorf("log collector: %w", err)
 	}
@@ -238,6 +244,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	sup.SetRootless(cfg.Rootless.Rootless, cgroups)
 
 	ctl := control.New(logger, rt, imgStore, sup, ctx, nil, version, gitCommit, buildDate, cfg.BaseDir, cfg.Socket, cfg.SocketGroup, driver, cfg.DNS)
+	ctl.SetLogDir(logDir)
 	builder, err := build.New(build.Config{
 		Store:    imgStore,
 		Overlay:  ovl,
@@ -291,6 +298,7 @@ func parseFlags() Config {
 	flag.StringVar(&cfg.UsernsRemap, "userns-remap", "", "As root: run the daemon and containers in a user namespace mapped to host IDs START:COUNT (\"default\" = 100000:65536); no setuid helpers needed")
 	flag.StringVar(&cfg.LogMaxSize, "log-max-size", "10m", "Rotate a container's log file when it reaches this size (k, m, g suffixes); 0 never rotates")
 	flag.IntVar(&cfg.LogMaxFiles, "log-max-files", logs.DefaultMaxFiles, "Log files kept per container, the current one included")
+	flag.StringVar(&cfg.LogDir, "log-dir", "", "Directory for container logs (default <base-dir>/logs); a tmpfs such as /run/nyxd/logs keeps log writes off an SD card, and the logs are lost on reboot")
 	flag.BoolVar(&cfg.Version, "version", false, "Print version and exit")
 	flag.Parse()
 
@@ -379,4 +387,12 @@ func newLogger(level string) *slog.Logger {
 		lvl = slog.LevelInfo
 	}
 	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl}))
+}
+
+// containerLogDir is where container logs go: -log-dir, else <base-dir>/logs.
+func containerLogDir(cfg Config) string {
+	if cfg.LogDir != "" {
+		return filepath.Clean(cfg.LogDir)
+	}
+	return filepath.Join(cfg.BaseDir, "logs")
 }
