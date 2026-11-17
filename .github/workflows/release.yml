@@ -21,9 +21,14 @@ jobs:
     uses: ./.github/workflows/ci.yml
     secrets: inherit
 
+  repo-smoke:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/repo-smoke.yml
+    secrets: inherit
+
   publish:
     if: github.event_name == 'push'
-    needs: ci
+    needs: [ci, repo-smoke]
     runs-on: ubuntu-latest
     outputs:
       hashes: ${{ steps.hashes.outputs.hashes }}

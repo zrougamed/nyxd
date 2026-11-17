@@ -1,14 +1,22 @@
 name: CI
 
+# main, pull requests, and tags through the Release workflow. Pushes to
+# other branches are covered by their pull request: running both doubled
+# every PR's CI.
 on:
   push:
-    branches:
-      - "**"
+    branches: [main]
   pull_request:
   workflow_call:
 
 permissions:
   contents: read
+
+# A new push to a pull request cancels its previous run; runs on main and
+# tags always finish.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   go:
@@ -103,21 +111,3 @@ jobs:
           path: .
           fail-build: false
           output-format: table
-
-  # The one-line install from the package repositories, in a fresh container
-  # per distribution (Ubuntu, Debian, Fedora, Rocky, openSUSE, Alpine, Arch):
-  # each must finish within 60 seconds. Throwaway signing keys, local server.
-  repos:
-    runs-on: ${{ (github.event.pull_request.head.repo.fork && 'ubuntu-latest') || fromJSON(vars.GH_RUNS_ON || '"ubuntu-latest"') }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # GoReleaser needs the tags for the snapshot version
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Install from the repositories
-        run: scripts/repo-smoke.sh
