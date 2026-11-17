@@ -32,6 +32,11 @@ Signatures:
 - `.apk` files are signed natively only if an RSA key is configured (see below);
   their `.sig` covers them either way.
 - `nyxd-release-key.asc`: the public key.
+- `nyxd.intoto.jsonl`: [SLSA](https://slsa.dev) Build Level 3 provenance for
+  every file in `checksums.txt`, made by the
+  [slsa-github-generator](https://github.com/slsa-framework/slsa-github-generator)
+  and signed with Sigstore (no key to manage). It records the repository,
+  commit, tag and workflow run that built each file.
 
 ## One-time setup (maintainers)
 
@@ -205,6 +210,18 @@ gpg --fingerprint "$FPR"                       # must match the published finger
 
 gpg --verify checksums.txt.sig checksums.txt   # "Good signature from nyxd release signing"
 sha256sum --ignore-missing -c checksums.txt    # macOS: shasum -a 256 --ignore-missing -c checksums.txt
+```
+
+Build provenance, with [slsa-verifier](https://github.com/slsa-framework/slsa-verifier#installation)
+(no key needed; releases after v1.2.0):
+
+```bash
+TAG=<release tag, e.g. v1.3.0>
+curl -fsSLO "https://github.com/zrougamed/nyxd/releases/download/$TAG/nyxd.intoto.jsonl"
+slsa-verifier verify-artifact nyxd_${TAG#v}_amd64.deb \
+  --provenance-path nyxd.intoto.jsonl \
+  --source-uri github.com/zrougamed/nyxd \
+  --source-tag "$TAG"                          # "PASSED: SLSA verification passed"
 ```
 
 Package managers:
