@@ -63,3 +63,12 @@ func (m *Manager) MergedDir(containerID string) string {
 func (m *Manager) IsMounted(containerID string) bool {
 	return false
 }
+
+// ContainerIDs is empty off Linux.
+func (m *Manager) ContainerIDs() []string { return nil }
+
+// LayerStoreDir is the shared layer store path.
+func (m *Manager) LayerStoreDir() string { return filepath.Join(m.base, "_layers") }
+
+// IsReserved reports whether id names an internal directory.
+func (m *Manager) IsReserved(id string) bool { return id == "_layers" || id == "_cache" }
