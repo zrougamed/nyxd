@@ -13,6 +13,9 @@ umask 022
 ARCH=${1:?arch (amd64|arm64)}
 OUT=${2:?output directory}
 VERSION=${3:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}
+# Stamped into nyxd like the Makefile and GoReleaser do (`nyx version`).
+COMMIT=${COMMIT:-$(git -C "$(dirname "$0")" rev-parse --short HEAD 2>/dev/null || echo unknown)}
+BUILD_DATE=${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 
 # shellcheck source=scripts/pins.sh
 . "$(dirname "$0")/pins.sh"
@@ -40,7 +43,7 @@ if [ -n "${NYXD_BIN:-}" ]; then
 	install -m 0755 "$NYXD_BIN" "$R/usr/local/bin/nyxd"
 else
 	(cd "$ROOT_DIR" && CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -trimpath \
-		-ldflags "-w -s -X main.version=$VERSION" -o "$R/usr/local/bin/nyxd" ./cmd/nyxd)
+		-ldflags "-w -s -X main.version=$VERSION -X main.gitCommit=$COMMIT -X main.buildDate=$BUILD_DATE" -o "$R/usr/local/bin/nyxd" ./cmd/nyxd)
 fi
 
 # crun, static, pinned.
