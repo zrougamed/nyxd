@@ -40,10 +40,8 @@ func validateService(name string, svc *Service, all map[string]Service) error {
 	if err := validateNetworkMode(svc.NetworkMode); err != nil {
 		return fmt.Errorf("service %q: %w", name, err)
 	}
-	for _, dep := range svc.DependsOn {
-		if _, ok := all[dep]; !ok {
-			return fmt.Errorf("service %q: unknown depends_on %q", name, dep)
-		}
+	if err := validateDependsOn(name, svc, all); err != nil {
+		return err
 	}
 	if svc.NoNewPrivileges == nil {
 		t := true
@@ -83,7 +81,7 @@ func detectCycles(services map[string]Service) error {
 		}
 		color[n] = 1
 		for _, dep := range services[n].DependsOn {
-			if err := dfs(dep); err != nil {
+			if err := dfs(dep.Service); err != nil {
 				return err
 			}
 		}
@@ -117,7 +115,7 @@ func TopologicalOrder(stack *Stack) []string {
 	for name, svc := range stack.Services {
 		inDeg[name] = len(svc.DependsOn)
 		for _, dep := range svc.DependsOn {
-			adj[dep] = append(adj[dep], name)
+			adj[dep.Service] = append(adj[dep.Service], name)
 		}
 	}
 

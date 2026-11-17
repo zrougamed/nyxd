@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -18,12 +19,131 @@ import (
 // container is already running with an equivalent spec, it is left alone; if the
 // spec changed, the container is stopped and recreated; if missing, it is started.
 func (s *Supervisor) StartComposeUp(ctx context.Context, specs []ContainerSpec) error {
+	return s.StartComposeUpWith(ctx, specs, ComposeUpOptions{})
+}
+
+// depends_on conditions compose up waits for (the Compose spec's names).
+// service_started needs no wait: dependencies start first.
+const (
+	DependsOnHealthy   = "service_healthy"
+	DependsOnCompleted = "service_completed_successfully"
+)
+
+// DefaultComposeWaitTimeout bounds all depends_on waits of one compose up.
+const DefaultComposeWaitTimeout = 5 * time.Minute
+
+// dependencyPoll is how often a depends_on wait re-checks its dependency.
+var dependencyPoll = time.Second
+
+// ComposeDependency is one depends_on entry, by container id.
+type ComposeDependency struct {
+	ID        string
+	Condition string
+}
+
+// ComposeUpOptions are the depends_on waits for [Supervisor.StartComposeUpWith].
+type ComposeUpOptions struct {
+	// Deps maps a container id to the dependencies it waits for before starting.
+	Deps map[string][]ComposeDependency
+	// WaitTimeout bounds all waits together; 0 means DefaultComposeWaitTimeout.
+	WaitTimeout time.Duration
+}
+
+// StartComposeUpWith is [Supervisor.StartComposeUp] that also honours
+// depends_on conditions: before each container starts, it waits until every
+// service_healthy dependency passes its health check and every
+// service_completed_successfully dependency has exited 0. A failed or timed
+// out wait stops the rest of the stack from starting.
+func (s *Supervisor) StartComposeUpWith(ctx context.Context, specs []ContainerSpec, opts ComposeUpOptions) error {
+	timeout := opts.WaitTimeout
+	if timeout <= 0 {
+		timeout = DefaultComposeWaitTimeout
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	for _, sp := range specs {
+		for _, dep := range opts.Deps[sp.ID] {
+			if err := s.waitDependency(waitCtx, dep); err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					err = fmt.Errorf("%s: not met within %s (compose up --wait-timeout)", dep.Condition, timeout)
+				}
+				return fmt.Errorf("start %s: dependency %s: %w", sp.ID, dep.ID, err)
+			}
+		}
 		if err := s.ensureComposeContainer(ctx, sp); err != nil {
 			return fmt.Errorf("start %s: %w", sp.ID, err)
 		}
 	}
 	return nil
+}
+
+// waitDependency blocks until dep meets its condition.
+func (s *Supervisor) waitDependency(ctx context.Context, dep ComposeDependency) error {
+	var check func(context.Context, string) (bool, error)
+	switch dep.Condition {
+	case DependsOnHealthy:
+		check = s.dependencyHealthy
+	case DependsOnCompleted:
+		check = s.dependencyCompleted
+	default:
+		return nil
+	}
+	t := time.NewTicker(dependencyPoll)
+	defer t.Stop()
+	for {
+		ok, err := check(ctx, dep.ID)
+		if err != nil || ok {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+		}
+	}
+}
+
+// dependencyHealthy reports whether id is running and healthy. The checker's
+// status is used when it has one; until its first check (a container just
+// started, or re-adopted after a daemon restart) a probe decides.
+func (s *Supervisor) dependencyHealthy(ctx context.Context, id string) (bool, error) {
+	s.mu.RLock()
+	e, ok := s.containers[id]
+	s.mu.RUnlock()
+	if !ok {
+		if rec, found := s.readExited(id); found {
+			return false, fmt.Errorf("exited with code %d before becoming healthy", rec.ExitCode)
+		}
+		return false, fmt.Errorf("not running")
+	}
+	e.mu.Lock()
+	chk, spec := e.checker, e.spec
+	e.mu.Unlock()
+	if spec.Healthcheck == nil || spec.Healthcheck.Type == health.TypeNone || spec.Healthcheck.Type == "" {
+		return false, fmt.Errorf("has no healthcheck")
+	}
+	if chk != nil && chk.Status() == health.StatusHealthy {
+		return true, nil
+	}
+	pctx, cancel := context.WithTimeout(ctx, spec.Healthcheck.Timeout+time.Second)
+	defer cancel()
+	return health.Probe(pctx, *spec.Healthcheck, id, s.rt.Binary(), s.rt.RootDir()) == nil, nil
+}
+
+// dependencyCompleted reports whether id has exited 0. A non-zero exit is an
+// error; a restart policy that restarts it keeps the wait going.
+func (s *Supervisor) dependencyCompleted(_ context.Context, id string) (bool, error) {
+	if s.Running(id) {
+		return false, nil
+	}
+	rec, ok := s.readExited(id)
+	if !ok {
+		return false, fmt.Errorf("exited, exit code unknown")
+	}
+	if rec.ExitCode != 0 {
+		return false, fmt.Errorf("exited with code %d", rec.ExitCode)
+	}
+	return true, nil
 }
 
 func (s *Supervisor) ensureComposeContainer(ctx context.Context, want ContainerSpec) error {

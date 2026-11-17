@@ -45,8 +45,8 @@ func TestBuildContainerSpecsMore(t *testing.T) {
 // A dependency cycle (Parse rejects one) still yields every service once.
 func TestTopologicalOrderCycle(t *testing.T) {
 	st := &compose.Stack{Services: map[string]compose.Service{
-		"a": {DependsOn: compose.DependsOn{"b"}},
-		"b": {DependsOn: compose.DependsOn{"a"}},
+		"a": {DependsOn: compose.DependsOn{{Service: "b"}}},
+		"b": {DependsOn: compose.DependsOn{{Service: "a"}}},
 		"c": {},
 	}}
 	if got := strings.Join(compose.TopologicalOrder(st), ","); got != "c,a,b" {

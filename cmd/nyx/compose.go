@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/zrougamed/nyxd/internal/compose"
 	"github.com/zrougamed/nyxd/internal/image"
@@ -21,6 +22,7 @@ type composeCLI struct {
 	project       string
 	removeVolumes bool
 	build         bool
+	waitTimeout   string
 	positional    []string
 }
 
@@ -51,6 +53,14 @@ func parseComposeArgs(args []string) (composeCLI, error) {
 			c.removeVolumes = true
 		case a == "--build":
 			c.build = true
+		case a == "--wait-timeout":
+			if i+1 >= len(args) {
+				return composeCLI{}, fmt.Errorf("--wait-timeout requires a duration")
+			}
+			i++
+			c.waitTimeout = args[i]
+		case strings.HasPrefix(a, "--wait-timeout="):
+			c.waitTimeout = strings.TrimPrefix(a, "--wait-timeout=")
 		case strings.HasPrefix(a, "-"):
 			return composeCLI{}, fmt.Errorf("unknown flag %q", a)
 		default:
@@ -82,6 +92,8 @@ flags:
                       If omitted, defaults to the compose file's parent directory name.
   -v, --volumes       (down only) delete declared named volume host dirs after remove
   --build             (up only) rebuild every service with build: (default: only missing images)
+  --wait-timeout D    (up only) how long to wait for depends_on conditions
+                      (service_healthy, service_completed_successfully); default 5m
   -q, --quiet         (ps only) print container ids only
   --no-stream         (stats only) print one sample and exit
   --no-trunc          (ps/stats) do not truncate container ids / names
@@ -131,6 +143,9 @@ examples:
 	case "stop", "down":
 		if opts.build {
 			return fmt.Errorf("--build is only for compose up")
+		}
+		if opts.waitTimeout != "" {
+			return fmt.Errorf("--wait-timeout is only for compose up")
 		}
 		if sub == "down" {
 			return doComposeDown(socket, opts)
@@ -460,6 +475,12 @@ func doComposeUp(socket string, opts composeCLI) error {
 	}
 	if len(auth) > 0 {
 		body["registry_auth"] = auth
+	}
+	if opts.waitTimeout != "" {
+		if d, err := time.ParseDuration(opts.waitTimeout); err != nil || d <= 0 {
+			return fmt.Errorf("--wait-timeout %q: want a positive duration such as 2m", opts.waitTimeout)
+		}
+		body["wait_timeout"] = opts.waitTimeout
 	}
 	return postComposeJSON(socket, "http://unix/v1/compose/up", body, "ids", "Starting compose stack…")
 }
