@@ -450,11 +450,10 @@ func doComposeUp(socket string, opts composeCLI) error {
 			return err
 		}
 	}
-	// The daemon reads the file: give it the path as the daemon sees it.
-	if abs, err = daemonPath(socket, abs); err != nil {
+	body, err := composeFileBody(socket, abs)
+	if err != nil {
 		return err
 	}
-	body := map[string]any{"file": abs}
 	if opts.project != "" {
 		body["project"] = opts.project
 	}
@@ -469,11 +468,10 @@ func doComposeStop(socket string, opts composeCLI) error {
 	if err != nil {
 		return err
 	}
-	// The daemon reads the file: give it the path as the daemon sees it.
-	if abs, err = daemonPath(socket, abs); err != nil {
+	body, err := composeFileBody(socket, abs)
+	if err != nil {
 		return err
 	}
-	body := map[string]string{"file": abs}
 	if opts.project != "" {
 		body["project"] = opts.project
 	}
@@ -485,11 +483,10 @@ func doComposeDown(socket string, opts composeCLI) error {
 	if err != nil {
 		return err
 	}
-	// The daemon reads the file: give it the path as the daemon sees it.
-	if abs, err = daemonPath(socket, abs); err != nil {
+	body, err := composeFileBody(socket, abs)
+	if err != nil {
 		return err
 	}
-	body := map[string]any{"file": abs}
 	if opts.project != "" {
 		body["project"] = opts.project
 	}
@@ -712,4 +709,23 @@ func imageExists(socket, ref string) (bool, error) {
 		b, _ := io.ReadAll(resp.Body)
 		return false, fmt.Errorf("image %s: %w", ref, daemonError(resp.StatusCode, b))
 	}
+}
+
+// composeFileBody names the compose file for the daemon. A local or WSL
+// daemon reads it by path (as the daemon sees it); a remote one gets the
+// contents, with the file's directory as context_dir: .env and relative
+// paths resolve there on the remote host.
+func composeFileBody(socket, abs string) (map[string]any, error) {
+	if isRemoteEndpoint(socket) {
+		b, err := os.ReadFile(abs)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"yaml": string(b), "context_dir": filepath.Dir(abs)}, nil
+	}
+	p, err := daemonPath(socket, abs)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"file": p}, nil
 }

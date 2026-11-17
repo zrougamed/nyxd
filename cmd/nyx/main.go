@@ -25,11 +25,14 @@ import (
 
 const systemSocket = "/run/nyxd/nyxd.sock"
 
-// defaultSocket picks NYXD_SOCKET, else the nyx machine (WSL distro on
+// defaultSocket picks NYX_HOST, else NYXD_SOCKET, else the nyx machine (WSL distro on
 // Windows, the VM's socket on macOS once created), else (for non-root users)
 // the user's own rootless daemon at $XDG_RUNTIME_DIR/nyxd/nyxd.sock when it
 // exists, else the system daemon.
 func defaultSocket() string {
+	if v := os.Getenv("NYX_HOST"); v != "" {
+		return v
+	}
 	if v := os.Getenv("NYXD_SOCKET"); v != "" {
 		return v
 	}
@@ -69,11 +72,14 @@ func run(args []string) error {
 	socket := defaultSocket()
 	for len(args) > 0 && strings.HasPrefix(args[0], "-") {
 		switch {
-		case args[0] == "-socket" && len(args) > 1:
+		case (args[0] == "-socket" || args[0] == "--host" || args[0] == "-H") && len(args) > 1:
 			socket = args[1]
 			args = args[2:]
 		case strings.HasPrefix(args[0], "-socket="):
 			socket = strings.TrimPrefix(args[0], "-socket=")
+			args = args[1:]
+		case strings.HasPrefix(args[0], "--host="):
+			socket = strings.TrimPrefix(args[0], "--host=")
 			args = args[1:]
 		case args[0] == "-h" || args[0] == "--help":
 			usage()
@@ -158,7 +164,10 @@ usage:
   nyx [global-options] <command> [args ...]
 
 global-options (before <command>):
-  -socket PATH | -socket=PATH   control socket (default when NYXD_SOCKET unset: %s)
+  -socket PATH | -socket=PATH   control socket (default when NYX_HOST and NYXD_SOCKET are unset: %s)
+  -H, --host ENDPOINT          daemon to talk to (env NYX_HOST): a socket path, unix:///path,
+                               or ssh://[user@]host[:port][/path/to/nyxd.sock] for nyxd on
+                               another machine (runs nyxd stdio-proxy there over ssh)
   -h, --help                   show this help (must come before the command name)
   -v, --version                print the nyx version (nyx version also asks the daemon)
 
