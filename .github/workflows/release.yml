@@ -1,7 +1,8 @@
 name: Release
 
 # Tag push (v*): CI, then GoReleaser builds, packages, GPG-signs and publishes
-# the release (see .goreleaser.yaml and docs/packaging.md).
+# the release (see .goreleaser.yaml and docs/packaging.md), and the SLSA
+# generator attaches signed build provenance (nyxd.intoto.jsonl).
 # Manual run: an unsigned snapshot of every package, uploaded as a workflow
 # artifact, to try packaging changes without tagging.
 
@@ -24,6 +25,8 @@ jobs:
     if: github.event_name == 'push'
     needs: ci
     runs-on: ubuntu-latest
+    outputs:
+      hashes: ${{ steps.hashes.outputs.hashes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -102,9 +105,35 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           NFPM_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
+      # checksums.txt lists every published file (GoReleaser's and
+      # dist-extra/): the subjects of the SLSA provenance below.
+      - name: Provenance subjects
+        id: hashes
+        run: |
+          set -euo pipefail
+          test -s dist/checksums.txt
+          echo "hashes=$(base64 -w0 < dist/checksums.txt)" >> "$GITHUB_OUTPUT"
+
       - name: Remove key files
         if: always()
         run: rm -f "${RUNNER_TEMP}/gpg-key.asc" "${RUNNER_TEMP}/apk-key.rsa"
+
+  # SLSA Build Level 3 provenance for every file in checksums.txt, signed
+  # with Sigstore and uploaded to the release as nyxd.intoto.jsonl. Verify
+  # with slsa-verifier (docs/packaging.md). The generator must be referenced
+  # by tag, not SHA: slsa-verifier checks the builder identity against it.
+  provenance:
+    if: github.event_name == 'push'
+    needs: publish
+    permissions:
+      actions: read     # read the workflow run
+      id-token: write   # Sigstore signing
+      contents: write   # upload to the release
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.publish.outputs.hashes }}
+      provenance-name: nyxd.intoto.jsonl
+      upload-assets: true
 
   # The apt, rpm, apk and pacman repositories at pkgs.nyxd.io, rebuilt with
   # the new release's packages (see repos.yml).
