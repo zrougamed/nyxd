@@ -109,6 +109,30 @@ nyx -H ssh://pi@nas/run/user/1000/nyxd/nyxd.sock ps   # a rootless daemon's sock
   directory of the same path. `nyx build` and `compose up --build` send the build context from your
   machine.
 
+## Copying files (`nyx cp`)
+
+Copy files or directories between the host and a running container, without a bind mount and
+without a shell or `tar` in the image:
+
+```bash
+nyx cp web:/etc/nginx/nginx.conf ./nginx.conf     # out of the container
+nyx cp ./fix.sh web:/usr/local/bin/fix.sh         # in (new name)
+nyx cp ./site web:/usr/share/nginx/               # a directory, into an existing one
+nyx cp web:/var/log/app - | tar -t                # a tar stream on stdout
+tar -c conf | nyx cp - web:/etc/app/              # a tar stream from stdin
+```
+
+- When DEST is an existing directory the copy lands inside it; otherwise it is created (or replaced)
+  under that name.
+- Files copied into a container belong to root; `-a` / `--archive` keeps their uid and gid. Files copied
+  out belong to you.
+- Symlinks inside the container resolve as the container sees them (an absolute link points into the
+  container's root, never the host's), and every write stays inside the container or the destination
+  directory. Paths under a bind-mounted volume use the volume's files.
+- The container must be running: an exited container's filesystem is gone. `/proc`, `/sys`, `/dev` and
+  tmpfs mounts cannot be copied.
+- API: `GET` / `PUT /v1/containers/{id}/archive?path=...` (tar).
+
 ## Container logs
 
 nyxd stores each container's stdout and stderr as JSON lines under

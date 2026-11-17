@@ -96,6 +96,59 @@ paths:
               schema:
                 type: string
 
+  /v1/containers/{id}/archive:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      - name: path
+        in: query
+        required: true
+        description: Absolute path in the container
+        schema: {type: string}
+    get:
+      tags: [containers]
+      summary: Copy a file or directory out of a running container (nyx cp)
+      description: |
+        A tar stream of `path`, its top-level entry named after the last element of `path`. Symlinks
+        are stored, not followed; symlinks along `path` resolve inside the container's root. Paths
+        under a bind mount read the mount's source.
+      operationId: containerArchiveGet
+      responses:
+        "200":
+          description: Tar stream
+          content:
+            application/x-tar:
+              schema: {type: string, format: binary}
+        "400": {description: "Relative path, kernel filesystem (/proc, /sys, /dev) or tmpfs mount"}
+        "404": {description: No such container, or no such path in it}
+        "409": {description: The container is not running}
+    put:
+      tags: [containers]
+      summary: Copy a tar stream into a running container (nyx cp)
+      description: |
+        When `path` is an existing directory, the archive is extracted into it. Otherwise it is
+        extracted into the parent with the archive's top-level entry renamed to the last element of
+        `path`. Every write stays inside the container; names starting with `.wh.` are ordinary files.
+        Ownership is taken from the archive.
+      operationId: containerArchivePut
+      parameters:
+        - name: raw
+          in: query
+          description: "1: extract the stream as is; `path` must be an existing directory"
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/x-tar:
+            schema: {type: string, format: binary}
+      responses:
+        "200": {description: Copied}
+        "400": {description: Invalid path or archive}
+        "404": {description: No such container, or no such parent directory}
+        "409": {description: The container is not running}
+
   /v1/network:
     get:
       tags: [system]

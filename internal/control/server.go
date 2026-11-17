@@ -156,6 +156,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /v1/containers/{id}/remove", s.handleContainerRemove)
 	mux.HandleFunc("POST /v1/containers/{id}/kill", s.handleContainerKill)
 	mux.HandleFunc("GET /v1/containers/{id}/logs", s.handleContainerLogs)
+	mux.HandleFunc("GET /v1/containers/{id}/archive", s.handleArchiveGet)
+	mux.HandleFunc("PUT /v1/containers/{id}/archive", s.handleArchivePut)
 	mux.HandleFunc("POST /v1/containers/run", s.handleContainerRun)
 	mux.HandleFunc("POST /v1/compose/up", s.handleComposeUp)
 	mux.HandleFunc("POST /v1/compose/stop", s.handleComposeStop)
