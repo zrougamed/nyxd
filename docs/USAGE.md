@@ -133,6 +133,33 @@ tar -c conf | nyx cp - web:/etc/app/              # a tar stream from stdin
   tmpfs mounts cannot be copied.
 - API: `GET` / `PUT /v1/containers/{id}/archive?path=...` (tar).
 
+## Events (`nyx events`)
+
+Subscribe to what happens instead of polling `nyx ps`: a container dying, restarting, getting
+OOM-killed or turning unhealthy, images being pulled, built or removed.
+
+```bash
+nyx events
+nyx events --filter container=web --filter event=health_status
+nyx events --json --since 10m | jq -c 'select(.action == "die")'
+```
+
+```
+2026-11-17T22:55:10Z image pull alpine:3.20
+2026-11-17T22:55:12Z container start web (image=alpine:3.20)
+2026-11-17T22:55:23Z container die web (image=alpine:3.20, exit_code=137, signal=9, stopped=true)
+```
+
+- Container events: `create`, `start`, `die` (`exit_code`, `signal`, `stopped=true` when nyx stopped
+  it, `error` when it failed to start), `oom`, `restart` (`attempt`), `health_status` (`status`), `remove`.
+  Compose services carry `compose_project` and `compose_service`. Image events: `pull`, `build`, `remove`.
+- `--filter` keys: `type` (container, image), `event`, `container`, `image`. Repeat a key for
+  alternatives; different keys must all match.
+- nyxd keeps the last 1000 events in memory (nothing on disk); `--since` replays them. A client that
+  falls behind is disconnected with an `events_dropped` line instead of slowing nyxd down.
+- `oom` needs per-container cgroups: rootless daemons do not report it.
+- API: `GET /v1/events` (newline-delimited JSON; `since`, repeatable `filter`).
+
 ## Container logs
 
 nyxd stores each container's stdout and stderr as JSON lines under

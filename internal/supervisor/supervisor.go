@@ -14,11 +14,14 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/zrougamed/nyxd/internal/bundle"
+	"github.com/zrougamed/nyxd/internal/cgstats"
+	"github.com/zrougamed/nyxd/internal/events"
 	"github.com/zrougamed/nyxd/internal/health"
 	"github.com/zrougamed/nyxd/internal/image"
 	"github.com/zrougamed/nyxd/internal/logs"
@@ -128,6 +131,7 @@ type containerEntry struct {
 	removed   bool // being removed: leave no exited record
 	logCancel context.CancelFunc
 	checker   *health.Checker
+	cgroup    string // the container's cgroup while it runs (OOM detection)
 	// runDone receives the result of the foreground `crun run` that owns the
 	// workload. nil for containers re-adopted after a daemon restart.
 	runDone <-chan error
@@ -189,6 +193,8 @@ type Supervisor struct {
 	dnsMode    string
 	dnsGateway string
 
+	events *events.Bus // container events; nil publishes nothing
+
 	// rootless: nyxd runs in its own user namespace. noCgroups: crun runs
 	// with --cgroup-manager=disabled, so resource limits cannot be applied.
 	rootless  bool
@@ -245,6 +251,9 @@ func (s *Supervisor) Start(ctx context.Context, spec ContainerSpec) error {
 	entry := &containerEntry{spec: spec}
 	s.containers[spec.ID] = entry
 	s.mu.Unlock()
+	if _, existed := s.readExited(spec.ID); !existed {
+		s.emit(events.Create, spec, nil)
+	}
 
 	fastExit, err := s.startOnce(ctx, entry)
 	if err != nil {
@@ -253,12 +262,15 @@ func (s *Supervisor) Start(ctx context.Context, spec ContainerSpec) error {
 		s.mu.Unlock()
 		removeBundle(filepath.Join(s.baseDir, "bundles", spec.ID))
 		entry.markFinished()
+		s.emitStartFailed(spec, err)
 		return err
 	}
 	if fastExit {
 		defer entry.markFinished()
 		// Init exited with status 0 before we observed OCI "running" (e.g. default /bin/sh
 		// with no stdin, or a very fast command). No supervisor loop; cleanup is done.
+		s.emit(events.Start, spec, nil)
+		s.emit(events.Die, spec, map[string]string{"exit_code": "0"})
 		s.dropFinished(entry, 0)
 		return nil
 	}
@@ -327,6 +339,7 @@ func (s *Supervisor) RunAttached(ctx context.Context, spec ContainerSpec, stdin 
 		delete(s.containers, spec.ID)
 		s.mu.Unlock()
 		removeBundle(filepath.Join(s.baseDir, "bundles", spec.ID))
+		s.emitStartFailed(spec, err)
 		return err
 	}
 	if fastExit {
@@ -593,19 +606,23 @@ func (s *Supervisor) Remove(ctx context.Context, id string) error {
 	entry, exists := s.containers[id]
 	s.mu.RUnlock()
 	if !exists {
-		if _, ok := s.readExited(id); !ok {
+		rec, ok := s.readExited(id)
+		if !ok {
 			return fmt.Errorf("container %s not found", id)
 		}
 		s.forgetExited(id)
 		if s.logColl != nil {
 			s.logColl.Remove(id)
 		}
+		s.emit(events.Remove, rec.Spec, nil)
 		return nil
 	}
 	entry.mu.Lock()
 	entry.removed = true
+	spec := entry.spec
 	entry.mu.Unlock()
 	defer s.forgetExited(id)
+	defer s.emit(events.Remove, spec, nil)
 
 	if err := s.Stop(ctx, id); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		s.log.Warn("stop before remove", "id", id, "err", err)
@@ -862,6 +879,10 @@ func (s *Supervisor) startHealthMonitor(parent context.Context, e *containerEntr
 		}(id)
 	}
 	chk := health.New(e.spec.ID, hc, s.rt.Binary(), s.rt.RootDir(), s.log, onUnhealthy)
+	spec := e.spec
+	chk.OnStatusChange(func(st health.Status) {
+		s.emit(events.HealthStatus, spec, map[string]string{"status": string(st)})
+	})
 	e.mu.Lock()
 	e.checker = chk
 	e.mu.Unlock()
@@ -1160,8 +1181,10 @@ func (s *Supervisor) startOnce(ctx context.Context, e *containerEntry) (fastExit
 				e.mu.Lock()
 				e.runDone = runErr
 				e.exited = make(chan struct{})
+				e.cgroup = cgstats.CgroupPath(st.Pid)
 				e.mu.Unlock()
 				log.Info("container started", "image", spec.Image, "ip", ip)
+				s.emit(events.Start, spec, nil)
 				s.registerEmbeddedDNS(spec, ip)
 				if err := s.persistContainerEntry(e); err != nil {
 					log.Warn("persist supervisor state", "err", err)
@@ -1248,6 +1271,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 		e.mu.Unlock()
 
 		log.Info("container exited", "exitCode", exitCode, "intentional", intentionallyStopped)
+		s.emitDie(e, exitCode, intentionallyStopped)
 
 		s.resetLogIO(e)
 
@@ -1272,6 +1296,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 		attempt := e.bumpRestarts()
 		delay := backoff(attempt)
 		log.Info("restarting", "attempt", attempt, "delay", delay)
+		s.emit(events.Restart, e.spec, map[string]string{"attempt": strconv.Itoa(attempt)})
 
 		select {
 		case <-ctx.Done():
@@ -1306,6 +1331,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 			intentionallyStopped := e.stopped
 			e.mu.Unlock()
 			log.Info("container exited", "exitCode", exitCode, "intentional", intentionallyStopped)
+			s.emitDie(e, exitCode, intentionallyStopped)
 			if intentionallyStopped {
 				s.dropFinished(e, exitCode)
 				return
@@ -1318,6 +1344,7 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 			attempt := e.bumpRestarts()
 			delay := backoff(attempt)
 			log.Info("restarting", "attempt", attempt, "delay", delay)
+			s.emit(events.Restart, e.spec, map[string]string{"attempt": strconv.Itoa(attempt)})
 			select {
 			case <-ctx.Done():
 				return

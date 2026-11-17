@@ -49,6 +49,24 @@ func Read(pid int) (Sample, error) {
 	return s, nil
 }
 
+// CgroupPath is the cgroup v2 directory of pid ("" when unknown).
+func CgroupPath(pid int) string {
+	p, err := cgroupPath(pid)
+	if err != nil {
+		return ""
+	}
+	return p
+}
+
+// OOMKills is the oom_kill count in a cgroup's memory.events (0 when the
+// cgroup is gone or has none).
+func OOMKills(cgroupDir string) uint64 {
+	if cgroupDir == "" {
+		return 0
+	}
+	return readKeyed(filepath.Join(cgroupDir, "memory.events"), "oom_kill")
+}
+
 // ReadProc samples pid from /proc only, skipping its cgroup. For containers
 // that have no cgroup of their own (rootless nyxd runs crun with cgroups
 // disabled): their cgroup is the daemon's, often the user's whole session,

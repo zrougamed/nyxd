@@ -20,6 +20,7 @@ import (
 	"github.com/zrougamed/nyxd/internal/cgroup"
 	"github.com/zrougamed/nyxd/internal/control"
 	"github.com/zrougamed/nyxd/internal/daemonlock"
+	"github.com/zrougamed/nyxd/internal/events"
 	"github.com/zrougamed/nyxd/internal/image"
 	"github.com/zrougamed/nyxd/internal/logs"
 	"github.com/zrougamed/nyxd/internal/netdns"
@@ -247,6 +248,9 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 	ctl := control.New(logger, rt, imgStore, sup, ctx, nil, version, gitCommit, buildDate, cfg.BaseDir, cfg.Socket, cfg.SocketGroup, driver, cfg.DNS)
 	ctl.SetLogDir(logDir)
+	bus := events.New(events.DefaultHistory)
+	sup.SetEvents(bus)
+	ctl.SetEvents(bus)
 	ctl.SetDaemonInfo(daemonInfo(cfg.Rootless, cgroups, logDir, os.Getenv(rootless.EnvHostUID)))
 	builder, err := build.New(build.Config{
 		Store:    imgStore,

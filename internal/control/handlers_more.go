@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/zrougamed/nyxd/internal/events"
 	"io"
 	"net/http"
 	"os"
@@ -247,6 +248,7 @@ func (s *Server) handleImagesRemove(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	s.imageEvent(events.ImageRemove, ref)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "ref": ref})
 }
@@ -272,6 +274,11 @@ func (s *Server) handleImagesPrune(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if !body.DryRun {
+		for _, ref := range removed {
+			s.imageEvent(events.ImageRemove, ref)
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/zrougamed/nyxd/internal/events"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -140,5 +141,8 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("build finished", "image", res.ImageID, "tags", res.Tags)
+	for _, tag := range res.Tags {
+		s.events.Publish(events.Event{Type: events.TypeImage, Action: events.ImageBuild, ID: tag, Attrs: map[string]string{"image_id": res.ImageID}})
+	}
 	out.send(buildEvent{Done: true, ImageID: res.ImageID, Tags: res.Tags})
 }

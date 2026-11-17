@@ -2,6 +2,7 @@ package control
 
 import (
 	"encoding/json"
+	"github.com/zrougamed/nyxd/internal/events"
 	"io"
 	"io/fs"
 	"net/http"
@@ -346,6 +347,9 @@ func (s *Server) handleSystemPrune(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, ref := range removed {
 			add("images", ref)
+			if !req.DryRun {
+				s.imageEvent(events.ImageRemove, ref)
+			}
 		}
 	}
 	// Build cache, stale build directories, layers no image uses.

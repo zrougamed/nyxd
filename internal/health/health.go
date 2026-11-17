@@ -56,6 +56,7 @@ type Checker struct {
 	status      Status
 	consecutive int                      // consecutive failures
 	onUnhealthy func(containerID string) // called when container becomes unhealthy
+	onStatus    func(Status)             // called on every status change
 
 	cancel context.CancelFunc
 }
@@ -101,6 +102,21 @@ func (c *Checker) Start(ctx context.Context) {
 func (c *Checker) Stop() {
 	if c.cancel != nil {
 		c.cancel()
+	}
+}
+
+// OnStatusChange registers f, called (on its own goroutine) each time the
+// status changes. Call before Start.
+func (c *Checker) OnStatusChange(f func(Status)) { c.onStatus = f }
+
+// setStatusLocked records a new status and reports the change. c.mu is held.
+func (c *Checker) setStatusLocked(s Status) {
+	if c.status == s {
+		return
+	}
+	c.status = s
+	if c.onStatus != nil {
+		go c.onStatus(s)
 	}
 }
 
@@ -159,7 +175,7 @@ func (c *Checker) check(ctx context.Context) {
 			"consecutive", c.consecutive,
 		)
 		if c.consecutive >= c.cfg.Retries && c.status != StatusUnhealthy {
-			c.status = StatusUnhealthy
+			c.setStatusLocked(StatusUnhealthy)
 			if c.onUnhealthy != nil {
 				go c.onUnhealthy(c.containerID)
 			}
@@ -169,7 +185,7 @@ func (c *Checker) check(ctx context.Context) {
 			c.log.Info("healthcheck recovered", "id", c.containerID)
 		}
 		c.consecutive = 0
-		c.status = StatusHealthy
+		c.setStatusLocked(StatusHealthy)
 	}
 }
 
