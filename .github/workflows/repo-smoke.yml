@@ -55,7 +55,9 @@ jobs:
 
       # Without Docker (the self-hosted runners only have nyxd, and jobs get
       # no access to the host's daemon), start a throwaway rootless nyxd
-      # built from this checkout, with everything under RUNNER_TEMP.
+      # built from this checkout. Its data goes under TMPDIR when the runner
+      # sets one (gh-runners: a host directory): overlayfs cannot use the
+      # container's own overlay root as its upper layer.
       - name: Throwaway nyxd
         run: |
           set -euo pipefail
@@ -65,9 +67,10 @@ jobs:
           fi
           command -v crun newuidmap newgidmap >/dev/null ||
             { sudo apt-get update -qq && sudo apt-get install -y -qq crun uidmap; }
-          grep -q "^$(id -un):" /etc/subuid ||
-            sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$(id -un)"
-          d="$RUNNER_TEMP/nyxd"
+          u=$(id -un)
+          grep -q "^$u:" /etc/subuid 2>/dev/null || sudo usermod --add-subuids 100000-165535 "$u"
+          grep -q "^$u:" /etc/subgid 2>/dev/null || sudo usermod --add-subgids 100000-165535 "$u"
+          d="${TMPDIR:-$RUNNER_TEMP}/nyxd-smoke"
           mkdir -p "$d"
           go build -o "$d/nyxd" ./cmd/nyxd
           "$d/nyxd" -base-dir "$d/data" -socket "$d/nyxd.sock" -net-driver host >"$d/nyxd.log" 2>&1 &
@@ -75,6 +78,7 @@ jobs:
           for _ in $(seq 1 100); do [ -S "$d/nyxd.sock" ] && break; sleep 0.2; done
           [ -S "$d/nyxd.sock" ] || { cat "$d/nyxd.log"; exit 1; }
           echo "NYXD_SOCKET=$d/nyxd.sock" >>"$GITHUB_ENV"
+          echo "SMOKE_NYXD_DIR=$d" >>"$GITHUB_ENV"
 
       - name: Install from the repositories
         env:
@@ -84,8 +88,9 @@ jobs:
       - name: Stop nyxd
         if: always()
         run: |
-          d="$RUNNER_TEMP/nyxd"
-          [ -f "$d/pid" ] || exit 0
+          d="${SMOKE_NYXD_DIR:-}"
+          [ -n "$d" ] && [ -f "$d/pid" ] || exit 0
           kill "$(cat "$d/pid")" 2>/dev/null || true
           for _ in $(seq 1 60); do kill -0 "$(cat "$d/pid")" 2>/dev/null || break; sleep 0.5; done
           if [ "${{ job.status }}" != success ]; then tail -50 "$d/nyxd.log"; fi
+          rm -rf "$d" 2>/dev/null || true
