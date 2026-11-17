@@ -101,10 +101,10 @@ func doComposeLifecycle(socket, sub string, opts composeCLI) error {
 	if err != nil {
 		return err
 	}
-	if abs, err = daemonPath(socket, abs); err != nil {
+	body, err := composeFileBody(socket, abs)
+	if err != nil {
 		return err
 	}
-	body := map[string]any{"file": abs}
 	if opts.project != "" {
 		body["project"] = opts.project
 	}

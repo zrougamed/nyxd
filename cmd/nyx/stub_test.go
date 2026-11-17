@@ -22,7 +22,12 @@ import (
 // broken) answers.
 func stub(t *testing.T, h http.HandlerFunc) string {
 	t.Helper()
-	sock := filepath.Join(t.TempDir(), "stub.sock")
+	return stubAt(t, filepath.Join(t.TempDir(), "stub.sock"), h)
+}
+
+// stubAt is stub on the socket path sock.
+func stubAt(t *testing.T, sock string, h http.HandlerFunc) string {
+	t.Helper()
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Fatal(err)
@@ -199,7 +204,7 @@ func capture2(t *testing.T, fn func() error) (string, string, error) {
 }
 
 func TestHelpers(t *testing.T) {
-	var c pipeConn
+	c := pipeConn{label: "wsl"}
 	var a = c.LocalAddr()
 	if a.Network() != "pipe" || a.String() != "wsl" || c.RemoteAddr() == nil ||
 		c.SetDeadline(time.Time{}) != nil || c.SetReadDeadline(time.Time{}) != nil || c.SetWriteDeadline(time.Time{}) != nil {

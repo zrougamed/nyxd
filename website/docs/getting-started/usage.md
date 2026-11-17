@@ -2,7 +2,7 @@
 
 ## nyx CLI (recommended)
 
-Install **`nyx`** next to **`nyxd`** (`make build-nyx`). It talks to the daemon over the Unix socket (default `/run/nyxd/nyxd.sock`, override with `-socket` or `NYXD_SOCKET`). To use **`nyx` as a normal user** (no `sudo`), run **`nyxd --socket-group=…`** and add your user to that POSIX group — see **[Install](/docs/getting-started/install)** (`Use nyx without sudo`, `Install to /usr/bin`).
+Install **`nyx`** next to **`nyxd`** (`make build-nyx`). It talks to the daemon over the Unix socket (default `/run/nyxd/nyxd.sock`, override with `-socket` or `NYXD_SOCKET`; a remote daemon with `--host ssh://...`, see below). To use **`nyx` as a normal user** (no `sudo`), run **`nyxd --socket-group=…`** and add your user to that POSIX group — see **[Install](/docs/getting-started/install)** (`Use nyx without sudo`, `Install to /usr/bin`).
 
 ```bash
 nyx ping
@@ -81,6 +81,30 @@ sudo nyx stop web
 sudo nyx exec <id> sh -c 'hostname'
 sudo nyx exec <id> -- sh -c 'hostname'
 ```
+
+## Remote daemon over SSH
+
+`nyx` can drive a `nyxd` on another machine (a Pi in the closet, a NAS) over SSH, without
+any TCP listener on the daemon:
+
+```bash
+nyx --host ssh://pi@raspberrypi.local ps
+NYX_HOST=ssh://pi@nas:2222 nyx compose up -d
+nyx -H ssh://pi@nas/run/user/1000/nyxd/nyxd.sock ps   # a rootless daemon's socket
+```
+
+- For each connection `nyx` runs the system `ssh` (`ssh -T host -- nyxd stdio-proxy`), so your keys,
+  ssh-agent, `known_hosts` and `~/.ssh/config` apply. `nyx` stores no credentials. A
+  `ControlMaster` / `ControlPersist` entry in `~/.ssh/config` saves the SSH handshake on every command.
+- Without a socket path, the remote side uses the remote user's rootless daemon
+  (`$XDG_RUNTIME_DIR/nyxd/nyxd.sock`) when it is running, else `/run/nyxd/nyxd.sock`. The remote user
+  needs access to that socket (the `nyx` group, see [INSTALL.md](/docs/getting-started/install)) and `nyxd` in `PATH`.
+- `-H` / `--host` beats `NYX_HOST`, which beats `NYXD_SOCKET`. `--host` also takes a socket path or
+  `unix:///path`.
+- Paths refer to the remote host: `nyx run -v` sources, and for `nyx compose` the compose file is
+  sent from your machine but its `.env` and relative bind mounts resolve on the remote host, in the
+  directory of the same path. `nyx build` and `compose up --build` send the build context from your
+  machine.
 
 ## Container logs
 
