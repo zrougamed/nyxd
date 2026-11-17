@@ -12,6 +12,7 @@ import (
 
 	"github.com/zrougamed/nyxd/internal/bundle"
 	"github.com/zrougamed/nyxd/internal/health"
+	"github.com/zrougamed/nyxd/pkg/oci"
 )
 
 // StartComposeUp applies desired compose specs in order (same contract as
@@ -19,7 +20,31 @@ import (
 // container is already running with an equivalent spec, it is left alone; if the
 // spec changed, the container is stopped and recreated; if missing, it is started.
 func (s *Supervisor) StartComposeUp(ctx context.Context, specs []ContainerSpec) error {
-	return s.StartComposeUpWith(ctx, specs, ComposeUpOptions{})
+	_, err := s.StartComposeUpWith(ctx, specs, ComposeUpOptions{})
+	return err
+}
+
+// Recreate policies for compose up (ComposeUpOptions.Recreate).
+const (
+	RecreateChanged = ""      // recreate a running container whose spec changed
+	RecreateForce   = "force" // recreate every running container
+	RecreateNever   = "never" // keep running containers as they are
+)
+
+// What compose up did with one service (ComposeResult.Action).
+const (
+	ComposeStarted   = "started"
+	ComposeRecreated = "recreated"
+	ComposeUnchanged = "up to date"
+	ComposeKept      = "kept"
+)
+
+// ComposeResult is what compose up did with one container, and why.
+type ComposeResult struct {
+	ID      string `json:"id"`
+	Service string `json:"service,omitempty"`
+	Action  string `json:"action"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 // depends_on conditions compose up waits for (the Compose spec's names).
@@ -47,6 +72,8 @@ type ComposeUpOptions struct {
 	Deps map[string][]ComposeDependency
 	// WaitTimeout bounds all waits together; 0 means DefaultComposeWaitTimeout.
 	WaitTimeout time.Duration
+	// Recreate is RecreateChanged (default), RecreateForce or RecreateNever.
+	Recreate string
 }
 
 // StartComposeUpWith is [Supervisor.StartComposeUp] that also honours
@@ -54,7 +81,8 @@ type ComposeUpOptions struct {
 // service_healthy dependency passes its health check and every
 // service_completed_successfully dependency has exited 0. A failed or timed
 // out wait stops the rest of the stack from starting.
-func (s *Supervisor) StartComposeUpWith(ctx context.Context, specs []ContainerSpec, opts ComposeUpOptions) error {
+func (s *Supervisor) StartComposeUpWith(ctx context.Context, specs []ContainerSpec, opts ComposeUpOptions) ([]ComposeResult, error) {
+	var results []ComposeResult
 	timeout := opts.WaitTimeout
 	if timeout <= 0 {
 		timeout = DefaultComposeWaitTimeout
@@ -67,14 +95,16 @@ func (s *Supervisor) StartComposeUpWith(ctx context.Context, specs []ContainerSp
 				if errors.Is(err, context.DeadlineExceeded) {
 					err = fmt.Errorf("%s: not met within %s (compose up --wait-timeout)", dep.Condition, timeout)
 				}
-				return fmt.Errorf("start %s: dependency %s: %w", sp.ID, dep.ID, err)
+				return results, fmt.Errorf("start %s: dependency %s: %w", sp.ID, dep.ID, err)
 			}
 		}
-		if err := s.ensureComposeContainer(ctx, sp); err != nil {
-			return fmt.Errorf("start %s: %w", sp.ID, err)
+		res, err := s.ensureComposeContainer(ctx, sp, opts.Recreate)
+		if err != nil {
+			return results, fmt.Errorf("start %s: %w", sp.ID, err)
 		}
+		results = append(results, res)
 	}
-	return nil
+	return results, nil
 }
 
 // waitDependency blocks until dep meets its condition.
@@ -146,7 +176,8 @@ func (s *Supervisor) dependencyCompleted(_ context.Context, id string) (bool, er
 	return true, nil
 }
 
-func (s *Supervisor) ensureComposeContainer(ctx context.Context, want ContainerSpec) error {
+func (s *Supervisor) ensureComposeContainer(ctx context.Context, want ContainerSpec, recreate string) (ComposeResult, error) {
+	res := ComposeResult{ID: want.ID, Service: want.ComposeService}
 	if want.Healthcheck != nil {
 		n := health.Normalize(*want.Healthcheck)
 		want.Healthcheck = &n
@@ -165,20 +196,43 @@ func (s *Supervisor) ensureComposeContainer(ctx context.Context, want ContainerS
 	s.mu.RUnlock()
 
 	if !running {
-		return s.Start(ctx, want)
+		res.Action = ComposeStarted
+		return res, s.Start(ctx, want)
 	}
-	if bytes.Equal(composeComparableJSON(cur), composeComparableJSON(want)) {
-		return nil
+	changed := !bytes.Equal(composeComparableJSON(cur), composeComparableJSON(want))
+	switch {
+	case recreate == RecreateForce:
+		res.Reason = "--force-recreate"
+	case !changed:
+		res.Action = ComposeUnchanged
+		return res, nil
+	case recreate == RecreateNever:
+		res.Action, res.Reason = ComposeKept, changeReason(cur, want)+", --no-recreate"
+		return res, nil
+	default:
+		res.Reason = changeReason(cur, want)
 	}
+	res.Action = ComposeRecreated
 	if err := s.Stop(ctx, want.ID); err != nil {
-		return fmt.Errorf("recreate stop: %w", err)
+		return res, fmt.Errorf("recreate stop: %w", err)
 	}
 	waitCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	if err := s.waitContainerAbsent(waitCtx, want.ID); err != nil {
-		return fmt.Errorf("recreate wait: %w", err)
+		return res, fmt.Errorf("recreate wait: %w", err)
 	}
-	return s.Start(ctx, want)
+	return res, s.Start(ctx, want)
+}
+
+// changeReason says what differs between a running spec and the wanted one:
+// the image (another reference or other layers, e.g. after compose pull) or
+// the rest of the service's configuration.
+func changeReason(cur, want ContainerSpec) string {
+	if cur.Image != want.Image || !slices.EqualFunc(cur.ManifestLayers, want.ManifestLayers,
+		func(a, b oci.Descriptor) bool { return a.Digest == b.Digest }) {
+		return "image changed"
+	}
+	return "config changed"
 }
 
 func (s *Supervisor) waitContainerAbsent(ctx context.Context, id string) error {
