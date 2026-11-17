@@ -53,7 +53,39 @@ jobs:
           version: v2.18.2
           install-only: true
 
+      # Without Docker (the self-hosted runners only have nyxd, and jobs get
+      # no access to the host's daemon), start a throwaway rootless nyxd
+      # built from this checkout, with everything under RUNNER_TEMP.
+      - name: Throwaway nyxd
+        run: |
+          set -euo pipefail
+          if docker info >/dev/null 2>&1; then
+            echo "docker is available: repo-smoke.sh uses it"
+            exit 0
+          fi
+          command -v crun newuidmap newgidmap >/dev/null ||
+            { sudo apt-get update -qq && sudo apt-get install -y -qq crun uidmap; }
+          grep -q "^$(id -un):" /etc/subuid ||
+            sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$(id -un)"
+          d="$RUNNER_TEMP/nyxd"
+          mkdir -p "$d"
+          go build -o "$d/nyxd" ./cmd/nyxd
+          "$d/nyxd" -base-dir "$d/data" -socket "$d/nyxd.sock" -net-driver host >"$d/nyxd.log" 2>&1 &
+          echo $! >"$d/pid"
+          for _ in $(seq 1 100); do [ -S "$d/nyxd.sock" ] && break; sleep 0.2; done
+          [ -S "$d/nyxd.sock" ] || { cat "$d/nyxd.log"; exit 1; }
+          echo "NYXD_SOCKET=$d/nyxd.sock" >>"$GITHUB_ENV"
+
       - name: Install from the repositories
         env:
           GORELEASER: goreleaser
         run: scripts/repo-smoke.sh
+
+      - name: Stop nyxd
+        if: always()
+        run: |
+          d="$RUNNER_TEMP/nyxd"
+          [ -f "$d/pid" ] || exit 0
+          kill "$(cat "$d/pid")" 2>/dev/null || true
+          for _ in $(seq 1 60); do kill -0 "$(cat "$d/pid")" 2>/dev/null || break; sleep 0.5; done
+          if [ "${{ job.status }}" != success ]; then tail -50 "$d/nyxd.log"; fi
