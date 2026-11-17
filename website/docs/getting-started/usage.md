@@ -103,6 +103,29 @@ loading them whole, and `nyx logs -f` keeps following across rotations. Lines lo
 than 64 KiB are split into several entries. A container's logs stay readable after it exits; `nyx rm <id>` deletes them
 (and stops and removes it first if it is still running).
 
+## Metrics (Prometheus)
+
+nyxd serves metrics in the Prometheus text format at `GET /v1/metrics` on the control socket.
+For scrapers that cannot read a Unix socket, add a TCP listener that serves `/metrics` and
+nothing else (read-only, off by default):
+
+```bash
+NYXD_OPTS="-metrics-listen 127.0.0.1:9323"
+curl -s http://127.0.0.1:9323/metrics | grep nyxd_container_memory
+```
+
+- Per container (labels `name`, `image`, and `compose_project` / `compose_service` for stacks):
+  `nyxd_container_cpu_seconds_total`, `_memory_usage_bytes`, `_memory_limit_bytes`,
+  `_network_receive_bytes_total`, `_network_transmit_bytes_total`, `_block_read_bytes_total`,
+  `_block_write_bytes_total`, `_pids`, `_restarts_total`, `_oom_kills_total`, `_health_status{status}`.
+- Daemon: `nyxd_build_info`, `nyxd_uptime_seconds`, `nyxd_containers{state}`, `nyxd_images`, and Go
+  runtime basics (`go_goroutines`, `go_memstats_*`, `go_gc_cycles_total`).
+- Rootless daemons have no per-container cgroups: CPU, memory and PIDs then cover each container's
+  init process, and block I/O and OOM kills read 0.
+- Example scrape config and a small Grafana dashboard:
+  [example/metrics](https://github.com/zrougamed/nyxd/tree/main/example/metrics).
+- Keep the listener on loopback or a trusted network: it shows container names and images.
+
 ## Building images (`nyx build`)
 
 ```bash

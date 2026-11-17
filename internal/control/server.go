@@ -63,6 +63,7 @@ type Server struct {
 	buildDate   string
 	logDir      string // container logs; empty means dataDir/logs
 	info        DaemonInfo
+	started     time.Time
 	socket      string
 	socketGroup string // optional: chgrp socket for non-root nyx clients (0660)
 
@@ -93,7 +94,7 @@ func New(log *slog.Logger, rt *runtime.Runtime, store *image.Store, sup *supervi
 	}
 	return &Server{
 		log: log, rt: rt, store: store, lister: l, sup: sup, dataDir: dataDir, baseCtx: baseCtx,
-		version: version, gitCommit: commit, buildDate: date,
+		version: version, gitCommit: commit, buildDate: date, started: time.Now(),
 		socket:      socket,
 		socketGroup: strings.TrimSpace(socketGroup),
 		netDriver:   strings.TrimSpace(netDriver),
@@ -143,6 +144,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /v1/ping", s.handlePing)
 	mux.HandleFunc("GET /v1/version", s.handleVersion)
 	mux.HandleFunc("GET /v1/info", s.handleInfo)
+	mux.HandleFunc("GET /v1/metrics", s.handleMetrics)
 	mux.HandleFunc("GET /v1/network", s.handleNetwork)
 	mux.HandleFunc("GET /v1/containers", s.handleContainers)
 	mux.HandleFunc("GET /v1/containers/stats", s.handleContainerStats)

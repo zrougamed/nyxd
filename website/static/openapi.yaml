@@ -78,6 +78,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InfoResponse"
+  /v1/metrics:
+    get:
+      tags: [system]
+      summary: Prometheus metrics
+      description: |
+        Prometheus text format (0.0.4): per-container CPU, memory, network, block I/O, PIDs,
+        restarts, health and OOM kills, labelled `name`, `image`, `compose_project`,
+        `compose_service`; daemon uptime, containers by state, image count, build info and Go
+        runtime basics. nyxd `-metrics-listen ADDR` also serves it at `http://ADDR/metrics`.
+      operationId: getMetrics
+      responses:
+        "200":
+          description: Metrics
+          content:
+            text/plain:
+              schema:
+                type: string
 
   /v1/network:
     get:
