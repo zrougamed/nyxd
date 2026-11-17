@@ -141,7 +141,7 @@ major distribution.
       low-level inspect (`GET /v1/containers/{id}/inspect`), docker/podman-like CLI.
 - [x] **Service files** for systemd (system and user), OpenRC, runit and SysV, set up by
       `nyxd-service`, the packages and the installers.
-- [ ] **Metrics** — `internal/telemetry` exists but is not wired to an endpoint.
+- [x] **Metrics** — Prometheus text at `GET /v1/metrics` and optionally `-metrics-listen` (per-container CPU, memory, network, block I/O, PIDs, restarts, health, OOM kills).
 - [ ] **Exec errors** — a failed exec can start with `200` and report the error in the stream.
 - [ ] **API examples** — small Go, Python and curl clients kept in sync with the OpenAPI file.
 - [ ] **Web UI** for containers, stacks, logs and metrics.

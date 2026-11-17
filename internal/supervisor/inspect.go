@@ -156,7 +156,7 @@ func (s *Supervisor) Stats(ctx context.Context, ids []string, interval time.Dura
 		first[i].pid = pid
 		first[i].status = status
 		if pid > 0 {
-			first[i].sample, first[i].sampleErr = cgstats.Read(pid)
+			first[i].sample, first[i].sampleErr = s.readSample(pid)
 		} else {
 			first[i].sampleErr = fmt.Errorf("no pid")
 		}
@@ -183,7 +183,7 @@ func (s *Supervisor) Stats(ctx context.Context, ids []string, interval time.Dura
 			out = append(out, st)
 			continue
 		}
-		cur, err := cgstats.Read(pid)
+		cur, err := s.readSample(pid)
 		if err != nil {
 			st.Err = err.Error()
 			out = append(out, st)
@@ -250,4 +250,14 @@ func (s *Supervisor) runtimePID(ctx context.Context, id string) (int, string) {
 		return 0, st.Status
 	}
 	return st.Pid, st.Status
+}
+
+// readSample reads a container's resource counters: from its cgroup, or from
+// /proc when containers run without cgroups of their own (rootless), where
+// the cgroup would be the daemon's.
+func (s *Supervisor) readSample(pid int) (cgstats.Sample, error) {
+	if s.noCgroups {
+		return cgstats.ReadProc(pid)
+	}
+	return cgstats.Read(pid)
 }

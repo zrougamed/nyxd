@@ -80,6 +80,10 @@ type ContainerSpec struct {
 	// (where every container shares the loopback): a compose stack's service
 	// names, so "db:5432" works as it does on a compose network.
 	HostAliases []string `json:"host_aliases,omitempty"`
+	// ComposeProject / ComposeService name the compose stack and service the
+	// container belongs to (metrics labels); empty for nyx run.
+	ComposeProject string `json:"compose_project,omitempty"`
+	ComposeService string `json:"compose_service,omitempty"`
 	// ComposeInternalNet is true when every compose network for the service has internal: true.
 	// The native driver blocks IPv4 egress outside the bridge CIDR (nft forward).
 	ComposeInternalNet bool `json:"compose_internal_net,omitempty"`
@@ -140,6 +144,15 @@ type containerEntry struct {
 	finished    chan struct{}
 	monitorDone bool
 	mu          sync.Mutex
+}
+
+// bumpRestarts counts one more restart and returns the new count. The
+// counter is read under e.mu by inspect and metrics.
+func (e *containerEntry) bumpRestarts() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.restarts++
+	return e.restarts
 }
 
 // exitedChan returns the channel closed when the current foreground run ends,
@@ -1256,9 +1269,9 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 			return
 		}
 
-		e.restarts++
-		delay := backoff(e.restarts)
-		log.Info("restarting", "attempt", e.restarts, "delay", delay)
+		attempt := e.bumpRestarts()
+		delay := backoff(attempt)
+		log.Info("restarting", "attempt", attempt, "delay", delay)
 
 		select {
 		case <-ctx.Done():
@@ -1302,9 +1315,9 @@ func (s *Supervisor) supervise(ctx context.Context, e *containerEntry) {
 				s.dropFinished(e, exitCode)
 				return
 			}
-			e.restarts++
-			delay := backoff(e.restarts)
-			log.Info("restarting", "attempt", e.restarts, "delay", delay)
+			attempt := e.bumpRestarts()
+			delay := backoff(attempt)
+			log.Info("restarting", "attempt", attempt, "delay", delay)
 			select {
 			case <-ctx.Done():
 				return

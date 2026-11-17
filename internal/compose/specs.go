@@ -164,6 +164,8 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 
 		spec := supervisor.ContainerSpec{
 			ID:                 composeContainerID(meta.Project, name),
+			ComposeProject:     meta.Project,
+			ComposeService:     name,
 			Image:              img,
 			ImageConfig:        cfg,
 			ManifestLayers:     m.Layers,

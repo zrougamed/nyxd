@@ -40,21 +40,22 @@ var (
 
 // Config holds daemon configuration.
 type Config struct {
-	BaseDir      string
-	CrunBin      string
-	NetDriver    string // "native" (default) or "cni"
-	CNIBinDir    string
-	CNIConfDir   string
-	NetworkName  string
-	LogLevel     string
-	Version      bool
-	Socket       string // Unix socket for HTTP control API; empty disables
-	SocketGroup  string // optional POSIX group for socket (0660); lets non-root users in that group run nyx
-	PullPlatform string // OCI platform for multi-arch indexes, e.g. linux/arm64; empty uses GOOS/GOARCH
-	DNS          string // auto (default), embedded, cni, off — see docs/networking.md
-	LogMaxSize   string // container log size that triggers rotation, e.g. 10m; 0 = never rotate
-	LogMaxFiles  int    // container log files kept, the current one included
-	LogDir       string // container logs; empty means BaseDir/logs
+	BaseDir       string
+	CrunBin       string
+	NetDriver     string // "native" (default) or "cni"
+	CNIBinDir     string
+	CNIConfDir    string
+	NetworkName   string
+	LogLevel      string
+	Version       bool
+	Socket        string // Unix socket for HTTP control API; empty disables
+	SocketGroup   string // optional POSIX group for socket (0660); lets non-root users in that group run nyx
+	PullPlatform  string // OCI platform for multi-arch indexes, e.g. linux/arm64; empty uses GOOS/GOARCH
+	DNS           string // auto (default), embedded, cni, off — see docs/networking.md
+	LogMaxSize    string // container log size that triggers rotation, e.g. 10m; 0 = never rotate
+	LogMaxFiles   int    // container log files kept, the current one included
+	LogDir        string // container logs; empty means BaseDir/logs
+	MetricsListen string // TCP address for /metrics; empty disables
 
 	Rootless    rootless.Info // set when running in nyxd's own user namespace
 	UsernsRemap string        // "START:COUNT" or "default": root runs the daemon in a remapped user namespace
@@ -260,6 +261,11 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return fmt.Errorf("builder: %w", err)
 	}
 	ctl.SetBuilder(builder)
+	if cfg.MetricsListen != "" {
+		if err := ctl.ServeMetrics(ctx, cfg.MetricsListen); err != nil {
+			return fmt.Errorf("-metrics-listen: %w", err)
+		}
+	}
 	if err := ctl.Start(); err != nil {
 		logger.Warn("control API not started", "err", err)
 	} else {
@@ -301,6 +307,7 @@ func parseFlags() Config {
 	flag.StringVar(&cfg.LogMaxSize, "log-max-size", "10m", "Rotate a container's log file when it reaches this size (k, m, g suffixes); 0 never rotates")
 	flag.IntVar(&cfg.LogMaxFiles, "log-max-files", logs.DefaultMaxFiles, "Log files kept per container, the current one included")
 	flag.StringVar(&cfg.LogDir, "log-dir", "", "Directory for container logs (default <base-dir>/logs); a tmpfs such as /run/nyxd/logs keeps log writes off an SD card, and the logs are lost on reboot")
+	flag.StringVar(&cfg.MetricsListen, "metrics-listen", "", "Also serve Prometheus metrics at http://ADDR/metrics (e.g. 127.0.0.1:9323) for scrapers that cannot read the control socket; read-only, nothing else of the API. Off by default")
 	flag.BoolVar(&cfg.Version, "version", false, "Print version and exit")
 	flag.Parse()
 

@@ -22,6 +22,7 @@ type Sample struct {
 	BlockRead    uint64 // bytes read (cgroup io.stat)
 	BlockWrite   uint64 // bytes written
 	PIDs         uint64 // tasks in the cgroup, or 1 when unknown
+	OOMKills     uint64 // processes killed by the OOM killer (cgroup memory.events)
 	Timestamp    time.Time
 	Source       string // "cgroup" or "proc" (fallback when cgroups are unavailable)
 }
@@ -40,6 +41,23 @@ func Read(pid int) (Sample, error) {
 			return s, nil
 		}
 	}
+	if err := fillFromProc(&s, pid); err != nil {
+		return Sample{}, err
+	}
+	s.Source = "proc"
+	fillNet(&s, pid)
+	return s, nil
+}
+
+// ReadProc samples pid from /proc only, skipping its cgroup. For containers
+// that have no cgroup of their own (rootless nyxd runs crun with cgroups
+// disabled): their cgroup is the daemon's, often the user's whole session,
+// and would report everything running in it. Values cover the init process.
+func ReadProc(pid int) (Sample, error) {
+	if pid <= 0 {
+		return Sample{}, fmt.Errorf("invalid pid %d", pid)
+	}
+	s := Sample{Timestamp: time.Now().UTC(), PIDs: 1}
 	if err := fillFromProc(&s, pid); err != nil {
 		return Sample{}, err
 	}
@@ -126,6 +144,7 @@ func fillFromCgroup(s *Sample, cg string) bool {
 	if r, w, err := readIOStat(filepath.Join(cg, "io.stat")); err == nil {
 		s.BlockRead, s.BlockWrite = r, w
 	}
+	s.OOMKills = readKeyed(filepath.Join(cg, "memory.events"), "oom_kill")
 	return got
 }
 
@@ -269,6 +288,21 @@ func hostMemTotal() uint64 {
 				kb, _ := strconv.ParseUint(fields[1], 10, 64)
 				return kb * 1024
 			}
+		}
+	}
+	return 0
+}
+
+// readKeyed returns the value of key in a flat-keyed cgroup file such as
+// memory.events ("oom_kill 2"), or 0.
+func readKeyed(path, key string) uint64 {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := cutUintPrefix(line, key+" "); ok {
+			return v
 		}
 	}
 	return 0

@@ -2,6 +2,7 @@ package cgstats
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -121,4 +122,27 @@ func TestCgroupPathLegacy(t *testing.T) {
 		// pid 1 always exists on linux; path may still resolve.
 	}
 	_, _ = cgroupPath(os.Getpid())
+}
+
+func TestReadKeyed(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "memory.events")
+	if err := os.WriteFile(p, []byte("low 0\nhigh 0\nmax 4\noom 2\noom_kill 2\noom_group_kill 0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := readKeyed(p, "oom_kill"); got != 2 {
+		t.Fatalf("oom_kill: %d", got)
+	}
+	if readKeyed(p, "missing") != 0 || readKeyed(p+".none", "oom_kill") != 0 {
+		t.Fatal("missing key or file")
+	}
+}
+
+func TestReadProcSelf(t *testing.T) {
+	s, err := ReadProc(os.Getpid())
+	if err != nil || s.Source != "proc" || s.MemCurrent == 0 || s.PIDs != 1 {
+		t.Fatalf("ReadProc: %+v %v", s, err)
+	}
+	if _, err := ReadProc(0); err == nil {
+		t.Fatal("pid 0")
+	}
 }
