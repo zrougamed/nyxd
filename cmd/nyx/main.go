@@ -123,6 +123,8 @@ func run(args []string) error {
 		return doRM(socket, args[1:])
 	case "logs":
 		return doLogs(socket, args[1:])
+	case "cp":
+		return doCp(socket, args[1:])
 	case "image":
 		return doImage(socket, args[1:])
 	case "container":
@@ -228,6 +230,9 @@ commands:
       low-level container details as a JSON array (docker/podman inspect)
   logs [-f] [--tail N|-n N] <id>
       show container logs; -f follows new lines
+  cp [-a] CONTAINER:SRC DEST|-   |   cp [-a] SRC|- CONTAINER:DEST
+      copy files or directories between the host and a running container
+      (- is a tar stream on stdout / stdin)
   stop <id> [<id>...]
       send graceful stop (SIGTERM / image stop signal, then wait)
   start <id> [<id>...]
