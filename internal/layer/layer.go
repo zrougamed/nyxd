@@ -52,6 +52,9 @@ type ApplyOptions struct {
 	Chown bool
 	// IDMap optionally remaps tar uid/gid before chown (rootless).
 	IDMap func(uid, gid int) (int, int)
+	// Literal treats every entry as a file to create: names starting with
+	// .wh. are ordinary files, not whiteouts (nyx cp archives).
+	Literal bool
 }
 
 func (o ApplyOptions) xattrPrefix() string {
@@ -64,17 +67,23 @@ func (o ApplyOptions) xattrPrefix() string {
 // Apply extracts the (optionally gzip-compressed) layer read from r into dest.
 // dest must exist. It returns the number of uncompressed tar bytes read.
 func Apply(r io.Reader, dest string, opts ApplyOptions) (int64, error) {
-	dr, err := Decompress(r)
-	if err != nil {
-		return 0, err
-	}
-	defer dr.Close()
-
 	root, err := os.OpenRoot(dest)
 	if err != nil {
 		return 0, fmt.Errorf("open layer root: %w", err)
 	}
 	defer root.Close()
+	return ApplyRoot(r, root, opts)
+}
+
+// ApplyRoot is Apply into an open root: callers that resolved the
+// destination inside another root (os.Root.OpenRoot) keep that guarantee
+// instead of re-opening it by path.
+func ApplyRoot(r io.Reader, root *os.Root, opts ApplyOptions) (int64, error) {
+	dr, err := Decompress(r)
+	if err != nil {
+		return 0, err
+	}
+	defer dr.Close()
 
 	cr := &countingReader{r: dr}
 	a := &applier{root: root, opts: opts, written: map[string]struct{}{}}
@@ -170,7 +179,7 @@ func (a *applier) entry(r io.Reader, hdr *tar.Header) error {
 	}
 	dir, base := path.Dir(name), path.Base(name)
 
-	if strings.HasPrefix(base, whiteoutPrefix) {
+	if strings.HasPrefix(base, whiteoutPrefix) && !a.opts.Literal {
 		return a.whiteout(dir, base)
 	}
 
