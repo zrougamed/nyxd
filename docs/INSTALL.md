@@ -249,6 +249,24 @@ Default **`--base-dir=/var/lib/nyxd`**. Ensure the filesystem is persistent (SD 
 
 Only **one nyxd** may use a given base-dir at a time: the daemon takes an exclusive non-blocking flock on **`{base-dir}/run/nyxd-daemon.lock`**. A second start exits with an error instead of corrupting state.
 
+## SD cards: keep logs in memory
+
+Container logs are small, constant writes, which wear an SD card out over months. On a Raspberry
+Pi or another SD-card host, put them on a tmpfs with `-log-dir` and keep them small:
+
+```bash
+# /etc/default/nyxd (or the service's environment)
+NYXD_OPTS="-log-dir /run/nyxd/logs -log-max-size 1m -log-max-files 2"
+```
+
+- `/run` is a tmpfs on systemd and OpenRC hosts. Each container then keeps at most
+  `-log-max-size` × `-log-max-files` of logs in RAM (2 MiB here), so size them for your memory.
+- **The logs are gone after a reboot.** `nyx logs` works as before until then.
+- Mount the data partition with `noatime` so reads do not cause writes either.
+- To check the effect, compare the card's written sectors (field 10 of
+  `grep mmcblk0 /proc/diskstats`) over an hour before and after the change.
+- A USB SSD for `--base-dir` avoids the problem altogether, images and volumes included.
+
 ## Next steps
 
 - **[USAGE.md](USAGE.md)** — `nyx` commands and `curl` examples  

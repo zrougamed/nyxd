@@ -131,7 +131,7 @@ func (s *Server) resolveContainerIDForLogs(raw string) (string, error) {
 	if !safeLogContainerID(raw) {
 		return "", err
 	}
-	p := filepath.Join(s.dataDir, "logs", raw+".log")
+	p := filepath.Join(s.containerLogDir(), raw+".log")
 	if _, stErr := os.Stat(p); stErr == nil {
 		return raw, nil
 	}

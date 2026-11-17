@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -58,7 +57,7 @@ func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id = canon
-	logDir := filepath.Join(s.dataDir, "logs")
+	logDir := s.containerLogDir()
 	logPath := logs.Path(logDir, id)
 	tail := 200
 	if v := r.URL.Query().Get("tail"); v != "" {

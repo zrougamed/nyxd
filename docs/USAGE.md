@@ -7,6 +7,7 @@ Install **`nyx`** next to **`nyxd`** (`make build-nyx`). It talks to the daemon 
 ```bash
 nyx ping
 nyx version
+nyx info          # mode, storage, kernel, cgroups, crun, counts (--json for bug reports)
 
 # Pull (progress UI on stderr; add --json for a single JSON blob on stdout)
 sudo nyx pull nginx:alpine
@@ -94,6 +95,7 @@ service cannot fill the disk:
 |-----------|---------|---------|
 | `-log-max-size` | `10m` | Rotate when the log reaches this size (`k`, `m`, `g` suffixes); `0` never rotates |
 | `-log-max-files` | `3` | Files kept per container, the current one included (`<id>.log`, `<id>.log.1`, `<id>.log.2`) |
+| `-log-dir` | `<base-dir>/logs` | Where the log files live; a tmpfs keeps log writes off an SD card ([INSTALL.md](INSTALL.md#sd-cards-keep-logs-in-memory)) |
 
 With the defaults a container keeps at most 30 MiB of logs. Set the flags in
 `NYXD_OPTS` (see the service setup in the install guide), e.g.

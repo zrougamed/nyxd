@@ -3,6 +3,8 @@ package main
 import (
 	"runtime/debug"
 	"testing"
+
+	"github.com/zrougamed/nyxd/internal/rootless"
 )
 
 func TestFillFromBuildInfo(t *testing.T) {
@@ -40,5 +42,29 @@ func TestFillFromBuildInfo(t *testing.T) {
 				t.Fatalf("got (%q, %q), want (%q, %q)", gotC, gotD, c.wantCommit, c.wantDt)
 			}
 		})
+	}
+}
+
+func TestContainerLogDir(t *testing.T) {
+	if got := containerLogDir(Config{BaseDir: "/var/lib/nyxd"}); got != "/var/lib/nyxd/logs" {
+		t.Fatalf("default: %s", got)
+	}
+	if got := containerLogDir(Config{BaseDir: "/var/lib/nyxd", LogDir: "/run/nyxd/logs/"}); got != "/run/nyxd/logs" {
+		t.Fatalf("-log-dir: %s", got)
+	}
+}
+
+func TestDaemonInfo(t *testing.T) {
+	if got := daemonInfo(rootless.Info{}, true, "/l", ""); got.Mode != "rootful" || got.HostUID != -1 || !got.Cgroups || got.LogDir != "/l" {
+		t.Fatalf("rootful: %+v", got)
+	}
+	if got := daemonInfo(rootless.Info{Rootless: true, SubIDs: true}, false, "/l", "1000"); got.Mode != "rootless" || got.HostUID != 1000 || !got.SubIDs || got.Cgroups {
+		t.Fatalf("rootless: %+v", got)
+	}
+	if got := daemonInfo(rootless.Info{Rootless: true}, false, "/l", "x"); got.HostUID != -1 {
+		t.Fatalf("bad uid: %+v", got)
+	}
+	if got := daemonInfo(rootless.Info{Rootless: true, Remap: true, SubIDs: true}, true, "/l", "0"); got.Mode != "userns-remap" || got.HostUID != -1 {
+		t.Fatalf("remap: %+v", got)
 	}
 }
