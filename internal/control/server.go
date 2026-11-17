@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/zrougamed/nyxd/internal/events"
 	"io"
 	"log/slog"
 	"net"
@@ -63,6 +64,7 @@ type Server struct {
 	buildDate   string
 	logDir      string // container logs; empty means dataDir/logs
 	info        DaemonInfo
+	events      *events.Bus
 	started     time.Time
 	socket      string
 	socketGroup string // optional: chgrp socket for non-root nyx clients (0660)
@@ -144,6 +146,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /v1/ping", s.handlePing)
 	mux.HandleFunc("GET /v1/version", s.handleVersion)
 	mux.HandleFunc("GET /v1/info", s.handleInfo)
+	mux.HandleFunc("GET /v1/events", s.handleEvents)
 	mux.HandleFunc("GET /v1/system/df", s.handleSystemDF)
 	mux.HandleFunc("POST /v1/system/prune", s.handleSystemPrune)
 	mux.HandleFunc("GET /v1/metrics", s.handleMetrics)
@@ -474,6 +477,7 @@ func (s *Server) handleImagePull(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, image.HumanizePullError(err), http.StatusBadGateway)
 			return
 		}
+		s.imageEvent(events.ImagePull, body.Ref)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok":  true,
@@ -514,6 +518,7 @@ func (s *Server) handleImagePull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.imageEvent(events.ImagePull, body.Ref)
 	_ = enc.Encode(image.PullEvent{
 		Phase:  "done",
 		OK:     true,

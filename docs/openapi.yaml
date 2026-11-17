@@ -224,6 +224,47 @@ paths:
         "404": {description: No such container, or no such parent directory}
         "409": {description: The container is not running}
 
+  /v1/events:
+    get:
+      tags: [system]
+      summary: Stream container and image events (nyx events)
+      description: |
+        Newline-delimited JSON, one event per line, kept open until the client goes away. `since`
+        first replays the events nyxd keeps in memory (the last 1000). A client that falls behind
+        receives `{"type":"events_dropped"}` and is disconnected. Container actions: create, start,
+        die, oom, restart, health_status, remove; image actions: pull, build, remove.
+      operationId: getEvents
+      parameters:
+        - name: since
+          in: query
+          description: A duration back from now (`10m`) or a time (RFC 3339 or Unix seconds)
+          schema: {type: string}
+        - name: filter
+          in: query
+          description: "`type=`, `event=`, `container=` or `image=`; repeat for alternatives of one key"
+          schema:
+            type: array
+            items: {type: string}
+          style: form
+          explode: true
+      responses:
+        "200":
+          description: Event stream
+          content:
+            application/x-ndjson:
+              schema:
+                type: object
+                properties:
+                  time: {type: string, format: date-time}
+                  type: {type: string, enum: [container, image, events_dropped]}
+                  action: {type: string}
+                  id: {type: string}
+                  image: {type: string}
+                  attributes:
+                    type: object
+                    additionalProperties: {type: string}
+        "400": {description: Invalid since or filter}
+
   /v1/network:
     get:
       tags: [system]

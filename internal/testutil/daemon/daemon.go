@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/zrougamed/nyxd/internal/events"
 	"io"
 	"log/slog"
 	"net"
@@ -58,6 +59,7 @@ type Daemon struct {
 	Logs    *logs.Collector
 	Sup     *supervisor.Supervisor
 	Ctl     *control.Server
+	Events  *events.Bus
 	Builder *build.Builder
 	Log     fmt.Stringer // daemon log (JSON lines), safe to read while the daemon writes
 	Ctx     context.Context
@@ -127,6 +129,9 @@ func StartWith(t *testing.T, opts Options) *Daemon {
 	d.Ctx = ctx
 	d.Ctl = control.New(log, d.Runtime, d.Store, d.Sup, ctx, nil, "test", "abc1234", "2026-10-11",
 		base, d.Socket, "", opts.NetDriver, opts.DNS)
+	d.Events = events.New(events.DefaultHistory)
+	d.Sup.SetEvents(d.Events)
+	d.Ctl.SetEvents(d.Events)
 	d.Builder, err = build.New(build.Config{Store: d.Store, Overlay: d.Overlay, Runtime: d.Runtime,
 		BaseDir: base, Rootless: true, SingleID: true, Log: log})
 	must(err)
