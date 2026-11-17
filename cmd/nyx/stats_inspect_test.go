@@ -132,13 +132,35 @@ func TestHumanBytes(t *testing.T) {
 	}
 }
 
-func TestPrintStatsRowErrorAndTrunc(t *testing.T) {
-	printStatsHeader()
-	printStatsRow(statsItem{ID: "verylongcontaineridname", ShortID: "", Name: "verylongnameshouldtruncatehere", Err: "x"}, false)
-	printStatsRow(statsItem{
-		ID: "id", ShortID: "short", Name: "n", CPUPerc: 1, MemUsage: 100, MemLimit: 200,
-		MemPerc: 50, NetRx: 1, NetTx: 2, BlockRead: 3, BlockWrite: 4, PIDs: 5,
-	}, true)
-	clearStatsScreen(2)
+func TestWriteStatsTable(t *testing.T) {
+	var b strings.Builder
+	writeStatsTable(&b, []statsItem{
+		{ID: "verylongcontaineridname", Name: "verylongnameshouldtruncatehere", Err: "x"},
+		// GiB values fill a 17-character column: the PIDS column must still
+		// be separated from BLOCK I/O (seen as "8.17GiB 44" before).
+		{ID: "id", ShortID: "25fb82ac8847", Name: "gh-runner-2-runner", CPUPerc: 0.88,
+			MemUsage: 1954 << 20, MemLimit: 4 << 30, MemPerc: 45.5,
+			NetRx: 617 << 20, NetTx: 557 << 20, BlockRead: 5820 << 20, BlockWrite: 8418 << 20, PIDs: 44},
+	}, false)
+	lines := strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
+	if len(lines) != 3 || strings.Count(b.String(), "CONTAINER ID") != 1 {
+		t.Fatalf("want one header and two rows:\n%s", b.String())
+	}
+	if !strings.HasPrefix(lines[1], "verylongcont   verylongnameshouldtru...   --") {
+		t.Errorf("truncated row: %q", lines[1])
+	}
+	if !strings.HasSuffix(lines[2], "5.68GiB / 8.22GiB   44") {
+		t.Errorf("block I/O and PIDS run together: %q", lines[2])
+	}
+	pids := strings.Index(lines[0], "PIDS")
+	if pids < 0 || strings.Index(lines[2], "44") != pids {
+		t.Errorf("PIDS column misaligned:\n%s\n%s", lines[0], lines[2])
+	}
+
+	b.Reset()
+	writeStatsTable(&b, []statsItem{{ID: "id", ShortID: "short", Name: "n"}}, true)
+	if !strings.Contains(b.String(), "\nid ") {
+		t.Errorf("--no-trunc uses the full id: %q", b.String())
+	}
 	_ = isTTY(os.Stdout)
 }
