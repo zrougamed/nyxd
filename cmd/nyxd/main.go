@@ -49,14 +49,16 @@ type Config struct {
 	NetworkName   string
 	LogLevel      string
 	Version       bool
-	Socket        string // Unix socket for HTTP control API; empty disables
-	SocketGroup   string // optional POSIX group for socket (0660); lets non-root users in that group run nyx
-	PullPlatform  string // OCI platform for multi-arch indexes, e.g. linux/arm64; empty uses GOOS/GOARCH
-	DNS           string // auto (default), embedded, cni, off — see docs/networking.md
-	LogMaxSize    string // container log size that triggers rotation, e.g. 10m; 0 = never rotate
-	LogMaxFiles   int    // container log files kept, the current one included
-	LogDir        string // container logs; empty means BaseDir/logs
-	MetricsListen string // TCP address for /metrics; empty disables
+	Socket        string                    // Unix socket for HTTP control API; empty disables
+	SocketGroup   string                    // optional POSIX group for socket (0660); lets non-root users in that group run nyx
+	PullPlatform  string                    // OCI platform for multi-arch indexes, e.g. linux/arm64; empty uses GOOS/GOARCH
+	DNS           string                    // auto (default), embedded, cni, off — see docs/networking.md
+	LogMaxSize    string                    // container log size that triggers rotation, e.g. 10m; 0 = never rotate
+	LogMaxFiles   int                       // container log files kept, the current one included
+	LogDir        string                    // container logs; empty means BaseDir/logs
+	MetricsListen string                    // TCP address for /metrics; empty disables
+	Mirrors       map[string][]image.Mirror // -registry-mirror, by registry API host
+	MirrorOnly    bool                      // -registry-mirror-only
 
 	Rootless    rootless.Info // set when running in nyxd's own user namespace
 	UsernsRemap string        // "START:COUNT" or "default": root runs the daemon in a remapped user namespace
@@ -182,6 +184,10 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return fmt.Errorf("image store: %w", err)
 	}
 	imgStore.SetPlatform(cfg.PullPlatform)
+	if cfg.MirrorOnly && len(cfg.Mirrors) == 0 {
+		return fmt.Errorf("-registry-mirror-only needs at least one -registry-mirror")
+	}
+	imgStore.SetMirrors(cfg.Mirrors, cfg.MirrorOnly)
 
 	ovl, err := overlay.NewManager(cfg.BaseDir+"/overlay", overlay.Options{
 		Rootless: cfg.Rootless.Rootless,
@@ -312,6 +318,18 @@ func parseFlags() Config {
 	flag.IntVar(&cfg.LogMaxFiles, "log-max-files", logs.DefaultMaxFiles, "Log files kept per container, the current one included")
 	flag.StringVar(&cfg.LogDir, "log-dir", "", "Directory for container logs (default <base-dir>/logs); a tmpfs such as /run/nyxd/logs keeps log writes off an SD card, and the logs are lost on reboot")
 	flag.StringVar(&cfg.MetricsListen, "metrics-listen", "", "Also serve Prometheus metrics at http://ADDR/metrics (e.g. 127.0.0.1:9323) for scrapers that cannot read the control socket; read-only, nothing else of the API. Off by default")
+	flag.Func("registry-mirror", "REGISTRY=URL: pull REGISTRY's images through this mirror first (repeatable; e.g. docker.io=https://mirror.lan:5000). Image names and digests do not change", func(v string) error {
+		reg, m, err := image.ParseMirror(v)
+		if err != nil {
+			return err
+		}
+		if cfg.Mirrors == nil {
+			cfg.Mirrors = map[string][]image.Mirror{}
+		}
+		cfg.Mirrors[reg] = append(cfg.Mirrors[reg], m)
+		return nil
+	})
+	flag.BoolVar(&cfg.MirrorOnly, "registry-mirror-only", false, "Never fall back to the upstream registry when its mirrors fail (air-gapped hosts)")
 	flag.BoolVar(&cfg.Version, "version", false, "Print version and exit")
 	flag.Parse()
 

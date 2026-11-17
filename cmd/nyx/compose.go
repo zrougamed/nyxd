@@ -496,7 +496,7 @@ func doComposeUp(socket string, opts composeCLI) error {
 	if opts.project != "" {
 		body["project"] = opts.project
 	}
-	if len(auth) > 0 {
+	if auth = withMirrorLogins(socket, auth); len(auth) > 0 {
 		body["registry_auth"] = auth
 	}
 	if opts.recreate != "" {

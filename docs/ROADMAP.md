@@ -80,7 +80,7 @@ major distribution.
 - [ ] **Reproducible image IDs** (`SOURCE_DATE_EPOCH`).
 - [ ] **zstd layers** — rejected with a clear error today.
 - [ ] **Signature verification** — cosign / policy before `run`; today blobs are digest-checked.
-- [ ] **Registry mirrors** — `--registry-mirror` for restricted or air-gapped networks.
+- [x] **Registry mirrors** — `-registry-mirror REGISTRY=URL` (fallback to the registry, or `-registry-mirror-only` for air-gapped hosts).
 - [ ] **OAuth identity tokens** for registry logins.
 
 ## Networking

@@ -405,6 +405,9 @@ func doRun(socket string, args []string) error {
 	if u, p := registryCredentials(o.image); u != "" {
 		body["registry_username"], body["registry_password"] = u, p
 	}
+	if m := mirrorLogins(socket); len(m) > 0 {
+		body["registry_auth"] = m
+	}
 	if o.name != "" {
 		body["id"] = o.name
 	}
@@ -569,6 +572,9 @@ func doRunAttached(socket string, o runOpts) error {
 	body := map[string]any{"image": o.image, "stdin": o.stdin, "tty": o.tty}
 	if u, p := registryCredentials(o.image); u != "" {
 		body["registry_username"], body["registry_password"] = u, p
+	}
+	if m := mirrorLogins(socket); len(m) > 0 {
+		body["registry_auth"] = m
 	}
 	if o.name != "" {
 		body["id"] = o.name

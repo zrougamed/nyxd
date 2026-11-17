@@ -25,6 +25,9 @@ type session struct {
 	user     string
 	pass     string
 	actions  string // token scope actions: "pull" or "pull,push"
+	// scheme forces http or https (a mirror URL); empty picks https, or
+	// http for loopback registries.
+	scheme string
 
 	mu    sync.Mutex
 	authz string // Authorization header value once known
@@ -41,6 +44,9 @@ func newSession(hc *http.Client, registry, repo string, auth *RegistryAuth, acti
 // baseURL is https://<registry>, or http:// for loopback registries
 // (localhost:5000 and friends), which Docker also treats as insecure-allowed.
 func (s *session) baseURL() string {
+	if s.scheme != "" {
+		return s.scheme + "://" + s.registry
+	}
 	if isLoopbackRegistry(s.registry) {
 		return "http://" + s.registry
 	}

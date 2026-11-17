@@ -1223,6 +1223,13 @@ components:
           type: boolean
           description: Container CPU and memory limits are applied (false in rootless mode)
         apparmor: {type: boolean}
+        registry_mirrors:
+          type: object
+          description: Mirror URLs by registry API host (registry-1.docker.io for Docker Hub)
+          additionalProperties:
+            type: array
+            items: {type: string}
+        registry_mirror_only: {type: boolean}
         crun_path: {type: string}
         crun_version: {type: string}
         containers_running: {type: integer}
@@ -1509,6 +1516,14 @@ components:
         password:
           type: string
           description: Optional registry password
+        registry_auth:
+          type: object
+          description: Logins for registry mirror hosts (nyx sends them when nyxd has mirrors); never used for the registry itself
+          additionalProperties:
+            type: object
+            properties:
+              username: {type: string}
+              password: {type: string}
 
     PullResponseJSON:
       type: object

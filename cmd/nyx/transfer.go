@@ -187,6 +187,58 @@ func registryAuthFor(refs ...string) image.AuthMap {
 	return m
 }
 
+// mirrorLogins returns the user's logins for the daemon's registry mirror
+// hosts (from GET /v1/info), sent along with pulls so a mirror that needs
+// credentials gets its own, never the upstream registry's. Empty when the
+// daemon has no mirrors or predates them.
+func mirrorLogins(socket string) image.AuthMap {
+	resp, err := httpClient(socket).Get("http://unix/v1/info")
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	var info struct {
+		Mirrors map[string][]string `json:"registry_mirrors"`
+	}
+	if json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&info) != nil {
+		return nil
+	}
+	out := image.AuthMap{}
+	for _, urls := range info.Mirrors {
+		for _, raw := range urls {
+			u, err := url.Parse(raw)
+			if err != nil || u.Host == "" {
+				continue
+			}
+			if _, done := out[u.Host]; done {
+				continue
+			}
+			a, _, _, err := registryauth.Lookup(u.Host)
+			warnAuth(err)
+			if a.Username != "" {
+				out[u.Host] = a
+			}
+		}
+	}
+	return out
+}
+
+// withMirrorLogins adds the mirror logins to m (creating it if needed).
+func withMirrorLogins(socket string, m image.AuthMap) image.AuthMap {
+	for host, a := range mirrorLogins(socket) {
+		if m == nil {
+			m = image.AuthMap{}
+		}
+		if _, ok := m[host]; !ok {
+			m[host] = a
+		}
+	}
+	return m
+}
+
 // warnAuth reports an unreadable auth file or failing credential helper; the
 // request goes on (anonymously for that registry).
 func warnAuth(err error) {

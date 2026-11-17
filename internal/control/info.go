@@ -59,6 +59,9 @@ type InfoResponse struct {
 	Limits   bool   `json:"resource_limits"`
 	AppArmor bool   `json:"apparmor"`
 
+	RegistryMirrors map[string][]string `json:"registry_mirrors,omitempty"`
+	MirrorOnly      bool                `json:"registry_mirror_only,omitempty"`
+
 	CrunPath    string `json:"crun_path,omitempty"`
 	CrunVersion string `json:"crun_version,omitempty"`
 
@@ -108,6 +111,9 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	if s.store != nil {
 		if refs, err := s.store.ListImageRefs(); err == nil {
 			out.Images = len(refs)
+		}
+		if m := s.store.Mirrors(); len(m) > 0 {
+			out.RegistryMirrors, out.MirrorOnly = m, s.store.MirrorOnly()
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

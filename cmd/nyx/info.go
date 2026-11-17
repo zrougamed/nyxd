@@ -6,37 +6,40 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 )
 
 // infoJSON mirrors GET /v1/info (internal/control InfoResponse).
 type infoJSON struct {
-	ServerVersion     string `json:"server_version"`
-	Commit            string `json:"commit"`
-	BuildDate         string `json:"build_date"`
-	GoVersion         string `json:"go_version"`
-	Mode              string `json:"mode"`
-	HostUID           *int   `json:"host_uid"`
-	SubIDs            bool   `json:"subordinate_ids"`
-	NetworkDriver     string `json:"network_driver"`
-	DNS               string `json:"dns"`
-	Socket            string `json:"socket"`
-	BaseDir           string `json:"base_dir"`
-	LogDir            string `json:"log_dir"`
-	StorageDriver     string `json:"storage_driver"`
-	UserXattr         bool   `json:"overlay_userxattr"`
-	FreeBytes         uint64 `json:"free_bytes"`
-	OS                string `json:"os"`
-	Arch              string `json:"arch"`
-	Kernel            string `json:"kernel"`
-	CgroupV2          bool   `json:"cgroup_v2"`
-	Limits            bool   `json:"resource_limits"`
-	AppArmor          bool   `json:"apparmor"`
-	CrunPath          string `json:"crun_path"`
-	CrunVersion       string `json:"crun_version"`
-	ContainersRunning int    `json:"containers_running"`
-	ContainersStopped int    `json:"containers_stopped"`
-	Images            int    `json:"images"`
+	ServerVersion     string              `json:"server_version"`
+	Commit            string              `json:"commit"`
+	BuildDate         string              `json:"build_date"`
+	GoVersion         string              `json:"go_version"`
+	Mode              string              `json:"mode"`
+	HostUID           *int                `json:"host_uid"`
+	SubIDs            bool                `json:"subordinate_ids"`
+	NetworkDriver     string              `json:"network_driver"`
+	DNS               string              `json:"dns"`
+	Socket            string              `json:"socket"`
+	BaseDir           string              `json:"base_dir"`
+	LogDir            string              `json:"log_dir"`
+	StorageDriver     string              `json:"storage_driver"`
+	UserXattr         bool                `json:"overlay_userxattr"`
+	FreeBytes         uint64              `json:"free_bytes"`
+	OS                string              `json:"os"`
+	Arch              string              `json:"arch"`
+	Kernel            string              `json:"kernel"`
+	CgroupV2          bool                `json:"cgroup_v2"`
+	Limits            bool                `json:"resource_limits"`
+	AppArmor          bool                `json:"apparmor"`
+	Mirrors           map[string][]string `json:"registry_mirrors"`
+	MirrorOnly        bool                `json:"registry_mirror_only"`
+	CrunPath          string              `json:"crun_path"`
+	CrunVersion       string              `json:"crun_version"`
+	ContainersRunning int                 `json:"containers_running"`
+	ContainersStopped int                 `json:"containers_stopped"`
+	Images            int                 `json:"images"`
 }
 
 // doInfo is nyx info [--json]: facts about the daemon and its host, for bug
@@ -79,7 +82,12 @@ func doInfo(socket string, args []string) error {
 }
 
 func writeInfo(w io.Writer, in infoJSON, endpoint string) {
-	row := func(k, v string) { fmt.Fprintf(w, "%-17s %s\n", k+":", v) }
+	row := func(k, v string) {
+		if k != "" {
+			k += ":"
+		}
+		fmt.Fprintf(w, "%-17s %s\n", k, v)
+	}
 	or := func(v, fallback string) string {
 		if v == "" {
 			return fallback
@@ -136,6 +144,22 @@ func writeInfo(w io.Writer, in infoJSON, endpoint string) {
 	row("cgroup", cg)
 	row("crun", strings.TrimSpace(or(in.CrunVersion, "?")+" "+parenthesize(in.CrunPath)))
 	row("AppArmor", map[bool]string{true: "enabled", false: "disabled"}[in.AppArmor])
+	regs := make([]string, 0, len(in.Mirrors))
+	for reg := range in.Mirrors {
+		regs = append(regs, reg)
+	}
+	sort.Strings(regs)
+	for i, reg := range regs {
+		label := ""
+		if i == 0 {
+			label = "Registry mirrors"
+		}
+		line := reg + " -> " + strings.Join(in.Mirrors[reg], ", ")
+		if in.MirrorOnly {
+			line += " (mirror only)"
+		}
+		row(label, line)
+	}
 	row("Containers", fmt.Sprintf("%d running, %d stopped", in.ContainersRunning, in.ContainersStopped))
 	row("Images", fmt.Sprintf("%d", in.Images))
 }

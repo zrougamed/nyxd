@@ -134,7 +134,7 @@ func (s *Server) handleBuild(w http.ResponseWriter, r *http.Request) {
 	out := &ndjsonWriter{enc: json.NewEncoder(w), fl: fl}
 	opts.Out = out
 
-	res, err := s.builder.Build(r.Context(), opts)
+	res, err := s.builder.Build(image.WithMirrorAuth(r.Context(), opts.Auth), opts)
 	if err != nil {
 		s.log.Warn("build failed", "err", err)
 		out.send(buildEvent{Error: err.Error()})

@@ -2,6 +2,8 @@ package image
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -196,11 +198,15 @@ func TestPullScenarios(t *testing.T) {
 
 	t.Run("index picks the platform", func(t *testing.T) {
 		r := newScripted(t)
-		m := r.publish(t, src, "src/app:1", "sha256:arm")
+		m := r.publish(t, src, "src/app:1", "arm")
+		// Index entries name manifests by their real digest (it is checked).
+		sum := sha256.Sum256(r.manifests["arm"].body)
+		armDigest := "sha256:" + hex.EncodeToString(sum[:])
+		r.manifests[armDigest] = r.manifests["arm"]
 		idx, _ := json.Marshal(oci.Index{SchemaVersion: 2, Manifests: []oci.Descriptor{
 			{Digest: "sha256:none"},
 			{Digest: "sha256:amd", Platform: &oci.Platform{OS: "linux", Architecture: "amd64"}},
-			{Digest: "sha256:arm", Platform: &oci.Platform{OS: "linux", Architecture: "arm64"}},
+			{Digest: armDigest, Platform: &oci.Platform{OS: "linux", Architecture: "arm64"}},
 		}})
 		r.manifests["1"] = served{ct: oci.MediaTypeImageIndex, body: idx}
 		r.manifests["2"] = served{ct: oci.MediaTypeDockerManifestList, body: idx}
@@ -210,7 +216,7 @@ func TestPullScenarios(t *testing.T) {
 			t.Fatal(err)
 		}
 		// LoadManifest reads a manifest kept as a blob.
-		d, err := s.PutBlob(r.manifests["sha256:arm"].body)
+		d, err := s.PutBlob(r.manifests[armDigest].body)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -430,8 +436,8 @@ func (timeoutErr) Temporary() bool { return true }
 
 func TestHumanizeAllBranches(t *testing.T) {
 	for err, want := range map[error]string{
-		context.DeadlineExceeded:                                           "timed out",
-		timeoutErr{}:                                                       "network timeout",
+		context.DeadlineExceeded: "timed out",
+		timeoutErr{}:             "network timeout",
 		fmt.Errorf("x: context deadline exceeded"):                         "while reading",
 		fmt.Errorf("Client.Timeout exceeded"):                              "HTTP read timed out",
 		fmt.Errorf("dial: connection refused"):                             "could not connect",

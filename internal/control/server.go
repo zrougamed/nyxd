@@ -452,6 +452,8 @@ type pullRequest struct {
 	Stream   bool   `json:"stream,omitempty"`
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
+	// RegistryAuth carries the client's logins for registry mirror hosts.
+	RegistryAuth image.AuthMap `json:"registry_auth,omitempty"`
 }
 
 func (s *Server) handleImagePull(w http.ResponseWriter, r *http.Request) {
@@ -471,7 +473,7 @@ func (s *Server) handleImagePull(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !body.Stream {
-		cfg, err := s.store.PullWithProgress(r.Context(), body.Ref, pullAuthFromPullBody(&body), nil)
+		cfg, err := s.store.PullWithProgress(image.WithMirrorAuth(r.Context(), body.RegistryAuth), body.Ref, pullAuthFromPullBody(&body), nil)
 		if err != nil {
 			s.log.Warn("pull failed", "ref", body.Ref, "err", err)
 			http.Error(w, image.HumanizePullError(err), http.StatusBadGateway)
@@ -508,7 +510,7 @@ func (s *Server) handleImagePull(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	cfg, err := s.store.PullWithProgress(r.Context(), body.Ref, pullAuthFromPullBody(&body), emit)
+	cfg, err := s.store.PullWithProgress(image.WithMirrorAuth(r.Context(), body.RegistryAuth), body.Ref, pullAuthFromPullBody(&body), emit)
 	if err != nil {
 		s.log.Warn("pull stream failed", "ref", body.Ref, "err", err)
 		_ = enc.Encode(image.PullEvent{Phase: "error", Message: image.HumanizePullError(err)})
@@ -641,7 +643,7 @@ func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, image.HumanizeComposeBuildError(err), http.StatusBadRequest)
 		return
 	}
-	specs, err := compose.BuildContainerSpecs(baseCtx, st, compose.UpMeta{
+	specs, err := compose.BuildContainerSpecs(image.WithMirrorAuth(baseCtx, body.RegistryAuth), st, compose.UpMeta{
 		ComposeDir: composeDir,
 		Project:    project,
 		DataDir:    s.dataDir,
@@ -803,6 +805,8 @@ type runRequest struct {
 	// Optional registry credentials when this run triggers an image pull.
 	RegistryUsername string `json:"registry_username,omitempty"`
 	RegistryPassword string `json:"registry_password,omitempty"`
+	// RegistryAuth carries the client's logins for registry mirror hosts.
+	RegistryAuth image.AuthMap `json:"registry_auth,omitempty"`
 	// TTY allocates a PTY for the container init (docker run -t).
 	TTY bool `json:"tty,omitempty"`
 	// Stdin keeps init stdin open; with application/x-nyxd-run+v1 the body after the
@@ -992,7 +996,7 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		if stream {
 			pullCb = func(ev image.PullEvent) { writeStream(ev) }
 		}
-		if _, errP := s.store.PullWithProgress(baseCtx, imgRef, pullAuthFromRunBody(&body), pullCb); errP != nil {
+		if _, errP := s.store.PullWithProgress(image.WithMirrorAuth(baseCtx, body.RegistryAuth), imgRef, pullAuthFromRunBody(&body), pullCb); errP != nil {
 			s.log.Warn("run: pull failed", "ref", imgRef, "err", errP)
 			msg := image.HumanizePullError(errP)
 			if stream {

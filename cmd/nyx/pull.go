@@ -65,6 +65,9 @@ func doPull(socket, ref string, jsonOut bool, username, password string) error {
 		bodyMap["username"] = username
 		bodyMap["password"] = password
 	}
+	if m := mirrorLogins(socket); len(m) > 0 {
+		bodyMap["registry_auth"] = m
+	}
 	body, err := json.Marshal(bodyMap)
 	if err != nil {
 		return err
