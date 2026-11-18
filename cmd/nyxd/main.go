@@ -60,6 +60,7 @@ type Config struct {
 	MetricsListen string                    // TCP address for /metrics; empty disables
 	Mirrors       map[string][]image.Mirror // -registry-mirror, by registry API host
 	UpdateEvery   time.Duration             // -update-interval; 0 disables automatic updates
+	ImagePolicy   string                    // -image-policy file; empty: no signature policy
 	MirrorOnly    bool                      // -registry-mirror-only
 
 	Rootless    rootless.Info // set when running in nyxd's own user namespace
@@ -190,6 +191,14 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return fmt.Errorf("-registry-mirror-only needs at least one -registry-mirror")
 	}
 	imgStore.SetMirrors(cfg.Mirrors, cfg.MirrorOnly)
+	if cfg.ImagePolicy != "" {
+		pol, err := image.LoadPolicy(cfg.ImagePolicy)
+		if err != nil {
+			return err
+		}
+		imgStore.SetPolicy(pol)
+		logger.Info("image signature policy", "file", cfg.ImagePolicy, "default", pol.Default)
+	}
 
 	ovl, err := overlay.NewManager(cfg.BaseDir+"/overlay", overlay.Options{
 		Rootless: cfg.Rootless.Rootless,
@@ -337,6 +346,7 @@ func parseFlags() Config {
 		cfg.Mirrors[reg] = append(cfg.Mirrors[reg], m)
 		return nil
 	})
+	flag.StringVar(&cfg.ImagePolicy, "image-policy", "", "Image signature policy file (cosign key signatures; see docs/security.md), e.g. /etc/nyxd/policy.yaml")
 	flag.DurationVar(&cfg.UpdateEvery, "update-interval", 0, "Check the images of containers labelled nyx.update=digest this often (e.g. 6h) and recreate them when their tag moved, rolling back when the new one fails its health check; 0 (default) disables")
 	flag.BoolVar(&cfg.MirrorOnly, "registry-mirror-only", false, "Never fall back to the upstream registry when its mirrors fail (air-gapped hosts)")
 	flag.BoolVar(&cfg.Version, "version", false, "Print version and exit")

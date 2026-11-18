@@ -11,7 +11,7 @@ claimed (no substitute for an independent penetration test).
 | Container hardening (nnp, caps, seccomp, masked paths, netns) | Implemented by default |
 | Rootless daemon | Supported (automatic when started as non-root); rootful still common as a system service |
 | Image blob digests | Verified on pull |
-| Image signatures (cosign / Notary) | **Not implemented** (see ROADMAP) |
+| Image signatures (cosign / Notary) | **Key-based cosign signatures** with `-image-policy` (see below); keyless and Notary not implemented |
 | Control API | Local Unix socket only; group membership is root-equivalent |
 | Independent pen-test / public audit | **Not claimed** |
 | Vulnerability process | [SECURITY.md](../SECURITY.md) + GitHub private advisories |
@@ -47,8 +47,33 @@ workload and the host.
 
 - Pulls verify **SHA-256 digests** of blobs against the manifest.
 - Use private registries and short-lived credentials; prefer digests over mutable tags in production compose files.
-- **Signed images are not verified yet.** Dependency scanning of the nyxd Go module
-  tree is recommended in CI (e.g. `make scan` / govulncheck) for operators who build from source.
+- **Image signatures are checked only with a policy** (below): without `-image-policy`, images are
+  digest-checked but not signature-checked. Keyless (Fulcio / Rekor) signatures are not supported.
+  Dependency scanning of the nyxd Go module tree is recommended in CI (e.g. `make scan` /
+  govulncheck) for operators who build from source.
+
+## Image signature policy
+
+`nyxd -image-policy /etc/nyxd/policy.yaml` checks key-based cosign signatures (made with
+`cosign sign --key`), with the Go standard library only:
+
+```yaml
+default: warn            # allow | warn | reject, for images no entry below covers
+registries:
+  ghcr.io/myorg/*:
+    require: signed
+    keys: [/etc/nyxd/keys/myorg.pub]      # cosign generate-key-pair (ECDSA P-256)
+  docker.io/library/*:
+    require: none
+```
+
+- Patterns match `registry/repository` (Docker Hub as `docker.io/...`); the most specific wins.
+- On pull, before anything is downloaded or stored, nyxd fetches the `sha256-<digest>.sig` artifact
+  from the image's repository and needs a signature by one of the keys over a payload naming the
+  exact digest the tag points to. A rejected image is not stored, and the pull says why.
+- `nyx run` and `compose up` refuse an image that needs a signature but was not verified when it came
+  in (`nyx load`, a tag, a local build, or a pull before the policy): pull it again.
+- `default: warn` pulls and runs uncovered images with a warning; `default: reject` refuses them.
 
 ## Secrets
 
@@ -76,7 +101,7 @@ Aligned with a typical independent assessment (not yet all shipped):
 
 1. External penetration testing of create/run, mounts, networking, and privilege boundaries  
 2. Broader rootless-by-default packaging with loud warnings for rootful / host net / privileged  
-3. Cosign/sigstore verification before run  
+3. Keyless (Fulcio / Rekor) cosign verification  
 4. Published support window and advisories for every CVE-class fix  
 5. Reproducible builds / signed release artifacts verification docs  
 

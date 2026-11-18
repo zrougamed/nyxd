@@ -100,6 +100,9 @@ type Store struct {
 	// the mirrors tried before it, in order; mirrorOnly drops the fallback.
 	mirrors    map[string][]Mirror
 	mirrorOnly bool
+
+	// policy is the image signature policy (nyxd -image-policy); nil: none.
+	policy *Policy
 }
 
 // lockBlob takes the download lock for digest and returns its unlock.
@@ -219,6 +222,15 @@ func (s *Store) pullFrom(ctx context.Context, client *registryClient, ref, tag s
 		LayerCount: len(manifest.Layers),
 	})
 
+	// The signature policy decides before anything is downloaded or stored.
+	warning, err := s.checkSignature(ctx, client.s, ref, client.topDigest)
+	if err != nil {
+		return nil, err
+	}
+	if warning != "" {
+		emit(PullEvent{Phase: "policy", Ref: ref, Message: warning})
+	}
+
 	emit(PullEvent{
 		Phase:  "config",
 		Digest: manifest.Config.Digest,
@@ -248,6 +260,9 @@ func (s *Store) pullFrom(ctx context.Context, client *registryClient, ref, tag s
 		return nil, fmt.Errorf("write image meta: %w", err)
 	}
 	s.writeSourceDigest(ref, client.topDigest)
+	if r := s.policy.rule(ref); r != nil && r.signed {
+		s.markVerified(ref, client.topDigest)
+	}
 
 	return &imgCfg, nil
 }

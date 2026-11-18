@@ -79,7 +79,7 @@ major distribution.
 - [ ] **`RUN --mount`** (cache / secret / bind) and heredocs in Dockerfiles.
 - [ ] **Reproducible image IDs** (`SOURCE_DATE_EPOCH`).
 - [ ] **zstd layers** — rejected with a clear error today.
-- [ ] **Signature verification** — cosign / policy before `run`; today blobs are digest-checked.
+- [x] **Signature verification** — key-based cosign signatures with `-image-policy`, on pull and before `run` (keyless not yet).
 - [x] **Registry mirrors** — `-registry-mirror REGISTRY=URL` (fallback to the registry, or `-registry-mirror-only` for air-gapped hosts).
 - [ ] **OAuth identity tokens** for registry logins.
 
