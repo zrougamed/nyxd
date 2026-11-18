@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Metrics","content":{"text/plain":{"schema":{"type":"string"}}}}}}

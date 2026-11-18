@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Restarted","content":{"application/json":{"schema":{"type":"object","required":["ok","id"],"properties":{"ok":{"type":"boolean"},"id":{"type":"string"}},"title":"StopResponse"}}}},"400":{"description":"Bad `t`, or the start failed"},"404":{"description":"No such container"},"503":{"description":"Supervisor unavailable"}}}

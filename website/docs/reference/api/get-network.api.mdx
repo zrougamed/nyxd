@@ -1,0 +1,63 @@
+---
+id: get-network
+title: "Active network identity"
+description: "Returns the daemon's active network driver and, for the native driver,"
+sidebar_label: "Active network identity"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVW1P40YQ/iuj+dJgGTupqtPJV1WiQFvaKxdBqFoR1N3Yk3gPe9e3uw6xovz3atYOEEDiDzQfkng988zbM89u0cuVw+wWXec81XgXY0Eut6rxymjM8Ip8a7UDXxIUkmqjv3Mgc6/WBJr8g7H3UFi1JgtSFzEsjQ22WgaT/lU818GflrKtPCysKlZsUlMMK+npQXZwMV3/EDMGuHahycPpxdlVAn/JqiUHtfR52aNUjCuLwpJzYHSINiA+lNQ/K+3JLmVOQBvlvIOR8ya/HyrI5lrobrOwYxGDmIyTjx+TcTJ5/jBOJx/EUTLXGKNpyEpux0WBGa7IX/Z1Y4yWXGO0I4fZFr8fj/nnsH+DLaiCtFe+wxhzoz1pz7ayaSqVB/D0q2OHLbq8pFryP981hBmaxVfKfYj2rVWWCp5X31ieV2M5Qa/6JIbzJ2/nrdIrfDnXk36E4liTP+6dBKy52TAS/fC4H7lWIgZjQZTGeXGUYIy0kXVTMXZvh7sY+wG8H/ZsoACj7ac2OuDKyxBhThxiIMr7MX7uYZ8T6xDzceIM27PtfdRTo71UmuwBP9/EZfLgbhejVz68GEhwNbAFd/yJsSZfmoFTGGMjfYkZputJqh8Z5siuyfKKbrG1FWZYet9kaVqZXFbcxleZ3jgCkbe2guPjVqvNsTP5PXn4kQP8BC/90yRJBIzCRHglQTlQK20sFZ/A6KoLGzVgMAQvoyfrwnrs7mJUemlCA4dydbcpgFluTQUn04tXGf6ptKplBb/NZlM2CKoRRewXRTGEmgvebQlRdKPVBgpTS6WHLKIIRnstEaltdcqe4Sthi7C4s5JsqEUbmJ1OoVLOE49v0e2FKJnruY6iU1lVSq9CmSfTiyjiYyHEQrpyrvtGuusXzXwj7OvOridpo/QqoDHoFTUVi9KbScOD8iV0prUHzebdu/zn77N/r7+c/nE+E5ACixcMiYihiJPWl6wwvZhkUQTaaAJvCtnBKKQE3rbOHyVwPcCTrZVzymgH0hL4rlG5rKoOxPjDh/Ee+dxaYx0j1lJ3YE3ryUHLJPO08WlTSaUFLEyhyMHSmhoEdyIJjuIT/H795RJIF41R2juw4UYB8VL7BA/ctXlOzvXCy8TvCTPhrcIYK5UTL1C2RaYqZjg1VfeLsTVcGp2buiabK1nB594Q9o5Pq+OyNG1M1S2NrRtrWFoTY1fpAO1S/RwoDQBp2ObGOF9L/Sz4yeE9+EzjD/i+fZL8/+/TeK+zT+RhGQ4D2g4aeIvrCca4V8G7GIPQZbe43S6koxtb7XZ8/K0l22F2exfjWlolF6w/t3e7GEuSBd+Dt1u8py7MKqeGxTJccpi9vntZyh4l+dfzGe52/wHHXiNH
+sidebar_class_name: "get api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Active network identity"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/v1/network"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Returns the daemon's active network driver and, for the native driver,
+the default bridge name, gateway IPv4, and subnet CIDR. Values match
+the live address on the bridge when the interface exists (stock daemon:
+`nyxbr0`, `10.88.0.1`, `10.88.0.0/16`).
+
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-network.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-network.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

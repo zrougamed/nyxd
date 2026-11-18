@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"`{\"ok\":true,\"restarted\":[ids]}`"},"400":{"description":"Invalid body, unknown service, or a start failed"},"404":{"description":"A service has no container"},"503":{"description":"Supervisor unavailable"}}}

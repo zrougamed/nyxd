@@ -1,0 +1,72 @@
+---
+id: start-container
+title: "Start an exited container"
+description: "Starts a container that exited (or was stopped) again with the settings it was created"
+sidebar_label: "Start an exited container"
+hide_title: true
+hide_table_of_contents: true
+api: eJzlVm1v2zYQ/isHfkoERXK2rsDUYUCQdVi3NQ2aFNiQBBMtnS021JE9Um4Ew/99OEp5T/cH9sWWxXt5ePfcc96qqNdBVReqcRS1IeSgrnLVYmjY+GgcqUqdRc0xgIY7I4idjoA3JmILe47hqw4QovMe233Qa20IvprYQewQAsZoaB3AxGTXMOqI7SWJRQ4DRWPlzARg7N0G2wLqgwPu6/uEASzqDQK52BlaQ3QQBFUB71Ypien1GsHqETlc0ldkBM8DYQvBUIN5MmoGZqQ4G68cT/h0j8C4QkZqUGAMAdviklSunEfWUoZ3rapUSnl8i0nlymvWPUapWnWxVaR7VJUyrcqVkcp5HTuVK8Yvg2FsVRV5wFyFpsNeq2qr4ugxBWZDa7XbXYlx8I4CBjn/brGQrxf6gZJE6oMUxUR7b02TsJafg9htn+dxy8/YxEeILpS7Frit9N2zXDiaKbm7fuC6dM6iJrVLti9Az1U00WLC5/zH+RZqt5OjV9+8B6y0scIiLNYFeMcRDEkH8rlNvQnB0HpfpTCvnoc5cRCGprsny2T543PLI8uo2xF4IEqgc/XD4vsXgA0eeWOCYxhIb7Sxemkx3bHH2DnhgnchJgbETlWq3ByW92Qtt6bdlYktKlcBeXPLkIGtqlQXo6/K0rpG226K8xjAp4BQNwNbODgYyNwcBNdcY4SfJN3P8NS/LIqihj15BOGgcNisyTG2b8CRHSeeTzEkBPQ6Cmv3heVCOkMrl5o6t5DGmzYVlJ2Fo9N3zxC+N2R6beG38/NTMUjTlGXil2U5pDu34Ag0ZNknMjfQul5kYUKRZbDX4koPNkJd8kCleKaPQixqQXbeyRibAOTg/PgUrAkRRX2WI8zOxSVdUpYda2uTLHQoYLJMXtd1vdShu6SpkOHsSTFfSPu8spvD0htap2gS9CN6qxt8GfSkeaMb+FGxHUN98vdfv/xz9uH4j7fnNZRQ03gDM5B6vsTREDukOA9xlWVAjhCia/UIewkSRB5C3C/gbA6PnMbDUQDNCHH0ptHWjlAvXr9e3EZ+y+w4SMRe0wjshohJ5aCOeBNLb7WhGpauNRhgxa6HWipRJMf6Dfx+9uEEkFrvDEWR6TgwQf1Uc2ppeBiaBkOY9FOIPxHmsFgUC5UraxoUXaju5PLU2fFXxz2cOGpc3yM3Rlv4czKEW8f70QlVWXpnx5Xj3rMTSSscr8s5dCjpYaAyBSjT9MrQ9poeJJ80SNPtMmseqPsjxm/vxfb/vBBn1b+njYhoas121sILtTmcV9P8hyJXVVqJkyBe5SppXnWhttulDviJ7W4nr78MyKOqLq5ytdFskuaKaLYmyHOrqpW2Af+jMXsf5722D9/COr/UNAo9tR3kl8rVNY7T6t5d7XLVoW6RU/bp4Khp0McHLs/2rcjo3XY4/XB2rna7fwGwi0KT
+sidebar_class_name: "post api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Start an exited container"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/v1/containers/{id}/start"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Starts a container that exited (or was stopped) again with the settings it was created
+with, until it is removed. `--rm` containers leave nothing to start. If the image layers
+were pruned since, the current image for the same reference is used.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./start-container.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./start-container.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./start-container.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

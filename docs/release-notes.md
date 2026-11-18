@@ -4,6 +4,27 @@
 
 ### New
 
+- **`nyx cp`**: copy files and directories between the host and a running container, both ways,
+  with `-` for a tar stream; no shell or `tar` needed in the image. Writes stay inside the container
+  (symlinks resolve against its root). API: `GET` / `PUT /v1/containers/{id}/archive`.
+- **`nyx system df` / `nyx system prune`**: disk use by images (shared layers counted once), build
+  cache, containers, logs and volumes; prune removes what nothing references (`--images`,
+  `--volumes`, `--dry-run`).
+- **`nyx events`**: stream container and image events (`create`, `start`, `die`, `oom`, `restart`,
+  `health_status`, `remove`, `pull`, `build`, `update`) with filters and `--since`. API: `GET /v1/events`.
+- **`nyx info`**: mode, storage, kernel, cgroups, crun, mirrors and counts; `--json` for bug reports.
+- **Prometheus metrics** at `GET /v1/metrics`, and on a TCP listener with `nyxd -metrics-listen`.
+- **Remote daemon over SSH**: `nyx --host ssh://user@host` (or `NYX_HOST`).
+- **Compose**: `depends_on` conditions (`service_healthy`, `service_completed_successfully`,
+  `--wait-timeout`); `nyx compose pull`, and `compose up` reports what it recreated
+  (`--force-recreate`, `--no-recreate`); `secrets:` (on a tmpfs, at `/run/secrets/<name>`) and
+  `configs:`.
+- **Registry mirrors**: `nyxd -registry-mirror REGISTRY=URL` and `-registry-mirror-only`.
+- **Automatic image updates** for containers labelled `nyx.update=digest` (`nyxd -update-interval`,
+  `nyx update [--check]`), rolled back when the new image fails its health check. `nyx run --label`.
+- **`nyxd -log-dir`** to keep container logs on a tmpfs (SD cards).
+- **SLSA build provenance** for every release file (`nyxd.intoto.jsonl`): see
+  [Verifying downloads](packaging.md#verifying-downloads-users).
 - **`nyx run` limits and filesystem flags:** `-m` / `--memory`, `--memory-swap`, `--cpus`,
   `--pids-limit`, `--oom-score-adj`, `--read-only` and `--tmpfs PATH[:OPTIONS]` (repeatable).
   Same fields on `POST /v1/containers/run`. Compose services accept `tmpfs:` (one path or a
@@ -20,8 +41,19 @@
 
 ### Security
 
+- A manifest fetched by digest (a pinned `image@sha256:` reference, or an index entry) is now
+  checked against that digest, so a registry, mirror or proxy cannot swap it.
 - Built with Go 1.27.4: fixes GO-2026-6859 in `net/http`, which nyxd reaches through the
   control API server and registry pulls.
+
+### Fixed
+
+- `nyx version` reported `commit: unknown` for the daemon in the WSL distro and the macOS VM.
+- `nyx stats` printed its header again on every refresh in a narrow terminal, and its columns ran
+  together; rootless containers reported the whole user session's CPU and memory.
+- Rootless subordinate group IDs were looked up by group instead of user, so a user whose primary
+  group differs from their uid lost them.
+- Container names starting with `_` could collide with nyxd's own overlay directories: refused now.
 
 ### Changed
 

@@ -1,0 +1,61 @@
+---
+id: run-updates
+title: "Update containers labelled nyx.update=digest now"
+description: "Pulls tags whose digest moved and recreates their containers; a container that does not start or"
+sidebar_label: "Update containers labelled nyx.update=digest now"
+hide_title: true
+hide_table_of_contents: true
+api: eJzVVdtO5EYQ/ZVSP4FlbMjDPng3kRC7UcgF0AJSIkBxj12Me2lXd6rbA9Zo/j2qtmG4RfuceZjxuKtO1+XUqbWKehlUdaUaR1EbQg7qJlcthoaNj8aRqtTZYG0AsYT7zgWE1iwxROjdClvQ1AJjw6gjBogdGoYt2kfQ238QOx2hdRiAXIQQNUdwfE1ehwAmBuhQ29hB02FzByaAHyIsdHMHjtK5Z1wZNwQwvV4i7OhGYoSanbXYJtN6t7gmlSvnkbWcHreqUjzQpW8lRJUrxuAdBQyqWqsf9vfl52XKp4TAGAYbwSOD8xHbPUPAA5Gh5TYllafSIUUB0d5b06Rby29BkNYqNB32Wp7i6FFVyi2+YRNVrjxLjNFMcTzrwNZWM+tR5cpE7MP3MUz7zCZENrRUm1ylYr170gzMc+wvz15z4PPUcsbGcStdj9JqsDpE8IO1AqZX2li9sO9c9R9wAhH1ErwzFANEB+TuE1QzGX4PZ/DiJH3NYUj9hacochjojtw9wU5RFLuPBm0Oz9iSQ7gz3mP7aITMjiWE6eFt0eSTq2ii5KkmUn1NVAmPhz3GzgnrvAupSTp2qlLl6qAcnkgYkFep2VdrNbBVlepi9FVZWtdo202eL7O9DAh1M7CFvb2BzMNecM0dRvgkF/wEr/3Loihq2JFHIN2jDJRZkmNsP4IjO6b6zxgCAb2OETmkCdrc5MrQrUslmLOl8aFN3Gdn4fDs+E2Efxgyvbbwy8XFmRjArWPIMvHLshxSzq0Ms4YsuyTzAK3rtaE5iiyDnRZvtcxdXfJApXimr0Is0mxfdMgpF3JwcXQG1oSIoi6LEWbn4pquKcuOtLUyrZLm4dlxlsnruq4XOnTXNBUynL8q5jvXvq3s6qD0hpYJTUC/ore6wfeDhnsTOxjdwC+K7Rjqk7/+/Pz3+enRb18uaiihpvEB5kDqOYnDIXZIcZaVKsuAHCFE1+oRdlJIEHkIcbeA8xkeuTchGEcBNCPE0ZtGWztCvf/hw/4j8hdheBDEXtMI7AZR8EFIFvEhlt5qQzUsXGswwC27HmqpRJEc64/w6/npCSC18/gyxoEJ6tcqWEvDw9A0GMKkzUL8iTAHxX6xr3JlTYMUknIIVWXrODv+7LiHE0eN63vkxmgLv0+G8Oi4HZ1QlaV3drx13Ht2IpCF42U5Q4eSngOVCaBUMq8ypr2mZ5dPY/1sj4HVC0yqQeNDMU3xj/MeFM16NQjr7Vb4n67PWfW2RBBNTMVez3p2pVYH0oBZ0W5ylUSrulLr9UIHvGS72cjrfwbkUVVXN7laaTbThri62eSqQ90iJwm8w1FV6rBp0IvwrbQd0gJ8vVFFlp709ez0/EJtNv8CWFwStg==
+sidebar_class_name: "post api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Update containers labelled nyx.update=digest now"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/v1/updates"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Pulls tags whose digest moved and recreates their containers; a container that does not start or
+pass its health check is put back on its previous image (action `rolled back`).
+
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./run-updates.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./run-updates.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

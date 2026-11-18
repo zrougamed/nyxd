@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"The image is present","content":{"application/json":{"schema":{"type":"object","properties":{"ref":{"type":"string"},"id":{"type":"string","description":"Config digest (`sha256:...`)"}}}}}},"400":{"description":"Missing ref"},"404":{"description":"Not in the local store"},"503":{"description":"Image store not configured"}}}

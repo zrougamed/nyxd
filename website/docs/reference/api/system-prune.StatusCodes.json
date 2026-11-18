@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"What was (or would be) removed, and the bytes reclaimed (an estimate with dry_run)","content":{"application/json":{"schema":{"type":"object","properties":{"ok":{"type":"boolean"},"dry_run":{"type":"boolean"},"removed":{"type":"object","additionalProperties":{"type":"array","items":{"type":"string"}}},"reclaimed":{"type":"integer"}}}}}}}}

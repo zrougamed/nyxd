@@ -1,0 +1,73 @@
+---
+id: container-archive-put
+title: "Copy a tar stream into a running container (nyx cp)"
+description: "When `path` is an existing directory, the archive is extracted into it. Otherwise it is"
+sidebar_label: "Copy a tar stream into a running container (nyx cp)"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVm1P40YQ/iuj/VKIjA3V6aSaqhKlV5W2B9ER1FYE1Rt7gvduveubHYdYUf57NbZDQuCuV7Uf+4WX9cwzz7zPSrG+Dyq9Vbl3rI1DCuouUgWGnEzNxjuVqt9KdJDVmssMTADtAJcmsHH3UBjCnD21EXCJoCkvzQJFCpdMOmcswDj2YDiGKy6RHkxAMAwmTN2ejCDUmtAxPBgudxG/CsC+PrK4QAvomFogdLrCAgZFqwMDWqxE3c+nriccw5sFUgsPZBghsG4DGBdMgZ3Wo9unIGhBJKjzrGOQxQ9lnIEmBE+FcZpamBuLIZ66qweJVmlq8Zb1B3QwJ1/tso6nTkXK10haQnlRqHQb6LNeZtywilStSVfIEv70dqWEi0oV6QcVKSM5+NggtWo/MyfpJs6d2cCEugIdwITTTcaqJjDM8OW0qUiFvMRKq3SluK3FamAy7l6t19EjEVNseAimihThx8YQFiplavDLQAbVJ+7s4zx172wWvG1YqoJLMO5pyj7L/a7HxsDf+6IViX1TgoOO5ZOua2vyLkfJ8og1yeOnsCM191RpVqmadRWh1uv1WsyF2ruAQVS+Pj6WX0/dOfe1wUKtI/Xqpc8XbqGtKXpnPW2KqJd/9Vz+0kNo8vJJQDyBG56HTtqmOnWNtR3YN8/BJruRlYp2noEa54Ysqgq59FLA9VCwXKpUJYuTZDs6kpUp1smGd6QC0mJT0g1ZlaqSuU6TxPpc29IHflbRNwEhyxuycHTUOLM8Cj7/gAzfisHvYF8/ieM4gwP5s2tgYW7unScsTsE72/Z90WN0ga00S5sdSm9KlRg3912SDVvJsmuXRRcJ8hbOxhfPGL41zlTawk+TyVgEYO4JRiPRG40i6HwuwDvQMBrdOLOEwlfauIHFaAQHBc51YxmyhBqXiGb3IxaJTJhNSiTsswCT8zFYExglMbMWBuV46qZuNDrX1kpHi5tn44vRSJ6zLJvpUE5dH8hwvRfMF8w+j+ziJKmNu+/QBPQd1lbn+DLpfly2vqEnwfYE2eUfv//w5/XV+S9vJhkkkLl2CQORbHDirOESHQ8tmI5G4LxDYF/oFg46SsDUBD6M4XqAR6pMCMa70I1nbmuTa2tbyI5fvz7eIL8h8hQEsdKuBfINY4BGioxxyUlttXEZzHxhMPTzO5NIxJ1idgo/X19dArqi9sZxAEJuyEG2OzHeB+8ySXho8hxD6Ke+FP4wpOPj+FhFypocXUAptmEijr1tf/RUwaV3ua8qpNxoC7/2grBR3LZOSJOk9raVCVSTf485x57ukwE6JG4XKOkAkq59ax+40m7H+LmvW9DAmjZ7o1vCetP1O+PgQHKW14f7vbDaDtH/j4R/dyQMO2ZblDL2u8Svhll7qxYnKto91CKVdot5M3DvItXN1PRWrVYzHfCG7Hotz/26lTFcmKBnVrbgXNuwv3F3E/pf3BYvevUB28fbZqFtIxJK7oQv53bwbljmh/C3N8JnOAwXyZbEnfxDRlj8w2jtMPqUzeFRu3bX5oaLKdT6bh2pEnWB1FnvP5z3No4mor5VfH6zCPvHLT2+mahIzYbbp/KF6EhVyrXyF/NkLoU=
+sidebar_class_name: "put api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Copy a tar stream into a running container (nyx cp)"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"put"}
+  path={"/v1/containers/{id}/archive"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+When `path` is an existing directory, the archive is extracted into it. Otherwise it is
+extracted into the parent with the archive's top-level entry renamed to the last element of
+`path`. Every write stays inside the container; names starting with `.wh.` are ordinary files.
+Ownership is taken from the archive.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./container-archive-put.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./container-archive-put.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./container-archive-put.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

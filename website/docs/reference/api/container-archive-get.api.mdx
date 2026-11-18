@@ -1,0 +1,72 @@
+---
+id: container-archive-get
+title: "Copy a file or directory out of a running container (nyx cp)"
+description: "A tar stream of `path`, its top-level entry named after the last element of `path`. Symlinks"
+sidebar_label: "Copy a file or directory out of a running container (nyx cp)"
+hide_title: true
+hide_table_of_contents: true
+api: eJzlVm1v20YM/ivEfWkiKFIyFAWmDgOCLOu6rWnQOMCGJJjOEm1dc+KpPMqNYOi/D3dWYuelG7Cv+2LL5+ND8iH5UGsleulVcaUqR6INIXt1k6oafcWmE+NIFeoYRDN4YdQtuAWUnZamTMGIB3HdgcUVWkASHoB0izXohSCDNAhWewG02CLJ1jaDi6G1hm79NWlG8OIY6xTICSycte4r1m/BT3dAW0fLyRQYvbMrBEPe1BidPAT/ygM7Jxmca2n8NfVUI4OGuaEaWteTAKOuo1H8+cqDdz1XmF2TSpXrkHXI+n2tii0nx1w1ZoXvUFSqGH3nyKNXxVp9d3gYvh7zNXtgS6URBEnCLd111lQRP787EM3h0FcNtjo8ydChKpQXNrRUqVo4brWoQs0NaR7UOI5jql6/5PETWi1mhRAoSuEWmdDCwlj0gxdsYS/v2FUp5H7wKeQ1rvbBMUjbLfyGCRWxXz/HPnPg+6rZkhx4YqDpOHgEQ2BEFdRbG2G+f4GU3TqB8bHW3BOFZENinWbdooQOLK7WKjSSKpSpVapMAAiOIv1fesNYq0K4x/Sb/I1j+gAymUaYLz3y8ALOk5afe2d7wYf0HrWZ+ie3N6lqURoXOmgZOya6L1S+Osq3Y5avTT3metNZARB5dZ97z1YVqhHpijy3rtK2cT4gPQ7y0iOUVc8WDg56MncH3lW3KPBDcPgjPLXPsywrYS88xjENRTBLCpP3FhzZISY5YcS8Wy2hHvthOEJehhYupmzEhpxpuKsjK+wsHJ+/fxbhB0Om1RZ+mc3OwwVYOIYkCXZJkkLMuQZHoCFJLsncQe1abWiKIklgr8aF7q1AmXNPebCMH1m4UYbIZg0ybhoKZifnYI0XDD02H2Ayzq7pmpLkRFtraBnTPD5/nyThuCzLufbNNW2I9BdPyHzB7XNmV0d5Z2gZ0QLoJ+ysrvDloOGrkQYG1/Mjsh1DefbnHz/9dfHx5LfTWQk5lDTcwRRIOSVx3EuDJJOOFEkC5AhBXK0H2IshgXDvZT+DiwkeuTXeG0cegtrK0JlKWztAefjmzeE98imzYx8QW00DsOsFPfShyQTvJO+sNlTC3NUGPSzYtVAGJrJoWL6FXy8+ngFS3TlD4oFReiYod2Xvs3dUhoL7vqrQ+43shsbfNMxRdpgdqlRZUyF5DM02zfC5s8PPjls4c1S5tkWujLbw++Yi3BtuR8cXed45OwQZ7dh9xkoyx8t8gvY57QLlESDfKJHz0mracX7iugF0FNRQp9owVuJ4ANfHrabvlWxH4vZC8apu/+lQrLcr4X+0WSeV3DZS2DexWOtJH6/U6mjal9OLSKqKKP/3InmTqqiDxZVar+fa4yXbcQzHG1EP0lkbr+c2yPpCW/9U13e53/s0bYB9+Fe1fzH6Wxy2u2WlbR+uRJ1caTYhiv8e0bd8Toeahl2f97GYWo03Y6oa1DVy9L7547iqsJMdk+evIo/21rvTmRrHvwEupIT3
+sidebar_class_name: "get api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Copy a file or directory out of a running container (nyx cp)"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/v1/containers/{id}/archive"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+A tar stream of `path`, its top-level entry named after the last element of `path`. Symlinks
+are stored, not followed; symlinks along `path` resolve inside the container's root. Paths
+under a bind mount read the mount's source.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./container-archive-get.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./container-archive-get.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./container-archive-get.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

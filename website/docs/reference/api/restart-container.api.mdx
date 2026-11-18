@@ -1,0 +1,71 @@
+---
+id: restart-container
+title: "Restart a container"
+description: "Stops a running container (as `stop`, SIGKILL after `t` seconds when given) and starts it"
+sidebar_label: "Restart a container"
+hide_title: true
+hide_table_of_contents: true
+api: eJzVVk1v20YQ/SuDvdQmGFFuEh+YooDrpq0b1xYsG2hhG+WKHIkbL2eZ3aEiQuB/L3ZJfdhyDgV66UUSyPl88+aN1oLlwon0XuSGWCpC68RjLAp0uVU1K0MiFVM2tQMJtiFStICtLRxJB5ljU2cxTC9+/XRxeQlyzmgh4wwc5oYKB19LJFioJdIxSCrAsbTsQPEDyYVUBF8Vl8AlgpMVgkNmRQs3gjMCXCnGYi+lcvC5cdwHwWL0QCIWpkYrfbUXhUiFxfDyfOMjYlFLKytk3156vxYkKxSpUIWIhfIt1pJLEQuLXxplsRAp2wZj4fISKynSteC29h6OraKF6Lp4G4Q3Mb40aNtnQeZSu9eiKGJchLoqRapqKpGOY1HJVf/77el43B0MYQCTDXyVimFubA8ZmxpmODcWtyM4KnAuG83BYAvdd643ZlWhafhYdI++WFcbcuh8ed+Px/7reeIbHKAWcWAJEnsjWdda5QH05LPzluvDRs3sM+b8DJN7YZ48YoXnWW395Fj16c3TnuvMGI2SRBdsX5uAYMUaB37eDH2IrvOv3r3WyU+y8LyMYQudtAxzqTQWIji9O3S6MuCavNzB6C3fj98eWk6bGu1SOWOhIbmUSsuZxlBphVwaT83aOA505FKkIlmeJLvFS9aq6JKBvCIWDu1yQ9jGapGKkrlOk0SbXOqyj/S8hDuHkOWN1fDmTUNq9caZ/AkZfvAJf4SX/sloNMrgyP8Ez2a/XGpBxmLxAQzptoepj+FDQCXZL9GxXztPH0VzE4YzjILaVb+s1mg4m1wcVPiHJ7zU8Nvt7cQbBB5HkfeLohhCzwUYAglRdEdqBYWpvEb0VUTRjtxZYhtKvGf4GHmLzFd2W6INvZCB2/MJaOUYvXbMWhicRw/0QFF0LrX2iubbPJtcRJF/nGXZTLrygXog3fQFmK+kPUR2eZLUihYhmg96g7WWOb5edC+ArWnsM7CNhezqrz9//nt6ff7p420GCWTUrmAoJBuaOGu4ROJhGdMoAjKEwKaQLRyFkoBt4/h4BNMhPNpKOacMOZAWgdta5VLrFrLx6el4E/mjtcY6H7GS1II1DaODxpOMccVJraWiDGamUOhgbk0FmUdiFByzD/D79PoKkIraKGIHFrmxBNlL7cj8wF2T5+hcL+ie+D1hTkbj0VjEQqsc/X6nW+GdGN3+YmwFV4ZyU1VocyU1XPaGsHHcrY5Lk6Q2up0bW9XWeGkaGbtIhtAuof1ASQiQhP31a1tJ2ks+qCLIPWF4wfX1Ti7/Byd0kNfdXL3OBezWg1zdi+XJcAOGfwqxSMMJ3WjWYyyCLKX3Yr2eSYd3Vnedf9zfRq9khXJeFnfX8duY/fcX7xttPmE7HPKl1I1/H8RtKa0KEv7v6j66GY7dMXwr4fBQUrufc1OIKkT32MWiRFmgDdn7F2d5jvV+mQdH2Je9PTaT6+mt6Lp/AO3ca5s=
+sidebar_class_name: "post api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Restart a container"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/v1/containers/{id}/restart"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Stops a running container (as `stop`, SIGKILL after `t` seconds when given) and starts it
+again with the same settings. An exited container is just started.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./restart-container.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./restart-container.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./restart-container.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

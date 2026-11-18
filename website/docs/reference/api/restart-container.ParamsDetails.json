@@ -1,0 +1,1 @@
+{"parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string"}},{"name":"t","in":"query","required":false,"schema":{"type":"integer","minimum":0,"maximum":3600},"description":"Seconds to wait for the stop before SIGKILL (default the container's stop timeout)"}]}

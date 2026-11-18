@@ -1,0 +1,63 @@
+---
+id: get-info
+title: "How the daemon runs and on what host"
+description: "Plain facts for `nyx info` and bug reports: version and build, mode (`rootful`, `rootless`,"
+sidebar_label: "How the daemon runs and on what host"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVktv2zgQ/isDXtYxFCvpoQd3sUCQtJvsow2aBNhFHEi0OJbZUCR3SDkRDP/3xVBKmoda9LK3vSQWH8N5fPPNtxVR1kHMr0XoQsRG3GRCYahI+6idFXNxbqS2sJJVDLByBKXt7kHblStBWgXLtgZC7yiGOWyQgnZ22NBGZdA4hTApybm4ak2ZQfppMIQyW9iyDUg27BM20pd7GViMd45uQZHeIGUQoiNZY7JoXA1KE1bRkcYAdzquYUWIELysMINbJIsmg6om13rYvFlYvne3xrhGAsLgWqoQjG50DCC9N10GR94fUeMog7hGqKi1sNRWUpceHULK0kflbJTaIvHXwuqGXatca2OYwQeNRgWIaxl5zSiwLsISgVAqkISAjY/dbGFFJpxHkpzhMyXmosZ4ZldOZIIweGcDBjHfijcHB/zveT1OJDZDitcuxL4yIhPsG9rIFzgwXSXz+ZfAt7YiVGtsJP+KnUcxF275BasoMuGJnYm6fzMgbZCKIewn50MkbWux45eaRsfRrVT0QsmIo9u1+65hxsrrjUygbRuG6AAiTtOAIZGJpwgSN7tMcFaKVqsnlrSNWCOJl9g+5QSyAaDWWm1rkPBgGlSf6MnjgrOm22M/Q7t0pLSVEQutwpOHls4ZlPbVQ0fw5A6cnQBJWyPoAI30HhVMVtIEBG0haFsb3OczDw9zXtLDQ3cUfXeM5lDZMLoeXHWL3yiaDFgoPW7PuPqbe0Nzfs8dt0Eysis4yfcyRhpJ1i4T3MXFsosYfqBqF9ztIDdSG7k0CM6mzuUwHvmh+ynAShscWI09Gc+LpGo9utGTyXgDJH4pNm/Gg3ngmaLnmR+Ax/EjrxyfX6XWbrBx1D0yFWFiK/0MKa/xIb2XTGXf8qvWIVJXNJrIURgjg+d+/ZkOwtXnPwIsO3gwAEfnZz35TB6W9g9nihFGM+3SmDhJX3DaLvdEJqRSmm1Kc/6MbYbnJZHsRCZ0xGasTLvX3hfcjeNxMoUXXsbxuqbd79PbUIxQDKwwgsnn50J03MXj59KUGMM1RxV1NLzG9P954H6Ol/cajGs3jAfm6RSRyDeHue6HRc/VPL23oiUj5mIdo5/nuXGVNFygVxW9Cghl1ZKB/f3W6vv9nhfgZ7b+C7y8n89msxImqdZWNomxdG0doXqX+DB13mCDTUAjY0QKezzmdjeZSK5y7EOgtrvv5yg5wzgawRzPVQOnl5fnCWiMpumU702nGaSYFfe8hOn0yup7UK5hidJ7MZ3CROFKtiZCmVNrc76Z/sz4RMmeXa6RUizWweXxORgdInL7LTsYLs8WdmGn02NpDM8FDvPo/Gw65eWyLJcyrBe2T2S4eJHMkWdfZ3ZzmHtt62SNjX5Gb5jXRp3utU7nWnqWbJZjH//+66S4+HT8+/vLEvJeng2OlEMQR21co42DJJhPp2CdRYhOyQ4mySWI1Ia4N4OLwTxSowP3SM8+sfO6ksZ0UB68fXvwYPl9IhK22EjbAbk2YuCJCmXE+5h7Fo8lLJ1iwbYi10DJmZili+U7+O3i00dAq7zTNgYgjC1ZKF8qmJILHtqqwhB6AfXYweJwdjA7EJkwukLunvlWMFRZujrTfXDUwEdnWbQgVVoa+KM/CA8Xv7ZOmOe5d6ZbOWo8OebEmaM6H0yH3D41lCcDeepj70JspH3y+Km7S6gZZAS1nEmbkHvHEnGsPbdfVdz/uvs/0d0DBX8FJzN0AsB2INhrsTkUA2/d9GqSF7db1hdXZHY7Xv6nRerE/PomExtJmnUIf7H8RKlYDF1vxS12rP2qCj2XeiNNm6bdS3nOPPlI9r++vxS73b+smMpi
+sidebar_class_name: "get api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"How the daemon runs and on what host"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/v1/info"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Plain facts for `nyx info` and bug reports: version and build, mode (`rootful`, `rootless`,
+`userns-remap`), network driver, storage and log directories with free space, kernel, cgroup v2
+and whether resource limits apply, AppArmor, the crun binary and version, and container and
+image counts. Fields that could not be read are empty.
+
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-info.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-info.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

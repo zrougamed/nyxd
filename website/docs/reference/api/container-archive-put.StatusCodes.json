@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Copied"},"400":{"description":"Invalid path or archive"},"404":{"description":"No such container","or no such parent directory":null},"409":{"description":"The container is not running"}}}

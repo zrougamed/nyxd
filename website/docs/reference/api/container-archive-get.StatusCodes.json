@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Tar stream","content":{"application/x-tar":{"schema":{"type":"string","format":"binary"}}}},"400":{"description":"Relative path, kernel filesystem (/proc, /sys, /dev) or tmpfs mount"},"404":{"description":"No such container","or no such path in it":null},"409":{"description":"The container is not running"}}}
