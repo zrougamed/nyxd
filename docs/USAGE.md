@@ -291,6 +291,33 @@ api: recreated (image changed)
 
 `--force-recreate` recreates every running service, `--no-recreate` keeps running services as they are (changed ones are reported as `kept`).
 
+**Secrets and configs:** keep passwords out of `environment:` (where they show in `nyx inspect`, `/proc/<pid>/environ` and nyxd's state on disk):
+
+```yaml
+services:
+  db:
+    image: postgres:17
+    secrets: [db_password]
+    environment: {POSTGRES_PASSWORD_FILE: /run/secrets/db_password}
+    configs:
+      - source: pg_conf
+        target: /etc/postgresql/postgresql.conf
+secrets:
+  db_password: {file: ./db_password.txt}
+configs:
+  pg_conf: {file: ./postgresql.conf}
+```
+
+- A secret is copied to a per-container directory on a tmpfs (nyxd's runtime directory, next to its
+  socket) and mounted read-only at `/run/secrets/<name>`, or at the long form's `target` (relative targets
+  go under `/run/secrets`). It never touches the container's overlay or the data directory; `nyx inspect`
+  and nyxd's state show the mount, never the value. `uid`, `gid` and `mode` (default `0400`) are honoured.
+- A config is bind-mounted read-only at `target` (default `/<name>`); with `uid`, `gid` or `mode` it is
+  copied like a secret.
+- Changing a secret's file recreates the service on the next `compose up`. `compose down` removes the
+  copies, and so does a reboot (tmpfs): run `compose up` again afterwards.
+- `environment:` and `external:` sources are not supported yet: compose up warns and skips them.
+
 **Depends on:** both `depends_on: [svc]` and the Compose **map** form `depends_on: { svc: { condition: ... } }` set the start order (dependencies first). `nyx compose up` then honours the condition before starting each service:
 
 - `service_started` (also the list form): the dependency has been started.

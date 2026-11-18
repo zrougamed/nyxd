@@ -130,6 +130,7 @@ func StartWith(t *testing.T, opts Options) *Daemon {
 	d.Ctl = control.New(log, d.Runtime, d.Store, d.Sup, ctx, nil, "test", "abc1234", "2026-10-11",
 		base, d.Socket, "", opts.NetDriver, opts.DNS)
 	d.Events = events.New(events.DefaultHistory)
+	d.Ctl.SetSecretsDir(filepath.Join(base, "secrets"))
 	d.Sup.SetEvents(d.Events)
 	d.Ctl.SetEvents(d.Events)
 	d.Builder, err = build.New(build.Config{Store: d.Store, Overlay: d.Overlay, Runtime: d.Runtime,

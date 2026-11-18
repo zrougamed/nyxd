@@ -20,6 +20,9 @@ func Parse(data []byte) (*Stack, error) {
 		if err := validateService(name, &svc, st.Services); err != nil {
 			return nil, err
 		}
+		if err := validateFileRefs(name, &svc, &st); err != nil {
+			return nil, err
+		}
 		st.Services[name] = svc
 	}
 

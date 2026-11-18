@@ -254,6 +254,16 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 	ctl := control.New(logger, rt, imgStore, sup, ctx, nil, version, gitCommit, buildDate, cfg.BaseDir, cfg.Socket, cfg.SocketGroup, driver, cfg.DNS)
 	ctl.SetLogDir(logDir)
+	if cfg.Socket != "" {
+		// Compose secrets live on a tmpfs, next to the socket (/run/nyxd, or
+		// $XDG_RUNTIME_DIR/nyxd rootless), never in the data directory.
+		secrets := filepath.Join(filepath.Dir(cfg.Socket), "secrets")
+		if err := os.MkdirAll(secrets, 0o700); err != nil {
+			logger.Warn("compose secrets unavailable", "dir", secrets, "err", err)
+		} else {
+			ctl.SetSecretsDir(secrets)
+		}
+	}
 	bus := events.New(events.DefaultHistory)
 	sup.SetEvents(bus)
 	ctl.SetEvents(bus)

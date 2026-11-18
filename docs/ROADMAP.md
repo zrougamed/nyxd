@@ -104,7 +104,8 @@ major distribution.
       `environment` / `env_file`, `ports`, `volumes` (bind and named), `depends_on`,
       `healthcheck`, `restart`, `deploy.resources` (memory, CPU, pids, OOM score), `read_only`,
       `tmpfs`, `user`, `cap_add` / `cap_drop`, `privileged`, `seccomp_profile`, `labels`,
-      `stop_grace_period`, top-level `name:`, variable substitution and `.env`.
+      `stop_grace_period`, `secrets` / `configs` (file sources), top-level `name:`, variable
+      substitution and `.env`.
 - [x] **Lifecycle** — `nyx compose up` (builds missing images, `--build`), `stop`, `down`
       (`-v` removes named volumes no longer in use).
 - [x] **`nyx compose logs`** — logs of every service prefixed with its name, merged by time;

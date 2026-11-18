@@ -22,6 +22,9 @@ type UpMeta struct {
 	Project    string
 	DataDir    string
 	Auth       image.AuthMap // credentials by registry host for pulls
+	// SecretsDir is a tmpfs directory for secret copies (the daemon's
+	// runtime directory); empty refuses services with secrets.
+	SecretsDir string
 }
 
 // BuildContainerSpecs resolves images (pull when missing), maps each service in
@@ -81,6 +84,11 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 		if err != nil {
 			return nil, fmt.Errorf("service %q volumes: %w", name, err)
 		}
+		secretMounts, err := SecretMounts(&svc, stack, meta.ComposeDir, meta.SecretsDir, composeContainerID(meta.Project, name))
+		if err != nil {
+			return nil, fmt.Errorf("service %q: %w", name, err)
+		}
+		mounts = append(mounts, secretMounts...)
 
 		hostNet := ServiceUsesHostNetwork(stack, svc)
 		if hostNet && len(svc.Ports) > 0 {
