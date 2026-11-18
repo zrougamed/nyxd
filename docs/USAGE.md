@@ -44,6 +44,7 @@ sudo nyx run --rm --read-only --tmpfs /tmp:size=64m alpine:3.20 touch /tmp/ok
 # Bind mounts (absolute paths on the nyxd host) and the host's network
 sudo nyx run --rm -v /srv/data:/data:ro alpine:3.20 ls /data
 sudo nyx run --rm --network host alpine:3.20 ip addr
+# Names: letters, digits, '-' and '_' (not as the first character: reserved for nyxd)
 
 # Logs (optional follow; tail count)
 sudo nyx logs web
