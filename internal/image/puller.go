@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -93,6 +95,11 @@ type Store struct {
 	// same .partial file at once.
 	blobLocksMu sync.Mutex
 	blobLocks   map[string]*sync.Mutex
+
+	// mirrors maps a registry API host (registry-1.docker.io, ghcr.io) to
+	// the mirrors tried before it, in order; mirrorOnly drops the fallback.
+	mirrors    map[string][]Mirror
+	mirrorOnly bool
 }
 
 // lockBlob takes the download lock for digest and returns its unlock.
@@ -169,9 +176,29 @@ func (s *Store) PullWithProgress(ctx context.Context, ref string, auth *Registry
 	emit(PullEvent{Phase: "begin", Ref: ref})
 
 	reg, repo, tag := parseRef(ref)
-	client := &registryClient{
-		s: newSession(newPullHTTPClient(), reg, repo, auth, "pull"),
+	var mirrorErrs []string
+	for _, m := range s.mirrorsFor(reg) {
+		sess := newSession(newPullHTTPClient(), m.Host, path.Join(m.Prefix, repo), MirrorAuthFrom(ctx).host(m.Host), "pull")
+		sess.scheme = m.Scheme
+		cfg, err := s.pullFrom(ctx, &registryClient{s: sess}, ref, tag, emit)
+		if err == nil {
+			return cfg, nil
+		}
+		if ctx.Err() != nil {
+			return nil, err
+		}
+		mirrorErrs = append(mirrorErrs, fmt.Sprintf("%s: %v", m.URL, err))
+		emit(PullEvent{Phase: "mirror", Ref: ref, Message: fmt.Sprintf("mirror %s failed: %v", m.URL, err)})
 	}
+	if len(mirrorErrs) > 0 && s.mirrorOnly {
+		return nil, fmt.Errorf("pull %s: every mirror failed and -registry-mirror-only forbids %s: %s",
+			ref, reg, strings.Join(mirrorErrs, "; "))
+	}
+	return s.pullFrom(ctx, &registryClient{s: newSession(newPullHTTPClient(), reg, repo, auth, "pull")}, ref, tag, emit)
+}
+
+// pullFrom pulls ref (tag or digest) through client and stores it under ref.
+func (s *Store) pullFrom(ctx context.Context, client *registryClient, ref, tag string, emit func(PullEvent)) (*oci.ImageConfig, error) {
 	client.wantOS, client.wantArch = s.pullPlatform()
 
 	if err := client.auth(ctx); err != nil {
@@ -781,6 +808,13 @@ func (c *registryClient) manifest(ctx context.Context, ref string) (*oci.Manifes
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
 		return nil, err
+	}
+	// A manifest asked for by digest (a pinned reference, or an entry of an
+	// index) must be that manifest: a mirror or proxy cannot swap it.
+	if strings.HasPrefix(ref, "sha256:") {
+		if got := "sha256:" + hex.EncodeToString(sha256Sum(body)); got != ref {
+			return nil, fmt.Errorf("manifest %s: content has digest %s", ref, got)
+		}
 	}
 
 	if strings.Contains(ct, "index") || strings.Contains(ct, "manifest.list") {

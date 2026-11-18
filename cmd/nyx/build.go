@@ -159,7 +159,7 @@ func runBuild(socket string, o buildOpts, ctxDir, dfPath string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-tar")
-	if auth := registryAuthFor(dockerfileBaseImages(dfPath)...); len(auth) > 0 {
+	if auth := withMirrorLogins(socket, registryAuthFor(dockerfileBaseImages(dfPath)...)); len(auth) > 0 {
 		raw, err := json.Marshal(auth)
 		if err != nil {
 			return err

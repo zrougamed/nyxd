@@ -227,6 +227,26 @@ nyx system prune [--images] [--volumes]
 - Build directories and unreferenced layers younger than an hour are kept: a build or pull may be using them.
 - API: `GET /v1/system/df`, `POST /v1/system/prune` (`images`, `volumes`, `dry_run`).
 
+## Registry mirrors
+
+Pull through a mirror or pull-through cache, for Docker Hub rate limits or networks that only reach
+an internal registry:
+
+```bash
+NYXD_OPTS="-registry-mirror docker.io=https://mirror.lan:5000 -registry-mirror ghcr.io=https://ghcr-cache.lan"
+NYXD_OPTS="... -registry-mirror-only"   # air-gapped: never contact the registry itself
+```
+
+- Pulls of a registry's images try its mirrors first, in order, then the registry itself (unless
+  `-registry-mirror-only`). A mirror URL may carry a path prefix for proxy projects
+  (`https://harbor.lan/dockerhub`).
+- Image names do not change: `alpine:3.20` stays `docker.io/library/alpine:3.20`.
+- Every layer is checked against its digest and a pinned reference (`image@sha256:...`) against the
+  manifest's, so a mirror cannot swap content; a mirror serving something else is skipped.
+- A mirror that needs a login uses your `nyx login` (or docker/podman login) for the mirror's host,
+  sent by `nyx` with the pull; the registry's own credentials never go to the mirror.
+- `nyx info` lists the mirrors.
+
 ## Building images (`nyx build`)
 
 ```bash

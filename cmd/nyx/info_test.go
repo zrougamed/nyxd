@@ -12,7 +12,8 @@ func TestInfoCommand(t *testing.T) {
 "base_dir":"/home/pi/.local/share/nyxd","log_dir":"/run/nyxd/logs","storage_driver":"overlay",
 "overlay_userxattr":true,"free_bytes":15000000000,"os":"linux","arch":"arm64","kernel":"6.12.25-v8",
 "cgroup_v2":true,"resource_limits":false,"apparmor":true,"crun_path":"/usr/bin/crun","crun_version":"1.21",
-"containers_running":5,"containers_stopped":2,"images":12}`
+"containers_running":5,"containers_stopped":2,"images":12,
+"registry_mirrors":{"registry-1.docker.io":["https://mirror.lan:5000"],"ghcr.io":["https://ghcr-cache.lan"]},"registry_mirror_only":true}`
 	sock := stub(t, routes(map[string]http.HandlerFunc{"/v1/info": reply(200, body)}))
 	out, _, err := capture(t, "", func() error { return run([]string{"-socket", sock, "info"}) })
 	if err != nil {
@@ -28,6 +29,8 @@ func TestInfoCommand(t *testing.T) {
 		"crun:             1.21 (/usr/bin/crun)",
 		"Containers:       5 running, 2 stopped",
 		"Images:           12",
+		"Registry mirrors: ghcr.io -> https://ghcr-cache.lan (mirror only)",
+		"                  registry-1.docker.io -> https://mirror.lan:5000 (mirror only)",
 	} {
 		if !strings.Contains(out, want+"\n") {
 			t.Errorf("missing %q in:\n%s", want, out)
