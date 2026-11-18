@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.3.0
+
+Info, metrics, events, `nyx cp`, system df/prune, compose secrets/depends_on/pull, registry
+mirrors, opt-in image updates, key-based cosign image policy, and SLSA provenance on every
+release file. Compatible with 1.x; see [Stability and compatibility](stability.md).
+
 ### New
 
 - **`nyx cp`**: copy files and directories between the host and a running container, both ways,
@@ -41,6 +47,8 @@
 
 ### Security
 
+- **`nyxd -image-policy`**: key-based cosign signatures (`cosign sign --key`) checked on pull and
+  before `run` / `compose up`. Keyless (Fulcio / Rekor) is not supported.
 - A manifest fetched by digest (a pinned `image@sha256:` reference, or an index entry) is now
   checked against that digest, so a registry, mirror or proxy cannot swap it.
 - Built with Go 1.27.4: fixes GO-2026-6859 in `net/http`, which nyxd reaches through the
