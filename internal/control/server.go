@@ -63,6 +63,7 @@ type Server struct {
 	gitCommit   string
 	buildDate   string
 	logDir      string // container logs; empty means dataDir/logs
+	secretsDir  string // tmpfs root for compose secret copies
 	info        DaemonInfo
 	events      *events.Bus
 	started     time.Time
@@ -443,6 +444,7 @@ func (s *Server) handleContainerRemove(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
+	s.removeSecrets(id)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "id": id})
 }
@@ -648,6 +650,7 @@ func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
 		Project:    project,
 		DataDir:    s.dataDir,
 		Auth:       body.RegistryAuth,
+		SecretsDir: s.secretsDir,
 	}, s.store, s.netDriver, s.dnsMode)
 	if err != nil {
 		http.Error(w, image.HumanizeComposeBuildError(err), http.StatusBadRequest)
@@ -659,6 +662,10 @@ func (s *Server) handleComposeUp(w http.ResponseWriter, r *http.Request) {
 		for _, wmsg := range warnings {
 			s.log.Warn("compose up: host network", "project", project, "warning", wmsg)
 		}
+	}
+	for _, wmsg := range compose.SecretsWarnings(st) {
+		s.log.Warn("compose up: secrets", "project", project, "warning", wmsg)
+		warnings = append(warnings, wmsg)
 	}
 	for _, wmsg := range compose.DependsOnWarnings(st) {
 		s.log.Warn("compose up: depends_on", "project", project, "warning", wmsg)
@@ -743,6 +750,7 @@ func (s *Server) handleComposeDown(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		s.removeSecrets(id)
 	}
 	removedVolDirs := []string(nil)
 	if body.RemoveVolumes && len(st.Volumes) > 0 {

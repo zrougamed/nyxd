@@ -7,11 +7,13 @@ import "time"
 // Stack is the top-level parsed compose file.
 type Stack struct {
 	// Name is the project name (top-level name:); --project overrides it.
-	Name     string             `yaml:"name"`
-	Version  string             `yaml:"version"`
-	Services map[string]Service `yaml:"services"`
-	Networks map[string]Network `yaml:"networks"`
-	Volumes  map[string]Volume  `yaml:"volumes"`
+	Name     string                `yaml:"name"`
+	Version  string                `yaml:"version"`
+	Services map[string]Service    `yaml:"services"`
+	Networks map[string]Network    `yaml:"networks"`
+	Volumes  map[string]Volume     `yaml:"volumes"`
+	Secrets  map[string]FileSource `yaml:"secrets"`
+	Configs  map[string]FileSource `yaml:"configs"`
 }
 
 // Service describes a single container.
@@ -73,6 +75,11 @@ type Service struct {
 
 	// Tmpfs mounts, PATH[:OPTIONS] each (one string or a list).
 	Tmpfs Tmpfs `yaml:"tmpfs"`
+
+	// Secrets (read-only files at /run/secrets/<name>, on a tmpfs) and
+	// configs (read-only files at /<name>) declared at the top level.
+	Secrets FileRefs `yaml:"secrets"`
+	Configs FileRefs `yaml:"configs"`
 
 	// User override: "uid:gid"
 	User string `yaml:"user"`

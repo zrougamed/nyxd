@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/zrougamed/nyxd/internal/compose"
 	"github.com/zrougamed/nyxd/internal/events"
 	"net/http"
 	"os"
@@ -39,6 +40,17 @@ func (s *Server) SetBuilder(b *build.Builder) { s.builder = b }
 // SetLogDir sets where container logs live (nyxd -log-dir); the default is
 // <data dir>/logs.
 func (s *Server) SetLogDir(dir string) { s.logDir = dir }
+
+// SetSecretsDir sets the tmpfs directory compose secrets are copied to
+// (one subdirectory per container); empty refuses services with secrets.
+func (s *Server) SetSecretsDir(dir string) { s.secretsDir = dir }
+
+// removeSecrets deletes a container's secret copies.
+func (s *Server) removeSecrets(id string) {
+	if s.secretsDir != "" && id != "" {
+		_ = os.RemoveAll(compose.SecretsDir(s.secretsDir, id))
+	}
+}
 
 func (s *Server) containerLogDir() string {
 	if s.logDir != "" {
