@@ -19,6 +19,7 @@ type ContainerInspect struct {
 	ID            string                `json:"id"`
 	ShortID       string                `json:"short_id"`
 	Image         string                `json:"image"`
+	Labels        map[string]string     `json:"labels,omitempty"`
 	Status        string                `json:"status"`
 	Pid           int                   `json:"pid,omitempty"`
 	IP            string                `json:"ip,omitempty"`
@@ -86,6 +87,7 @@ func (s *Supervisor) Inspect(ctx context.Context, id string) (*ContainerInspect,
 		ID:            spec.ID,
 		ShortID:       DisplayID(spec.ID),
 		Image:         spec.Image,
+		Labels:        spec.Labels,
 		Status:        "unknown",
 		IP:            ip,
 		Ports:         append([]network.PortMapping(nil), spec.PortMappings...),

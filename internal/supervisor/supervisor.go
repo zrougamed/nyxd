@@ -83,6 +83,9 @@ type ContainerSpec struct {
 	// (where every container shares the loopback): a compose stack's service
 	// names, so "db:5432" works as it does on a compose network.
 	HostAliases []string `json:"host_aliases,omitempty"`
+	// Labels are the container's labels (compose labels:, nyx run --label);
+	// nyx.update opts it into automatic image updates.
+	Labels map[string]string `json:"labels,omitempty"`
 	// ComposeProject / ComposeService name the compose stack and service the
 	// container belongs to (metrics labels); empty for nyx run.
 	ComposeProject string `json:"compose_project,omitempty"`

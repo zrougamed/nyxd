@@ -175,6 +175,7 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 			User:               u,
 			PortMappings:       portMaps,
 			ReadOnly:           svc.ReadOnly,
+			Labels:             svc.Labels,
 			Hostname:           strings.TrimSpace(name),
 			HostAliases:        aliases,
 			HostNetwork:        hostNet,

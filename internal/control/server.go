@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/zrougamed/nyxd/internal/events"
+	"github.com/zrougamed/nyxd/internal/update"
 	"io"
 	"log/slog"
 	"net"
@@ -65,6 +66,7 @@ type Server struct {
 	logDir      string // container logs; empty means dataDir/logs
 	info        DaemonInfo
 	events      *events.Bus
+	updater     *update.Updater
 	started     time.Time
 	socket      string
 	socketGroup string // optional: chgrp socket for non-root nyx clients (0660)
@@ -147,6 +149,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /v1/version", s.handleVersion)
 	mux.HandleFunc("GET /v1/info", s.handleInfo)
 	mux.HandleFunc("GET /v1/events", s.handleEvents)
+	mux.HandleFunc("GET /v1/updates", s.handleUpdates)
+	mux.HandleFunc("POST /v1/updates", s.handleUpdates)
 	mux.HandleFunc("GET /v1/system/df", s.handleSystemDF)
 	mux.HandleFunc("POST /v1/system/prune", s.handleSystemPrune)
 	mux.HandleFunc("GET /v1/metrics", s.handleMetrics)
@@ -825,6 +829,8 @@ type runRequest struct {
 	compose.RunLimits
 	// ReadOnly mounts the root filesystem read-only (docker run --read-only).
 	ReadOnly bool `json:"read_only,omitempty"`
+	// Labels (docker run --label).
+	Labels map[string]string `json:"labels,omitempty"`
 	// Tmpfs mounts, PATH[:OPTIONS] each (docker run --tmpfs).
 	Tmpfs []string `json:"tmpfs,omitempty"`
 }
@@ -1041,6 +1047,7 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		Hostname:       body.Hostname,
 		RestartPolicy:  policy,
 		ReadOnly:       body.ReadOnly,
+		Labels:         body.Labels,
 		Resources:      resources,
 		PortMappings:   portMaps,
 		Terminal:       body.TTY,

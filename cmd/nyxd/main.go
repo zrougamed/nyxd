@@ -30,6 +30,7 @@ import (
 	"github.com/zrougamed/nyxd/internal/rootless"
 	"github.com/zrougamed/nyxd/internal/runtime"
 	"github.com/zrougamed/nyxd/internal/supervisor"
+	"github.com/zrougamed/nyxd/internal/update"
 )
 
 // Build-time variables injected via -ldflags.
@@ -58,6 +59,7 @@ type Config struct {
 	LogDir        string                    // container logs; empty means BaseDir/logs
 	MetricsListen string                    // TCP address for /metrics; empty disables
 	Mirrors       map[string][]image.Mirror // -registry-mirror, by registry API host
+	UpdateEvery   time.Duration             // -update-interval; 0 disables automatic updates
 	MirrorOnly    bool                      // -registry-mirror-only
 
 	Rootless    rootless.Info // set when running in nyxd's own user namespace
@@ -257,6 +259,12 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	bus := events.New(events.DefaultHistory)
 	sup.SetEvents(bus)
 	ctl.SetEvents(bus)
+	updater := update.New(sup, imgStore, bus, logger)
+	ctl.SetUpdater(updater)
+	if cfg.UpdateEvery > 0 {
+		logger.Info("automatic image updates", "interval", cfg.UpdateEvery, "label", supervisor.UpdateLabel+"=digest")
+		go updater.Loop(ctx, cfg.UpdateEvery)
+	}
 	ctl.SetDaemonInfo(daemonInfo(cfg.Rootless, cgroups, logDir, os.Getenv(rootless.EnvHostUID)))
 	builder, err := build.New(build.Config{
 		Store:    imgStore,
@@ -329,6 +337,7 @@ func parseFlags() Config {
 		cfg.Mirrors[reg] = append(cfg.Mirrors[reg], m)
 		return nil
 	})
+	flag.DurationVar(&cfg.UpdateEvery, "update-interval", 0, "Check the images of containers labelled nyx.update=digest this often (e.g. 6h) and recreate them when their tag moved, rolling back when the new one fails its health check; 0 (default) disables")
 	flag.BoolVar(&cfg.MirrorOnly, "registry-mirror-only", false, "Never fall back to the upstream registry when its mirrors fail (air-gapped hosts)")
 	flag.BoolVar(&cfg.Version, "version", false, "Print version and exit")
 	flag.Parse()

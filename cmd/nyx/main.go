@@ -105,6 +105,8 @@ func run(args []string) error {
 		return doInfo(socket, args[1:])
 	case "events":
 		return doEvents(socket, args[1:])
+	case "update":
+		return doUpdate(socket, args[1:])
 	case "system":
 		return doSystem(socket, args[1:])
 	case "pull":
@@ -190,6 +192,9 @@ commands:
   system df [-v] [--json] | system prune [--images] [--volumes] [--dry-run]
       disk use by images, build cache, containers, logs and volumes; remove what
       nothing references (nyx system for details)
+  update [--check] [--json]
+      update containers labelled nyx.update=digest to their tag's new image (rolls back
+      when the new one fails its health check); --check only reports
   events [--filter KEY=VALUE]... [--since D] [--json]
       stream container and image events (start, die, oom, restart, health_status, pull, ...)
   info [--json]

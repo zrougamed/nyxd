@@ -247,6 +247,7 @@ func (s *Store) pullFrom(ctx context.Context, client *registryClient, ref, tag s
 	if err := s.writeImageMeta(ref, manifest, &imgCfg); err != nil {
 		return nil, fmt.Errorf("write image meta: %w", err)
 	}
+	s.writeSourceDigest(ref, client.topDigest)
 
 	return &imgCfg, nil
 }
@@ -761,6 +762,9 @@ type registryClient struct {
 	s        *session
 	wantOS   string
 	wantArch string
+	// topDigest is the digest of the manifest (or index) the tag pointed
+	// to: what a later HEAD on the tag is compared with to spot updates.
+	topDigest string
 }
 
 // auth checks the registry API is reachable and obtains credentials up front
@@ -808,6 +812,9 @@ func (c *registryClient) manifest(ctx context.Context, ref string) (*oci.Manifes
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
 		return nil, err
+	}
+	if c.topDigest == "" {
+		c.topDigest = "sha256:" + hex.EncodeToString(sha256Sum(body))
 	}
 	// A manifest asked for by digest (a pinned reference, or an entry of an
 	// index) must be that manifest: a mirror or proxy cannot swap it.

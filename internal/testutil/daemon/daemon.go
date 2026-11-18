@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/zrougamed/nyxd/internal/events"
+	"github.com/zrougamed/nyxd/internal/update"
 	"io"
 	"log/slog"
 	"net"
@@ -132,6 +133,7 @@ func StartWith(t *testing.T, opts Options) *Daemon {
 	d.Events = events.New(events.DefaultHistory)
 	d.Sup.SetEvents(d.Events)
 	d.Ctl.SetEvents(d.Events)
+	d.Ctl.SetUpdater(update.New(d.Sup, d.Store, d.Events, log))
 	d.Builder, err = build.New(build.Config{Store: d.Store, Overlay: d.Overlay, Runtime: d.Runtime,
 		BaseDir: base, Rootless: true, SingleID: true, Log: log})
 	must(err)

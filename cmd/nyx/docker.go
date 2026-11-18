@@ -34,6 +34,7 @@ type runOpts struct {
 	network  string   // --network: "host" shares the host's network
 	readOnly bool     // --read-only: read-only root filesystem
 	tmpfs    []string // --tmpfs PATH[:OPTIONS]
+	labels   map[string]string
 	limits   compose.RunLimits
 }
 
@@ -59,7 +60,7 @@ func parseRunLimitFlag(o *runOpts, args []string, i int) (next int, ok bool, err
 		o.readOnly = true
 		return i + 1, true, nil
 	}
-	for _, name := range []string{"--memory", "-m", "--memory-swap", "--cpus", "--pids-limit", "--oom-score-adj", "--tmpfs"} {
+	for _, name := range []string{"--memory", "-m", "--memory-swap", "--cpus", "--pids-limit", "--oom-score-adj", "--tmpfs", "--label", "-l"} {
 		v, next, ok, err := runValueFlag(args, i, name)
 		if !ok || err != nil {
 			if err != nil {
@@ -76,6 +77,15 @@ func parseRunLimitFlag(o *runOpts, args []string, i int) (next int, ok bool, err
 			o.limits.CPUs = v
 		case "--tmpfs":
 			o.tmpfs = append(o.tmpfs, v)
+		case "--label", "-l":
+			k, val, _ := strings.Cut(v, "=")
+			if strings.TrimSpace(k) == "" {
+				return i, true, fmt.Errorf("--label %q: want KEY=VALUE", v)
+			}
+			if o.labels == nil {
+				o.labels = map[string]string{}
+			}
+			o.labels[strings.TrimSpace(k)] = val
 		case "--pids-limit", "--oom-score-adj":
 			n, err := strconv.Atoi(strings.TrimSpace(v))
 			if err != nil {
@@ -748,5 +758,8 @@ func addRunLimitFields(body map[string]any, o runOpts) {
 	}
 	if len(o.tmpfs) > 0 {
 		body["tmpfs"] = o.tmpfs
+	}
+	if len(o.labels) > 0 {
+		body["labels"] = o.labels
 	}
 }

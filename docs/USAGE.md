@@ -251,6 +251,40 @@ NYXD_OPTS="... -registry-mirror-only"   # air-gapped: never contact the registry
   sent by `nyx` with the pull; the registry's own credentials never go to the mirror.
 - `nyx info` lists the mirrors.
 
+## Automatic image updates
+
+Opt a container in with a label, and nyxd keeps it on its tag's current image, the safe way: a
+container that does not come up healthy is put back on the image it ran before.
+
+```yaml
+services:
+  web:
+    image: ghcr.io/me/site:latest
+    labels:
+      nyx.update: "digest"        # or "off" (default)
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+```
+
+```bash
+NYXD_OPTS="-update-interval 6h"   # off by default
+nyx update --check                # what would change, without pulling or restarting
+nyx update                        # update now
+nyx run -d --label nyx.update=digest --name web ghcr.io/me/site:latest
+```
+
+- Each round (every interval, plus up to 10% jitter so many hosts do not hit the registry at once) asks
+  the registry for the tag's digest with a `HEAD` request, which counts lightly against rate limits, and
+  pulls only when it changed.
+- The container is recreated with the new image. If it does not start, or has a health check that does not
+  pass within its start period, the previous image is started again and an `update_rolled_back` event is
+  published (`update` on success); that digest is not tried again until the tag moves on.
+- The previous image stays under the local tag `nyx-rollback/<container>:previous` until the next
+  successful update, so a rollback never needs the network.
+- Updates pull anonymously or through registry mirrors: the daemon does not hold your registry logins.
+- `:latest` plus automatic updates means running whatever the publisher pushes next. That is a choice you
+  make per container; pin a digest or a version tag for anything you do not want to change by itself.
+
 ## Building images (`nyx build`)
 
 ```bash
