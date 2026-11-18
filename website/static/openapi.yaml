@@ -265,6 +265,32 @@ paths:
                     additionalProperties: {type: string}
         "400": {description: Invalid since or filter}
 
+  /v1/updates:
+    get:
+      tags: [containers]
+      summary: Check image updates for containers labelled nyx.update=digest
+      description: Compares each tag's recorded digest with the registry's (HEAD); nothing is pulled or restarted.
+      operationId: checkUpdates
+      responses:
+        "200":
+          description: One result per opted-in running container
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/UpdateResults"}
+    post:
+      tags: [containers]
+      summary: Update containers labelled nyx.update=digest now
+      description: |
+        Pulls tags whose digest moved and recreates their containers; a container that does not start or
+        pass its health check is put back on its previous image (action `rolled back`).
+      operationId: runUpdates
+      responses:
+        "200":
+          description: One result per opted-in running container
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/UpdateResults"}
+
   /v1/network:
     get:
       tags: [system]
@@ -1235,6 +1261,23 @@ components:
         containers_running: {type: integer}
         containers_stopped: {type: integer}
         images: {type: integer}
+
+    UpdateResults:
+      type: object
+      properties:
+        containers:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: string}
+              image: {type: string}
+              current: {type: string, description: Digest recorded at the last pull}
+              available: {type: string, description: Digest the tag points to now}
+              action:
+                type: string
+                description: up to date, update available, unknown (...), updated, rolled back, skipped (...), error
+              error: {type: string}
 
     VersionResponse:
       type: object

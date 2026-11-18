@@ -26,6 +26,9 @@ const (
 	Restart      = "restart"
 	HealthStatus = "health_status"
 	Remove       = "remove"
+	// Update and UpdateRolledBack come from automatic image updates.
+	Update           = "update"
+	UpdateRolledBack = "update_rolled_back"
 )
 
 // Image actions.
