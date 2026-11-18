@@ -1044,6 +1044,17 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if warning, err := s.store.CheckRunPolicy(imgRef); err != nil {
+		if stream {
+			writeStreamErr(err.Error())
+			return
+		}
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	} else if warning != "" {
+		s.log.Warn("image policy", "warning", warning)
+	}
+
 	spec := supervisor.ContainerSpec{
 		ID:             id,
 		Image:          imgRef,

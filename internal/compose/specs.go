@@ -79,6 +79,11 @@ func BuildContainerSpecs(ctx context.Context, stack *Stack, meta UpMeta, store *
 		if err != nil {
 			return nil, fmt.Errorf("service %q resolve %q: %w", name, img, err)
 		}
+		if svc.Build == nil { // built here: there is no signature to check
+			if _, err := store.CheckRunPolicy(img); err != nil {
+				return nil, fmt.Errorf("service %q: %w", name, err)
+			}
+		}
 
 		mounts, err := ServiceExtraMounts(&svc, stack, meta.ComposeDir, meta.Project, meta.DataDir)
 		if err != nil {
