@@ -238,6 +238,9 @@ func New(rt *runtime.Runtime, ovl *overlay.Manager, net network.Backend, baseDir
 
 // Start launches a container according to its spec and supervises it.
 func (s *Supervisor) Start(ctx context.Context, spec ContainerSpec) error {
+	if err := CheckContainerID(spec.ID); err != nil {
+		return err
+	}
 	if spec.Healthcheck != nil {
 		n := health.Normalize(*spec.Healthcheck)
 		spec.Healthcheck = &n
@@ -315,6 +318,9 @@ func (s *Supervisor) StartSequential(ctx context.Context, specs []ContainerSpec)
 // It blocks until the init process exits, then tears down state. Restart policy is ignored
 // (the session ends when the client or init exits). AutoRemove deletes logs on exit.
 func (s *Supervisor) RunAttached(ctx context.Context, spec ContainerSpec, stdin io.Reader, stdout io.Writer, sz *runtime.TTYSize) error {
+	if err := CheckContainerID(spec.ID); err != nil {
+		return err
+	}
 	if stdout == nil {
 		stdout = io.Discard
 	}

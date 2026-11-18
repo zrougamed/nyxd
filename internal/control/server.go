@@ -884,6 +884,9 @@ func (s *Server) handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		// socket client cannot escape baseDir/bundles or netns dirs.
 		http.Error(w, "invalid container id: use letters, digits, '-' or '_' only (max 256)", http.StatusBadRequest)
 		return
+	} else if err := supervisor.CheckContainerID(id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	if s.sup == nil {
 		http.Error(w, "supervisor not available", http.StatusServiceUnavailable)

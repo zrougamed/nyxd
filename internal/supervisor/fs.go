@@ -3,6 +3,7 @@ package supervisor
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/zrougamed/nyxd/internal/bundle"
 )
@@ -35,4 +36,14 @@ func (s *Supervisor) ContainerFS(id string) (string, []bundle.Mount, error) {
 		return "", nil, fmt.Errorf("%w: %s (no root filesystem mounted)", ErrNotRunning, id)
 	}
 	return rootFS, mounts, nil
+}
+
+// CheckContainerID rejects ids nyxd keeps for itself: a name starting with
+// "_" could be the directory of the overlay's shared layer store (_layers)
+// or its legacy cache, which sit next to each container's overlay.
+func CheckContainerID(id string) error {
+	if strings.HasPrefix(id, "_") {
+		return fmt.Errorf("invalid container name %q: names starting with '_' are reserved for nyxd", id)
+	}
+	return nil
 }

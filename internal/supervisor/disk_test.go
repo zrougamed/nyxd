@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -38,5 +39,29 @@ func TestVolumeInUseAndOrphanOverlayGuards(t *testing.T) {
 	}
 	if s.LayerStoreDir() != filepath.Join(base, "overlay", "_layers") || len(s.OverlayIDs()) != 0 || s.OverlayMounted("ghost") {
 		t.Error("overlay helpers")
+	}
+}
+
+func TestCheckContainerID(t *testing.T) {
+	for _, id := range []string{"_layers", "_cache", "_x"} {
+		if err := CheckContainerID(id); err == nil || !strings.Contains(err.Error(), "reserved") {
+			t.Errorf("%q: %v", id, err)
+		}
+	}
+	for _, id := range []string{"web", "shop-db", "a_b", "x_"} {
+		if err := CheckContainerID(id); err != nil {
+			t.Errorf("%q: %v", id, err)
+		}
+	}
+	// Start refuses before touching anything.
+	s := &Supervisor{containers: map[string]*containerEntry{}, log: quiet}
+	if err := s.Start(context.Background(), ContainerSpec{ID: "_layers"}); err == nil {
+		t.Error("Start accepted _layers")
+	}
+	if err := s.RunAttached(context.Background(), ContainerSpec{ID: "_layers"}, nil, nil, nil); err == nil {
+		t.Error("RunAttached accepted _layers")
+	}
+	if len(s.containers) != 0 {
+		t.Error("entry registered for a refused id")
 	}
 }
