@@ -1,0 +1,73 @@
+---
+id: get-events
+title: "Stream container and image events (nyx events)"
+description: "Newline-delimited JSON, one event per line, kept open until the client goes away. `since`"
+sidebar_label: "Stream container and image events (nyx events)"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVttu4zYQ/ZUBnxJBkZxuUaBKt0CQZtv0kg02WaBFHKxocWxxQ5EqOXIsGP73Yig5zsVY9GHRp/rBlqmZwzP3WQuSiyCKWxH6QNiIu1QoDJXXLWlnRSEu8cFoi0cKjW40oYJfr99fpuAsAi7RErTogUVSuMeWwLVoobOkDVCNUBnNQguHAeSD7DMog7YVllM71z4QeGyN7EMUjoABbL9ScI/YBtAWGmyc7+GABYwMBMeTyeQwg9MtNtWSYC6NCTDDWls1tR4r1EsMUK6ngvoWp6KYigH+k/KubVFNxaYEaRXoAEqHylmLFaHK4MxZktqiB1mxG0IBlUdJmEIg6SmdWqUxBeeaFDwOZ1CjNFR/CiSpC3zeuCWegG7kAndAbWdMCrNOG7WVyaZWpMK16CULXShRiAXSeWQrUtFKLxsk9ByotbCyQVGI6EWRCs1R+rtD34uXsTsF1Q2YMJPVPcy9a8C6BzgojydNeQjOgwTSDcLBh3dn8ObNm+/57KPVKwhYOavCoUhFqGpspCjW0ZV8N3ltF2KzSR/pzLUh9F/mU7L62zKFMkYiPlVbX78t+eoyuuttecJ5gRxX5sjQVlKMqJvH3LvHfh8z6b3kF5qwCXsZi0C9iYydb0QqcNUap1AU5Dvc3KXCY2idDRjVv5lM+Oe5HTEyEMijZAQ2AS2xnGxbo6vo8nx1ZNXnwArr1zzd7DNWxMH1HHjSw3Uci9es08hVkiiEkoRHUWqTjlKvpdF2Ddf0o2/ZIexXfvesBsTdJhVDbu5xViq02n8cwfa9kURezzrCsM9YqZTmu6S5em72iyDFTyq+3ef8C7uURiuI+c8pM2YeKzRItRvLJxYO1aIQ+fI4x20xBfTLbSV13ohC1ERtkefGVdLULtCrtP0YEMqq8waOjjqrV0fBVfdI8APj/wgv9fMsy0o44Efg4uD+ohfWeVQn4KzpY6sbMRgCGklc3YfcCDgDtZ27IRsoZmrshxxM7wycXl28YviHtrqRBn65ubligVg1ScJ6SZJCtFmBsyAhSWJ1K9dIbUcWSQIHCueyMwRl7jubs2b8yliiZGY3Nfpoi3Vwc3YFRgdC7pGzHkblbGqnNknOpDHaLqKZp1cXScLHZVnOZKindnBkuH7hzD3Xvvbs8jhvtV1ENAb9wLOjwv2k4UFTDb3r/DNnc5O5/OvPnz5dvz/77fymhBxK269gJFKORpx2VKOlsZiLJAHLbYeckj0cREpAvgt0mMH1CI++0SFwnwfpEahvdSWN6aGcfPfdZIt87r3zgREbaXvwjqsFOk4ywhXlrZHaljBzSmMYenbJnsiiYnkSBzCgVa3TPC09UuctlE97D/edkgMeuqrCEIYRw4k/JMxxNskmIhVGV2hDLOWxj185079zvoFLZyvXNOgrLQ38PgjCVnFXOqHI89aZnltU6x1Xeub8Ih+hQ26fAuURII/V2rpAjbRPLr+OLRWq3fzl8RwH6LgaHHCohufDl2Ww3nXi/9eW/2ptGVv3LnN5CsTsWI/991Ysjx8HDy+YsckWt2K9nsmAH73ZbPh42Bm4Lysd5MygEsVcmoBfCPPX2nD2WsErxm7PWkrTsYzgpeffM/z6O88XuD4uYTuyd/zHa2Yrilse9zVKhT46etA6rSps6YnW3i2GkR7n68/nN2Kz+Qf3TUBi
+sidebar_class_name: "get api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Stream container and image events (nyx events)"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/v1/events"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Newline-delimited JSON, one event per line, kept open until the client goes away. `since`
+first replays the events nyxd keeps in memory (the last 1000). A client that falls behind
+receives `{"type":"events_dropped"}` and is disconnected. Container actions: create, start,
+die, oom, restart, health_status, remove; image actions: pull, build, remove.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./get-events.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-events.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-events.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

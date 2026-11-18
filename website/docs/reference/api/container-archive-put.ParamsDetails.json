@@ -1,0 +1,1 @@
+{"parameters":[{"name":"raw","in":"query","description":"1: extract the stream as is; `path` must be an existing directory","schema":{"type":"string"}},{"name":"id","in":"path","required":true,"schema":{"type":"string"}},{"name":"path","in":"query","required":true,"description":"Absolute path in the container","schema":{"type":"string"}}]}

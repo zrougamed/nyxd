@@ -1,0 +1,71 @@
+---
+id: system-prune
+title: "Remove what nothing references (nyx system prune)"
+description: "Exited containers and their logs, logs and overlays of containers that no longer exist, the"
+sidebar_label: "Remove what nothing references (nyx system prune)"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVt1v2zYQ/1cOfEoERUr20Ad1GJBlGdZ9tEbiYhvioKKls8WGOqpHyrZg+H8fjlJaJw0GDOjj/CBL5N2P9/k77lXQa6+KO+UHH7BV96mq0VdsumAcqUJd70zAGipHQRtC9qCphtCgYbBu7dP4jItug2z14MGtjuVDowOQA+tojQy4Mz6kgrCgZW9sDZWuGowIVg+iQQ5Mq9cIvUcPJ0sXGnjALsDKMWiCxvUMehWQBWaALTLClk0ISKfZgsqo7UvQ1jtgbN0G/QgZwT8bFw9Iodw427eiQLrFGqbPp6Kt6yn4bEE3PZGh9fOQbMXNaE7vETQjEG7EQtdXDdbZglSqXIesJbJvalVMMZ9xT6hSxfipRx9+dPWgir0SeKQgr7rrrKmiXv7RS1r2ylcNtlrewtChKpRbfsQqqFR1LKcEg152R6+P5JbOWdSkDqma/Hx5s+bhA/f00mb8icG+c+RHgO/Oz+XvafH8KTHZag8njmHrelvDEk+njNTpYynBcgjogbGy2kgCTjQB+mBaHRC2JjQwWXOq0m8VGPfwn/0Wl6PlL6HrujZiiLazJ+dMcppZDypVJmB7vO4DG1qrKaBTAI72DQVcI09BP6SqxdA4qZ7O+eiVDo0qVL65yMd6yrupoDzyBlm6e696tqpQTQhdkefWVdo2o/rThL33CGXVs4Wzs57M7sy76gEDfC+n/ADP9fMsy0o4kdfYOmA8mDU5xvo1OLJDzO6EIRDQ6hCQvXSpOtynSrJ286Xwr3e67SweF27gHo9Kdfz8nCT5PKTK0MrFoJkg2oqG3chZ7Cxczt585egfhkyrLfwyn89EIFJLkohekqQQQ1eDI9CQJO/J7KB2rTY0OZMkcFLjSvc2QJlzT7loxkcmEqU4OG+El0zkkfnVDKzxAYVKlgNMytmCFpQkV9paoRSJ1uXsTZLIclmWS+2bBY358LfPcvLCsV8naHORd4bWEU1Ab7CzusKXjR5bbRB2Pc6ZYyjf/v3XTx9u3139dj0vIYeShh1MhpSTE5d9aJDC1I9FkgA5Qgiu1gOcRJMgcO/DaQa3Ezxya7w3jnxkzDB0ptLWDlCev3p1/oh8zezYC2KraQB2vdCF0GwZcBfyzmpDJSxdbdDDil0LpUQii4rla/j19t1bQKo7ZygI0YSeCcrn9FFKwn1fVej9yNfSP2PBXGTn2blKlTUVko8VKhWvCjVzdvjZcQtvHVWubZEroy38PgrCo+KXDvRFnnfODivHbcdO+CNzvM4naJ/TMVAeAXIlvS8t32o6OvwmEtI4fMiFRqqIcYWMVMnslDyNtACRFk6fd8LRoPl/1n/TWT8R+JcKlQESq2A/kfad2lwIT49XLxlQQtz3qYrcXNyp/X6pPb5nezjI8qceeVDF3X2qNpqNXgrX3d0fUtWgrpEj0z/goAp1NSb1bC5GiLjt4xR6PjAP6aPGZVVhF/5V9v5o+sze3c5VqpbTbaV1teiw3spNRm9VoeJ1R7TjuItre2U1rXu9FtkRU37/AGjsuBM=
+sidebar_class_name: "post api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Remove what nothing references (nyx system prune)"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/v1/system/prune"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Exited containers and their logs, logs and overlays of containers that no longer exist, the
+build cache and layers no image uses (both kept for an hour after they were written).
+`images` also removes images no container uses, `volumes` named volumes no container mounts.
+Running containers and what they use are never touched.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./system-prune.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./system-prune.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

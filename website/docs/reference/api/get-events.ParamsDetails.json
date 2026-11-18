@@ -1,0 +1,1 @@
+{"parameters":[{"name":"since","in":"query","description":"A duration back from now (`10m`) or a time (RFC 3339 or Unix seconds)","schema":{"type":"string"}},{"name":"filter","in":"query","description":"`type=`, `event=`, `container=` or `image=`; repeat for alternatives of one key","schema":{"type":"array","items":{"type":"string"}},"style":"form","explode":true}]}

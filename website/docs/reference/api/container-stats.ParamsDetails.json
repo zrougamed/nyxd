@@ -1,0 +1,1 @@
+{"parameters":[{"name":"ids","in":"query","required":false,"schema":{"type":"string"},"description":"Comma-separated container ids (empty = all supervised)."},{"name":"interval_ms","in":"query","required":false,"schema":{"type":"integer","minimum":1,"maximum":10000},"description":"Sample gap in milliseconds (default 500, capped at 10000)."}]}

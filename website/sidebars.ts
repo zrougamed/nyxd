@@ -20,6 +20,7 @@ const sidebars: SidebarsConfig = {
       label: 'Getting Started',
       items: [
         'getting-started/install',
+        'getting-started/verify-downloads',
         'getting-started/platform-matrix',
         'getting-started/usage',
         'getting-started/build',
@@ -33,6 +34,7 @@ const sidebars: SidebarsConfig = {
       label: 'Operations',
       items: [
         'operations/rootless',
+        'operations/security',
         'operations/networking',
         'operations/native-network',
         'operations/docker-socket',

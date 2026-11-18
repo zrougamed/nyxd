@@ -1,0 +1,63 @@
+---
+id: get-metrics
+title: "Prometheus metrics"
+description: "Prometheus text format (0.0.4): per-container CPU, memory, network, block I/O, PIDs,"
+sidebar_label: "Prometheus metrics"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVMFu4zYQ/ZUBT4lAS05R7EFZFAiSdJu22RgbB2gRG0uamljcUEOVQ3kjGP73grKyTrJ77a0+2DI18+bNzOPbiqjXLMp7wT1HbMRSigrZBNtG60mUYhZ8g7HGjiHiU4QHHxod4WiaT/Ofj0toMUyMp6gtYYDz2Z2EBhsfegmE8asPjxJWzptHuCpuJMyuLlguKCBHHSJLqFG7WIOmCm5uruHROscSnF6hc1iBIt2gkqBso9fDg/FN6xk/t8F/QROVXNC3M8awsQbVKVQaG0/QtdE2KOEbQ4ZVDxx1RAkDJBjfUZSw6qyrwNKDH7h88AsKHaVsWGm2hnOg/qkCNWkwBmt44ixHJDi7uPikQDv2kMojg42gI6g6xrYsivS+GHNUviAhhW8x6DTfq0qUYo3xev9aSBGQW0+MLMqt+Gk6TT+vF3KITU0hxRSSVlO0TltK/9jU2OjhvG9RlIJjsLQWu/SRIu3Tj5WFFK2OtShFsTl5pimkGFoJSRlb0QUnSjG247zRrvacMl8Tu2MEZbrgYDLpyD5N2JtHjPA+FfgF3uYXeZ4rOEqPkJYMlsGuyQesTsGT6yHWCCNGgoBGx4iBj9MQd0sp0rKGJm10qcthP2kowTs4m119x/Dakm20g9/m81kKSGKGLEt5WSb366vAE2jIsjuyT1D5RlsaWWQZHFX4oDsXQRWhoyJlDl95ilCJ2bzGMPRCHubnM9irBEPS3ZicL2hBWXaunbO0Hto8m11lWTpWSq001wvaD5Jv3wzzB2W/n+zmpGgtrQe0BPoJW6cN/pg0fLWxht534dWwfQD18e+/Lj7f3pz/cTlXUICi/glGImps4qyLNVK0ZtBzmWVAnhCir3QPRwMliKHjeJzD7QiPobHM1hODDgixb63RzvWgpu/eTZ+RL0PwgRNio6mH4LuIDF0S2UHtCla+ssjwEHyzv3L5kKhO4ffbm4+AVLXeUmQIGLtAoHTbupFu8YU9qbRw7oxB5v31TMLfC+Ykn+ZTIYWzBokxiS1JNdmid/2vPjTw0ZPxTYPBWO3gz30gPCcerg6XRdF61yf/HK0r92FdjNBc0EugYgAoRLqurefYaHpZ/ODJhxv7Surbgzn87+D/gYOPvvrCdnfjsrejn96LzYkYvHbYz1KKwTTLe7HdrjTjXXC7XTr+p8PQi/J+KcVGB6tXycvulzspatQVhsGCH7EXpTgzBttkvBvturf1ly+M/cPlXOx2/wJELb2Y
+sidebar_class_name: "get api-method"
+info_path: docs/reference/api/nyxd-control-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Prometheus metrics"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/v1/metrics"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Prometheus text format (0.0.4): per-container CPU, memory, network, block I/O, PIDs,
+restarts, health and OOM kills, labelled `name`, `image`, `compose_project`,
+`compose_service`; daemon uptime, containers by state, image count, build info and Go
+runtime basics. nyxd `-metrics-listen ADDR` also serves it at `http://ADDR/metrics`.
+
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-metrics.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-metrics.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      
